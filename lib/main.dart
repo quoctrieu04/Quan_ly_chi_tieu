@@ -1,6 +1,10 @@
 import 'package:chitieu/api/investment/investment_provider.dart';
 import 'package:chitieu/api/investment/investment_service.dart';
 import 'package:chitieu/api/transaction/transaction_provider.dart';
+import 'package:chitieu/pages/accounts_list_page.dart';
+import 'package:chitieu/pages/income_list_page.dart';
+import 'package:chitieu/pages/investment_list_page.dart';
+import 'package:chitieu/pages/saving_list_page.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:dio/dio.dart';
@@ -74,7 +78,7 @@ Future<void> main() async {
 
   const rawBase = String.fromEnvironment(
     'API_BASE',
-    defaultValue: 'http://192.168.1.68:8000',
+    defaultValue: 'http://192.168.1.67:8000',
   );
 
   final authApi = AuthService(rawBase);
@@ -301,6 +305,10 @@ class MyApp extends StatelessWidget {
       routes: {
         '/settings/money': (_) => const MoneySettingsPage(),
         '/transactions': (_) => const TransactionsPage(),
+        '/accounts': (_) => const AccountsListPage(),
+        '/investment': (_) => const InvestmentListPage(),
+        '/saving': (_) => const SavingListPage(),
+        '/income': (_) => const IncomeListPage(),
       },
     );
   }

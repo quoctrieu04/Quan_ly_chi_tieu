@@ -3,6 +3,7 @@ import 'package:chitieu/utils/safe_ui.dart';
 import 'package:chitieu/widgets/create_investment_form.dart';
 import 'package:chitieu/widgets/create_saving_form.dart';
 import 'package:chitieu/widgets/edit_bank_account_form.dart';
+import 'package:chitieu/widgets/feature_grid.dart';
 import 'package:chitieu/widgets/saving_transaction_form.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -150,7 +151,6 @@ class _AccountsPageState extends State<AccountsPage> {
         year: ym.year,
         month: ym.month); // Gọi lại API tiết kiệm cho tháng/năm cụ thể
   }
-  
 
   Future<void> _fetchForYm(int year, int month) async {
     final walletProv = context.read<BankAccountProvider>();
@@ -161,7 +161,6 @@ class _AccountsPageState extends State<AccountsPage> {
     final incomeProv = context.read<IncomeProvider>();
     final savingProv = context.read<SavingProvider>();
     final investmentProv = context.read<InvestmentProvider>();
-
 
     /// ⚠️ SỬA LẠI ĐÚNG — TRUYỀN YEAR + MONTH
     await savingProv.fetch(year: year, month: month);
@@ -353,6 +352,111 @@ class _AccountsPageState extends State<AccountsPage> {
                 onToggleEye: _toggleHide,
                 isHidden: _hideBalance,
               ),
+              const SizedBox(height: 16),
+
+              FeatureHorizontalMenu(
+                items: [
+                  FeatureItem(
+                    icon: Icons.account_balance_wallet_rounded,
+                    label: 'Tài khoản',
+                    onTap: () async {
+                      final prov = context.read<BankAccountProvider>();
+
+                      if (prov.items.isEmpty) {
+                        // 👉 CHƯA CÓ → mở form thêm
+                        final created = await showModalBottomSheet<bool>(
+                          context: context,
+                          isScrollControlled: true,
+                          useSafeArea: true,
+                          builder: (_) => const CreateBankAccountForm(),
+                        );
+                        if (created == true && context.mounted) {
+                          await prov.fetch();
+                        }
+                      } else {
+                        // 👉 ĐÃ CÓ → mở trang quản lý
+                        Navigator.pushNamed(context, '/accounts');
+                      }
+                    },
+                  ),
+                  FeatureItem(
+                    icon: Icons.attach_money_rounded,
+                    label: 'Nguồn tiền',
+                    onTap: () async {
+                      final prov = context.read<IncomeProvider>();
+
+                      if (prov.items.isEmpty) {
+                        final created = await showModalBottomSheet<bool>(
+                          context: context,
+                          isScrollControlled: true,
+                          useSafeArea: true,
+                          builder: (_) => const CreateIncomeForm(),
+                        );
+                        if (created == true && context.mounted) {
+                          final ym = context.read<YearMonthProvider>().ym;
+                          await prov.fetch(year: ym.year, month: ym.month);
+                        }
+                      } else {
+                        Navigator.pushNamed(context, '/income');
+                      }
+                    },
+                  ),
+                  FeatureItem(
+                    icon: Icons.savings_rounded,
+                    label: 'Tiết kiệm',
+                    onTap: () async {
+                      final prov = context.read<SavingProvider>();
+                      final ym = context.read<YearMonthProvider>().ym;
+
+                      if (prov.items.isEmpty) {
+                        final created = await showModalBottomSheet<bool>(
+                          context: context,
+                          isScrollControlled: true,
+                          useSafeArea: true,
+                          builder: (_) => const CreateSavingForm(),
+                        );
+                        if (created == true && context.mounted) {
+                          await prov.fetch(year: ym.year, month: ym.month);
+                        }
+                      } else {
+                        Navigator.pushNamed(context, '/saving');
+                      }
+                    },
+                  ),
+                  FeatureItem(
+                    icon: Icons.trending_up_rounded,
+                    label: 'Đầu tư',
+                    onTap: () async {
+                      final prov = context.read<InvestmentProvider>();
+
+                      if (prov.items.isEmpty) {
+                        final created = await showModalBottomSheet<bool>(
+                          context: context,
+                          isScrollControlled: true,
+                          useSafeArea: true,
+                          builder: (_) => const CreateInvestmentForm(),
+                        );
+                        if (created == true && context.mounted) {
+                          await prov.fetch();
+                        }
+                      } else {
+                        Navigator.pushNamed(context, '/investment');
+                      }
+                    },
+                  ),
+                  FeatureItem(
+                    icon: Icons.history_rounded,
+                    label: 'Lịch sử',
+                    onTap: () {
+                      Navigator.pushNamed(
+                        context,
+                        '/transactions',
+                        arguments: {'year': ym.year, 'month': ym.month},
+                      );
+                    },
+                  ),
+                ],
+              ),
 
               // ===== Cảnh báo vượt chi =====
               if (overSpent) ...[
@@ -390,542 +494,6 @@ class _AccountsPageState extends State<AccountsPage> {
                   },
                 ),
               ],
-
-              const SizedBox(height: 18),
-
-              // ===== Danh sách TÀI KHOẢN =====
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    'Tài khoản',
-                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.add, size: 24),
-                    tooltip: 'Thêm tài khoản',
-                    onPressed: () async {
-                      final created = await showModalBottomSheet<bool>(
-                        context: context,
-                        isScrollControlled: true,
-                        useSafeArea: true,
-                        shape: const RoundedRectangleBorder(
-                          borderRadius:
-                              BorderRadius.vertical(top: Radius.circular(20)),
-                        ),
-                        builder: (_) => const CreateBankAccountForm(),
-                      );
-                      if (created == true && context.mounted) {
-                        await _fetchCurrentYm();
-                        safeShowSnackBar(
-                          context,
-                          const SnackBar(
-                              content: Text('Đã thêm tài khoản mới')),
-                        );
-                      }
-                    },
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              if (walletProv.loading && walletProv.items.isEmpty)
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 16),
-                  child: LinearProgressIndicator(minHeight: 2),
-                )
-              else if (!walletProv.loading && walletProv.items.isEmpty)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  child: Text('Chưa có tài khoản',
-                      style: TextStyle(color: cs.onSurfaceVariant)),
-                )
-              else
-                Column(
-                  children: walletProv.items.map((acc) {
-                    return _WalletCard(
-                      name: acc.name,
-                      balanceText: _hideBalance ? '•••' : fmt(acc.balance),
-                      isDefault: acc.isDefault,
-                      icon: Icons.account_balance_wallet_rounded,
-                      onEdit: () async {
-                        final updated = await showModalBottomSheet<bool>(
-                          context: context,
-                          isScrollControlled: true,
-                          useSafeArea: true,
-                          shape: const RoundedRectangleBorder(
-                            borderRadius:
-                                BorderRadius.vertical(top: Radius.circular(20)),
-                          ),
-                          builder: (context) => Padding(
-                            padding: EdgeInsets.only(
-                              bottom: MediaQuery.of(context).viewInsets.bottom,
-                            ),
-                            child: EditBankAccountForm(
-                              accountId: acc.id,
-                              initialName: acc.name,
-                              initialBankName: acc.bankname,
-                              initialBankNumber: acc.banknumber,
-                              initialBalance: acc.balance,
-                              initialCurrency: acc.currency,
-                            ),
-                          ),
-                        );
-                        if (updated == true && context.mounted) {
-                          await _fetchCurrentYm();
-                        }
-                      },
-                    );
-                  }).toList(),
-                ),
-
-              // ===== Danh sách Nguồn tiền =====
-              const SizedBox(height: 18),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    'Nguồn tiền tháng này',
-                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.add, size: 24),
-                    tooltip: 'Thêm nguồn thu',
-                    onPressed: () async {
-                      if (!isLoggedIn) {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (_) => const LoginPage()),
-                        );
-                        return;
-                      }
-                      final created = await showModalBottomSheet<bool>(
-                        context: context,
-                        isScrollControlled: true,
-                        useSafeArea: true,
-                        shape: const RoundedRectangleBorder(
-                          borderRadius:
-                              BorderRadius.vertical(top: Radius.circular(20)),
-                        ),
-                        builder: (context) => Padding(
-                          padding: EdgeInsets.only(
-                            bottom: MediaQuery.of(context).viewInsets.bottom,
-                          ),
-                          child: const CreateIncomeForm(),
-                        ),
-                      );
-                      if (created == true && context.mounted) {
-                        await _fetchCurrentYm();
-                        safeShowSnackBar(
-                          context,
-                          const SnackBar(content: Text('Đã thêm nguồn thu')),
-                        );
-                      }
-                    },
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              if (incomeProv.loading && incomesToShow.isEmpty)
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 16),
-                  child: LinearProgressIndicator(minHeight: 2),
-                )
-              else if (!incomeProv.loading && incomesToShow.isEmpty)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  child: Text('Chưa có nguồn thu',
-                      style: TextStyle(color: cs.onSurfaceVariant)),
-                )
-              else
-                Column(
-                  children: incomesToShow.map((c) {
-                    return _WalletCard(
-                      name: c.title,
-                      balanceText: _hideBalance ? '•••' : fmt(c.balance),
-                      isDefault: false,
-                      icon: Icons.savings_rounded,
-                      onEdit: () async {
-                        final int? incomeId = c.id;
-                        if (incomeId == null) return;
-                        final String initialTitle = (c.title).trim();
-                        final String initialCurrency =
-                            (c.currency.isEmpty) ? 'VND' : c.currency;
-                        final updated = await showModalBottomSheet<bool>(
-                          context: context,
-                          isScrollControlled: true,
-                          useSafeArea: true,
-                          shape: const RoundedRectangleBorder(
-                            borderRadius:
-                                BorderRadius.vertical(top: Radius.circular(20)),
-                          ),
-                          builder: (context) => Padding(
-                            padding: EdgeInsets.only(
-                              bottom: MediaQuery.of(context).viewInsets.bottom,
-                            ),
-                            child: EditIncomeForm(
-                              incomeId: incomeId,
-                              initialTitle: initialTitle,
-                              initialCurrency: initialCurrency,
-                            ),
-                          ),
-                        );
-                        if (updated == true && context.mounted) {
-                          await _fetchCurrentYm();
-                        }
-                      },
-                    );
-                  }).toList(),
-                ),
-
-              // ===== Tiết kiệm =====
-              const SizedBox(height: 18),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    'Tiết kiệm',
-                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.add, size: 24),
-                    tooltip: 'Thêm kế hoạch tiết kiệm',
-                    onPressed: () async {
-                      final created = await showModalBottomSheet<bool>(
-                        context: context,
-                        isScrollControlled: true,
-                        useSafeArea: true,
-                        shape: const RoundedRectangleBorder(
-                          borderRadius:
-                              BorderRadius.vertical(top: Radius.circular(20)),
-                        ),
-                        builder: (_) => const CreateSavingForm(),
-                      );
-
-                      if (created == true && context.mounted) {
-                        final ym = context.read<YearMonthProvider>().ym;
-                        await context
-                            .read<SavingProvider>()
-                            .fetch(year: ym.year, month: ym.month);
-
-                        safeShowSnackBar(
-                          context,
-                          const SnackBar(
-                              content: Text('Đã tạo kế hoạch tiết kiệm')),
-                        );
-                      }
-                    },
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 8),
-
-              Builder(builder: (_) {
-                final savingProv = context.watch<SavingProvider>();
-
-                if (savingProv.loading && savingProv.items.isEmpty) {
-                  return const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 16),
-                    child: LinearProgressIndicator(minHeight: 2),
-                  );
-                }
-
-                if (!savingProv.loading && savingProv.items.isEmpty) {
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    child: Text('Chưa có kế hoạch tiết kiệm',
-                        style: TextStyle(color: cs.onSurfaceVariant)),
-                  );
-                }
-
-                return Column(
-                  children: savingProv.items.map((s) {
-                    final progress = (s.targetAmount > 0)
-                        ? (s.currentAmount / s.targetAmount)
-                        : 0.0;
-
-                    return Container(
-                      margin: const EdgeInsets.only(bottom: 12),
-                      padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
-                      decoration: BoxDecoration(
-                        color: cs.surface,
-                        borderRadius: BorderRadius.circular(16),
-                        boxShadow: const [
-                          BoxShadow(
-                            blurRadius: 6,
-                            offset: Offset(0, 2),
-                            color: Colors.black12,
-                          ),
-                        ],
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  s.title,
-                                  style: const TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w700),
-                                ),
-                              ),
-                              Row(
-                                children: [
-                                  // Nút sửa
-                                  IconButton(
-                                    icon: const Icon(Icons.edit_outlined),
-                                    onPressed: () async {
-                                      final created =
-                                          await showModalBottomSheet<bool>(
-                                        context: context,
-                                        isScrollControlled: true,
-                                        useSafeArea: true,
-                                        shape: const RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.vertical(
-                                              top: Radius.circular(20)),
-                                        ),
-                                        builder: (_) =>
-                                            SavingTransactionForm(saving: s),
-                                      );
-
-                                      if (created == true && context.mounted) {
-                                        final ym = context
-                                            .read<YearMonthProvider>()
-                                            .ym;
-                                        await context
-                                            .read<SavingProvider>()
-                                            .fetch(
-                                                year: ym.year, month: ym.month);
-
-                                        context
-                                            .read<BankAccountProvider>()
-                                            .fetch();
-                                      }
-                                    },
-                                  ),
-
-                                  // Nút xoá tiết kiệm
-                                  IconButton(
-                                    icon: const Icon(Icons.delete_outline,
-                                        color: Colors.red),
-                                    onPressed: () =>
-                                        _confirmDeleteSaving(context, s.id!),
-                                  ),
-                                ],
-                              )
-                            ],
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            '${fmt(s.currentAmount)} / ${fmt(s.targetAmount)}',
-                            style: const TextStyle(fontWeight: FontWeight.w600),
-                          ),
-                          const SizedBox(height: 8),
-                          LinearProgressIndicator(
-                            value: progress.clamp(0, 1),
-                            minHeight: 6,
-                            backgroundColor: cs.surfaceVariant,
-                            color: _progressColor(progress),
-                          ),
-                        ],
-                      ),
-                    );
-                  }).toList(),
-                );
-              }),
-              // ===== Đầu tư sinh lời =====
-              // ===== Đầu tư sinh lời =====
-              const SizedBox(height: 18),
-
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    'Đầu tư sinh lời',
-                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.add, size: 24),
-                    tooltip: 'Thêm khoản đầu tư',
-                    onPressed: () async {
-                      final created = await showModalBottomSheet<bool>(
-                        context: context,
-                        isScrollControlled: true,
-                        useSafeArea: true,
-                        shape: const RoundedRectangleBorder(
-                          borderRadius:
-                              BorderRadius.vertical(top: Radius.circular(20)),
-                        ),
-                        builder: (_) => const CreateInvestmentForm(),
-                      );
-
-                      if (created == true && context.mounted) {
-                        context.read<InvestmentProvider>().fetch();
-                        safeShowSnackBar(
-                          context,
-                          const SnackBar(content: Text('Đã thêm khoản đầu tư')),
-                        );
-                      }
-                    },
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 8),
-
-              Builder(
-                builder: (_) {
-                  final invProv = context.watch<InvestmentProvider>();
-                  final items = invProv.items;
-
-                  if (invProv.loading && items.isEmpty) {
-                    return const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 16),
-                      child: LinearProgressIndicator(minHeight: 2),
-                    );
-                  }
-
-                  if (!invProv.loading && items.isEmpty) {
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      child: Text(
-                        'Chưa có khoản đầu tư',
-                        style: TextStyle(color: cs.onSurfaceVariant),
-                      ),
-                    );
-                  }
-
-                  return Column(
-                    children: items.map((inv) {
-                      final profit =
-                          inv.currentPrice * inv.quantity - inv.totalInvested;
-                      final profitPercent = profit / inv.totalInvested * 100;
-
-                      return Container(
-                        padding: const EdgeInsets.all(16),
-                        margin: const EdgeInsets.only(bottom: 12),
-                        decoration: BoxDecoration(
-                          color: cs.surface,
-                          borderRadius: BorderRadius.circular(16),
-                          boxShadow: const [
-                            BoxShadow(
-                                blurRadius: 6,
-                                offset: Offset(0, 2),
-                                color: Colors.black12),
-                          ],
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  inv.name,
-                                  style: const TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w700),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  profit >= 0
-                                      ? "Lãi: +${profitPercent.toStringAsFixed(2)}%"
-                                      : "Lỗ: ${profitPercent.toStringAsFixed(2)}%",
-                                  style: TextStyle(
-                                    color:
-                                        profit >= 0 ? Colors.green : Colors.red,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      );
-                    }).toList(),
-                  );
-                },
-              ),
-
-              // ===== Lịch sử giao dịch =====
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    t.transactionHistory,
-                    style: const TextStyle(
-                        fontSize: 22, fontWeight: FontWeight.w800),
-                  ),
-                  TextButton(
-                    onPressed: () => Navigator.pushNamed(
-                      context,
-                      '/transactions',
-                      arguments: {'year': ym.year, 'month': ym.month},
-                    ),
-                    child: Text(
-                      t.viewAll,
-                      style: TextStyle(
-                        color: cs.primary,
-                        fontWeight: FontWeight.w700,
-                        decoration: TextDecoration.underline,
-                        decorationColor: cs.primary,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 8),
-
-              if (inProv.loading || outProv.loading)
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 12),
-                  child: LinearProgressIndicator(minHeight: 2),
-                )
-              else
-                Builder(builder: (_) {
-                  final expenses = outProv.items;
-                  final incomesTx = inProv.items;
-
-                  if (expenses.isEmpty && incomesTx.isEmpty) {
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      child: Text(
-                        AppLocalizations.of(context)!.noData,
-                        style: TextStyle(color: cs.onSurfaceVariant),
-                      ),
-                    );
-                  }
-
-                  num sum(List list) =>
-                      list.fold<num>(0, (s, tx) => s + (tx.amount as num));
-
-                  return Column(
-                    children: [
-                      _SimpleTxItem(
-                        title: 'Đã Chi',
-                        color: const Color(0xFFD64545),
-                        sign: '-',
-                        total: sum(expenses),
-                        type: 'expense',
-                        moneySettings: moneySettings,
-                        isHidden: _hideBalance,
-                      ),
-                      const SizedBox(height: 12),
-                      _SimpleTxItem(
-                        title: 'Đã Thu',
-                        color: const Color(0xFF1F9D4C),
-                        sign: '+',
-                        total: sum(incomesTx),
-                        type: 'income',
-                        moneySettings: moneySettings,
-                        isHidden: _hideBalance,
-                      ),
-                    ],
-                  );
-                }),
             ],
           ),
         ),

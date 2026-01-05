@@ -16,7 +16,7 @@ import 'package:chitieu/auth/auth_provider.dart';
 import 'package:chitieu/auth/auth_service.dart';
 
 // ================= CONFIG =================
-const String _API_BASE_URL = "http://192.168.1.68:8000";
+const String _API_BASE_URL = "http://192.168.1.67:8000";
 
 /// ===============================================================
 ///  ANALYTICS (CÓ LƯU DỰ BÁO THÁNG TRƯỚC)

@@ -1,6 +1,35 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:chitieu/api/bankaccount/bank_account_provider.dart';
+import 'package:flutter/services.dart';
+import 'package:intl/intl.dart';
+
+class _MoneyInputFormatter extends TextInputFormatter {
+  final _fmt = NumberFormat('#,###', 'vi_VN');
+
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    final digits = newValue.text.replaceAll(RegExp(r'[^0-9]'), '');
+
+    if (digits.isEmpty) {
+      return const TextEditingValue(
+        text: '',
+        selection: TextSelection.collapsed(offset: 0),
+      );
+    }
+
+    final number = int.parse(digits);
+    final newText = _fmt.format(number);
+
+    return TextEditingValue(
+      text: newText,
+      selection: TextSelection.collapsed(offset: newText.length),
+    );
+  }
+}
 
 class CreateBankAccountForm extends StatefulWidget {
   const CreateBankAccountForm({super.key});
@@ -90,12 +119,14 @@ class _CreateBankAccountFormState extends State<CreateBankAccountForm> {
                 TextFormField(
                   controller: _initAmountCtrl,
                   textInputAction: TextInputAction.done,
+                  keyboardType: TextInputType.number, 
+                  inputFormatters: [
+                    _MoneyInputFormatter(), 
+                  ],
                   decoration: const InputDecoration(
                     labelText: 'Số dư ban đầu',
                     border: OutlineInputBorder(),
                   ),
-                  keyboardType:
-                      const TextInputType.numberWithOptions(decimal: true),
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
