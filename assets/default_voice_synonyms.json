@@ -1,0 +1,35 @@
+{
+  "category": {
+    "ăn": "Ăn uống",
+    "cơm": "Ăn uống",
+    "bánh mì": "Ăn uống",
+    "cà phê": "Ăn uống",
+    "trà sữa": "Ăn uống",
+    "xăng": "Di chuyển",
+    "grab": "Di chuyển",
+    "taxi": "Di chuyển",
+    "điện": "Hóa đơn",
+    "nước": "Hóa đơn",
+    "wi-fi": "Hóa đơn",
+    "lương": "Lương",
+    "thưởng": "Lương",
+    "ba mẹ": "Trợ cấp",
+    "cho": "Trợ cấp",
+    "học": "Giáo dục",
+    "sách": "Giáo dục",
+    "bán": "Doanh thu",
+    "đối tác": "Doanh thu",
+    "đầu tư": "Đầu tư"
+  },
+  "intent": {
+    "ăn": "spend",
+    "mua": "spend",
+    "trả": "spend",
+    "xăng": "spend",
+    "cho": "income",
+    "được": "income",
+    "nhận": "income",
+    "bán": "income",
+    "lương": "income"
+  }
+}
