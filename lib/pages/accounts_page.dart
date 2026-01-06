@@ -4,12 +4,15 @@ import 'package:chitieu/widgets/create_investment_form.dart';
 import 'package:chitieu/widgets/create_saving_form.dart';
 import 'package:chitieu/widgets/edit_bank_account_form.dart';
 import 'package:chitieu/widgets/feature_grid.dart';
+import 'package:chitieu/widgets/models/monthly_cashflow.dart';
 import 'package:chitieu/widgets/saving_transaction_form.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
+import 'package:chitieu/widgets/spending_trend_card.dart';
+import 'package:chitieu/widgets/saving_goal_card.dart';
 
 import 'package:chitieu/l10n/app_localizations.dart';
 import 'package:chitieu/core/money/money_formatter.dart';
@@ -59,6 +62,15 @@ class _AccountsPageState extends State<AccountsPage> {
     return Colors.redAccent;
   }
 
+  List<MonthlyCashFlow> _trendData = [];
+  bool _loadingTrend = true;
+  num _toNum(dynamic v) {
+      if (v == null) return 0;
+      if (v is num) return v;
+      if (v is String) return num.tryParse(v) ?? 0;
+      return 0;
+    }
+
   static const _prefKeyHideBalance = 'pref_hide_balance';
 
   AuthProvider? _auth;
@@ -83,6 +95,7 @@ class _AccountsPageState extends State<AccountsPage> {
       if (_auth!.isAuthenticated) {
         // Gọi 1 hàm duy nhất, fetch đủ ví + chi + thu + ngân sách + saving
         await _fetchForYm(ym.year, ym.month);
+        await _loadLast6MonthsTrend();
         if (mounted) setState(() {});
       } else {
         // Clear ví khi chưa login
@@ -99,6 +112,7 @@ class _AccountsPageState extends State<AccountsPage> {
           if (_auth!.isAuthenticated) {
             // Lúc trạng thái auth thay đổi, cũng fetch full data
             await _fetchForYm(ymNow.year, ymNow.month);
+            await _loadLast6MonthsTrend();
             if (mounted) setState(() {});
           } else {
             final bank = context.read<BankAccountProvider>();
@@ -113,6 +127,41 @@ class _AccountsPageState extends State<AccountsPage> {
 
       _auth!.addListener(_authListener!);
       context.read<YearMonthProvider>().addListener(_onYmChanged);
+    });
+    
+  }
+
+  Future<void> _loadLast6MonthsTrend() async {
+    final inApi = context.read<InInvoiceProvider>().api;
+    final outApi = context.read<OutInvoiceProvider>().api;
+
+    final now = DateTime.now();
+    final List<MonthlyCashFlow> list = [];
+
+    for (int i = 5; i >= 0; i--) {
+      final d = DateTime(now.year, now.month - i, 1);
+
+      final inRes = await inApi.fetchByMonth(year: d.year, month: d.month);
+      final outRes = await outApi.fetchByMonth(year: d.year, month: d.month);
+
+      final income = (inRes['data'] as List? ?? [])
+          .fold<num>(0, (s, e) => s + _toNum(e['amount']));
+
+      final expense = (outRes['data'] as List? ?? [])
+          .fold<num>(0, (s, e) => s + _toNum(e['amount']));
+
+      list.add(MonthlyCashFlow(
+        year: d.year,
+        month: d.month,
+        income: income,
+        expense: expense,
+      ));
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _trendData = list;
+      _loadingTrend = false;
     });
   }
 
@@ -456,6 +505,30 @@ class _AccountsPageState extends State<AccountsPage> {
                     },
                   ),
                 ],
+              ),
+              const SizedBox(height: 20),
+
+// ===== TỔNG THU / TỔNG CHI =====
+              MonthSummaryCard(
+                totalIncome: inProv.totalAmount,
+                totalExpense: outProv.totalAmount,
+                hideBalance: _hideBalance,
+              ),
+
+              const SizedBox(height: 16),
+
+              if (_loadingTrend)
+                const Center(child: CircularProgressIndicator())
+              else
+                SpendingTrendCard(data: _trendData),
+
+              const SizedBox(height: 16),
+
+              SavingGoalCard(
+                totalSaved: totalSaved,
+                onCreate: () {
+                  Navigator.pushNamed(context, '/saving');
+                },
               ),
 
               // ===== Cảnh báo vượt chi =====
@@ -1107,6 +1180,98 @@ class _SimpleTxItem extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class MonthSummaryCard extends StatelessWidget {
+  final num totalIncome;
+  final num totalExpense;
+  final bool hideBalance;
+
+  const MonthSummaryCard({
+    super.key,
+    required this.totalIncome,
+    required this.totalExpense,
+    required this.hideBalance,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final moneySettings = context.watch<MoneySettingsProvider>().settings;
+
+    String fmt(num v) =>
+        hideBalance ? '•••' : MoneyFormatter(moneySettings).format(v);
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: const [
+          BoxShadow(
+            blurRadius: 6,
+            offset: Offset(0, 2),
+            color: Colors.black12,
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Tổng thu / Tổng chi',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              _SummaryItem(
+                label: 'Tổng thu',
+                value: '+${fmt(totalIncome)}',
+                color: Colors.green,
+              ),
+              _SummaryItem(
+                label: 'Tổng chi',
+                value: '-${fmt(totalExpense)}',
+                color: Colors.redAccent,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SummaryItem extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color color;
+
+  const _SummaryItem({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
+        const SizedBox(height: 4),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.w900,
+            color: color,
+          ),
+        ),
+      ],
     );
   }
 }

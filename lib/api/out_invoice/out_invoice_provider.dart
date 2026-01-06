@@ -116,4 +116,7 @@ class OutInvoiceProvider with ChangeNotifier {
     await fetch(year: selectedYear, month: selectedMonth);
     notifyListeners();
   }
+  num get totalAmount =>
+    items.fold<num>(0, (sum, e) => sum + (e.amount ?? 0));
+
 }

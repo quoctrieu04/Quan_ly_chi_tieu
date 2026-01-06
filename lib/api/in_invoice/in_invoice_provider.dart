@@ -103,4 +103,8 @@ class InInvoiceProvider with ChangeNotifier {
     await fetch(year: now.year, month: now.month);
     notifyListeners();
   }
+    /// 💰 Tổng tiền thu trong danh sách hiện tại
+  num get totalAmount =>
+      _items.fold<num>(0, (sum, e) => sum + (e.amount ?? 0));
+
 }
