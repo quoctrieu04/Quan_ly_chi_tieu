@@ -7,44 +7,90 @@ class InvestmentProvider extends ChangeNotifier {
 
   InvestmentProvider({required this.api});
 
-  List<Investment> items = [];
+  final List<Investment> _items = [];
   bool loading = false;
 
+  List<Investment> get items => _items;
+
+  List<Investment> get banks => _items.where((e) => e.type == 'bank').toList();
+
+  List<Investment> get stocks =>
+      _items.where((e) => e.type == 'stock').toList();
+
+  // =========================
+  // FETCH
+  // =========================
   Future<void> fetch() async {
     loading = true;
     notifyListeners();
+
     try {
-      final data = await api.fetch();
-      items = data.map<Investment>((e) => Investment.fromJson(e)).toList();
-    } catch (_) {
-      items = [];
+      final rawList = await api.fetch(); // List<dynamic>
+
+      _items
+        ..clear()
+        ..addAll(
+          rawList.map((e) => Investment.fromJson(e)),
+        );
+    } catch (e) {
+      debugPrint("❌ Fetch investment error: $e");
+    } finally {
+      loading = false;
+      notifyListeners();
     }
-    loading = false;
-    notifyListeners();
   }
 
+  // =========================
+  // CREATE
+  // =========================
   Future<bool> add(Investment inv) async {
     final ok = await api.create(inv.toJson());
     if (ok) {
-      await fetch();
+      await fetch(); // reload từ server cho chắc
     }
     return ok;
   }
 
+  // =========================
+  // UPDATE PRICE (STOCK)
+  // =========================
   Future<bool> updatePrice(int id, double price) async {
     final ok = await api.updatePrice(id, price);
     if (ok) {
-      await fetch();
+      final idx = _items.indexWhere((e) => e.id == id);
+      if (idx != -1) {
+        _items[idx] = _items[idx].copyWith(currentPrice: price);
+        notifyListeners();
+      }
     }
     return ok;
   }
 
+  // =========================
+  // DELETE
+  // =========================
   Future<bool> remove(int id) async {
     final ok = await api.delete(id);
     if (ok) {
-      items.removeWhere((i) => i.id == id);
+      _items.removeWhere((e) => e.id == id);
       notifyListeners();
     }
     return ok;
+  }
+  // =========================
+  // SUMMARY
+  // =========================
+
+  double get totalInvested {
+    return _items.fold(0, (sum, e) => sum + e.totalInvested);
+  }
+
+  double get totalProfit {
+    return _items.fold(0, (sum, e) => sum + e.profitLoss);
+  }
+
+  double get totalProfitPercent {
+    if (totalInvested == 0) return 0;
+    return totalProfit / totalInvested * 100;
   }
 }

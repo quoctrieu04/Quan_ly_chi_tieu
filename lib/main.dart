@@ -3,7 +3,7 @@ import 'package:chitieu/api/investment/investment_service.dart';
 import 'package:chitieu/api/transaction/transaction_provider.dart';
 import 'package:chitieu/pages/accounts_list_page.dart';
 import 'package:chitieu/pages/income_list_page.dart';
-import 'package:chitieu/pages/investment_list_page.dart';
+import 'package:chitieu/pages/investment_page.dart';
 import 'package:chitieu/pages/saving_list_page.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -291,7 +291,7 @@ class MyApp extends StatelessWidget {
       themeMode: settings.themeMode,
       theme: ThemeData(
         useMaterial3: false,
-        colorScheme: ColorScheme.fromSeed(seedColor: settings.seed),
+        colorScheme: ColorScheme.fromSeed(seedColor: settings.seed), 
         scaffoldBackgroundColor: const Color(0xFFFAF3E6),
       ),
       darkTheme: ThemeData.dark().copyWith(
@@ -306,7 +306,7 @@ class MyApp extends StatelessWidget {
         '/settings/money': (_) => const MoneySettingsPage(),
         '/transactions': (_) => const TransactionsPage(),
         '/accounts': (_) => const AccountsListPage(),
-        '/investment': (_) => const InvestmentListPage(),
+        '/investment': (_) => InvestmentListPage(),
         '/saving': (_) => const SavingListPage(),
         '/income': (_) => const IncomeListPage(),
       },

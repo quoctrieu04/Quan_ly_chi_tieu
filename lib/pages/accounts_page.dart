@@ -65,11 +65,11 @@ class _AccountsPageState extends State<AccountsPage> {
   List<MonthlyCashFlow> _trendData = [];
   bool _loadingTrend = true;
   num _toNum(dynamic v) {
-      if (v == null) return 0;
-      if (v is num) return v;
-      if (v is String) return num.tryParse(v) ?? 0;
-      return 0;
-    }
+    if (v == null) return 0;
+    if (v is num) return v;
+    if (v is String) return num.tryParse(v) ?? 0;
+    return 0;
+  }
 
   static const _prefKeyHideBalance = 'pref_hide_balance';
 
@@ -128,7 +128,6 @@ class _AccountsPageState extends State<AccountsPage> {
       _auth!.addListener(_authListener!);
       context.read<YearMonthProvider>().addListener(_onYmChanged);
     });
-    
   }
 
   Future<void> _loadLast6MonthsTrend() async {
@@ -483,10 +482,12 @@ class _AccountsPageState extends State<AccountsPage> {
                           context: context,
                           isScrollControlled: true,
                           useSafeArea: true,
-                          builder: (_) => const CreateInvestmentForm(),
+                          builder: (_) => CreateInvestmentForm(),
                         );
+
                         if (created == true && context.mounted) {
                           await prov.fetch();
+                          Navigator.pushNamed(context, '/investment');
                         }
                       } else {
                         Navigator.pushNamed(context, '/investment');

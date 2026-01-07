@@ -1,11 +1,9 @@
-import 'dart:convert';
-import 'package:chitieu/api/investment/investment_model.dart';
-import 'package:chitieu/api/investment/investment_provider.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+
+import 'package:chitieu/api/investment/investment_provider.dart';
+import 'package:chitieu/api/investment/investment_model.dart';
 
 class CreateInvestmentForm extends StatefulWidget {
   const CreateInvestmentForm({super.key});
@@ -17,116 +15,44 @@ class CreateInvestmentForm extends StatefulWidget {
 class _CreateInvestmentFormState extends State<CreateInvestmentForm> {
   final _formKey = GlobalKey<FormState>();
 
-  final _name = TextEditingController();
-  final _buy = TextEditingController();
-  final _current = TextEditingController();
-  final _qty = TextEditingController();
-  final _symbol = TextEditingController();
+  String type = 'bank';
 
-  String _assetType = "custom";
-  bool _autoUpdate = false;
+  /// ===== BANK =====
+  String bankName = 'VCB';
 
-  String apiSource = "";
-  String apiField = "";
-  String apiPath = "";
+  /// Lãi suất gợi ý (tham khảo)
+  final Map<String, double> bankRates = const {
+    'VCB': 5.5,
+    'BIDV': 5.3,
+    'VietinBank': 5.4,
+    'MB': 5.8,
+    'ACB': 6.0,
+    'Techcombank': 5.7,
+  };
+
+  final nameCtrl = TextEditingController();
+  final amountCtrl = TextEditingController(); // bank
+  final rateCtrl = TextEditingController();   // bank
+  final priceCtrl = TextEditingController();  // stock
+  final qtyCtrl = TextEditingController();    // stock
+
+  DateTime startDate = DateTime.now();
 
   @override
-  void dispose() {
-    _name.dispose();
-    _buy.dispose();
-    _current.dispose();
-    _qty.dispose();
-    _symbol.dispose();
-    super.dispose();
-  }
-
-  // =============================
-  // Parse tiền (loại dấu ,)
-  // =============================
-  double _parseMoney(String text) {
-    return double.tryParse(text.replaceAll(RegExp(r'\D'), '')) ?? 0;
-  }
-
-  // =============================
-  // Format tiền khi nhập
-  // =============================
-  TextInputFormatter _moneyFormatter() {
-    return TextInputFormatter.withFunction((oldValue, newValue) {
-      final digits = newValue.text.replaceAll(RegExp(r'\D'), '');
-      final number = int.tryParse(digits) ?? 0;
-      final formatted = NumberFormat("#,##0", "vi_VN").format(number);
-      return newValue.copyWith(text: formatted);
-    });
-  }
-
-  // =============================
-  // Cấu hình API theo loại tài sản
-  // =============================
-  void _updateApiConfig() {
-    apiSource = "";
-    apiField = "";
-    apiPath = "";
-
-    switch (_assetType) {
-      case "gold":
-        apiSource = "https://sjc.azurewebsites.net/json/sjc.json";
-        apiPath = "cities.HCM.buy";
-        break;
-
-      case "crypto":
-        final symbol = _symbol.text.trim().toLowerCase();
-        apiSource =
-            "https://api.coingecko.com/api/v3/simple/price?ids=$symbol&vs_currencies=vnd";
-        apiPath = "$symbol.vnd";
-        break;
-
-      case "stock":
-        final symbol = _symbol.text.trim().toUpperCase();
-        apiSource =
-            "https://finfo-api.vndirect.com.vn/v4/stock_prices/?symbol=$symbol";
-        apiPath = "data.0.adjClose";
-        break;
-
-      case "custom":
-      default:
-        break;
-    }
-  }
-
-  // =============================
-  // Fetch giá từ API (có fallback)
-  // =============================
-  Future<double> fetchAutoPrice(double buyPrice) async {
-    if (!_autoUpdate) {
-      return _parseMoney(_current.text);
-    }
-
-    try {
-      final res = await http.get(Uri.parse(apiSource));
-      if (res.statusCode != 200) return buyPrice;
-
-      final json = jsonDecode(res.body);
-      dynamic data = json;
-
-      for (final key in apiPath.split(".")) {
-        data = (key == "0") ? data[0] : data[key];
-      }
-
-      final price = double.tryParse(data.toString());
-      return (price != null && price > 0) ? price : buyPrice;
-    } catch (_) {
-      return buyPrice; // fallback an toàn
-    }
+  void initState() {
+    super.initState();
+    // set lãi suất mặc định theo ngân hàng đầu tiên
+    rateCtrl.text = bankRates[bankName]!.toString();
   }
 
   @override
   Widget build(BuildContext context) {
     return Padding(
       padding: EdgeInsets.only(
-        bottom: MediaQuery.of(context).viewInsets.bottom,
         left: 16,
         right: 16,
-        top: 20,
+        top: 16,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 16,
       ),
       child: Form(
         key: _formKey,
@@ -135,163 +61,189 @@ class _CreateInvestmentFormState extends State<CreateInvestmentForm> {
             mainAxisSize: MainAxisSize.min,
             children: [
               const Text(
-                "Thêm khoản đầu tư",
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                'Thêm đầu tư',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 16),
 
-              // Tên
-              TextFormField(
-                controller: _name,
-                decoration: const InputDecoration(
-                  labelText: "Tên khoản đầu tư",
-                  prefixIcon: Icon(Icons.inventory),
-                ),
-                validator: (v) => v == null || v.trim().isEmpty
-                    ? "Không được bỏ trống"
-                    : null,
-              ),
-              const SizedBox(height: 12),
-
-              // Loại tài sản
+              // =========================
+              // TYPE
+              // =========================
               DropdownButtonFormField<String>(
-                value: _assetType,
-                decoration: const InputDecoration(
-                  labelText: "Loại tài sản",
-                  prefixIcon: Icon(Icons.category),
-                ),
+                value: type,
+                decoration: const InputDecoration(labelText: 'Loại đầu tư'),
                 items: const [
-                  DropdownMenuItem(value: "gold", child: Text("Vàng SJC")),
-                  DropdownMenuItem(value: "crypto", child: Text("Crypto")),
-                  DropdownMenuItem(value: "stock", child: Text("Cổ phiếu VN")),
-                  DropdownMenuItem(value: "custom", child: Text("Tuỳ chỉnh")),
+                  DropdownMenuItem(value: 'bank', child: Text('Ngân hàng')),
+                  DropdownMenuItem(value: 'stock', child: Text('Cổ phiếu')),
                 ],
-                onChanged: (v) {
-                  setState(() {
-                    _assetType = v!;
-                    _autoUpdate = _assetType != "custom";
-                  });
-                },
+                onChanged: (v) => setState(() => type = v!),
               ),
-              const SizedBox(height: 12),
 
-              // Symbol
-              if (_assetType == "crypto" || _assetType == "stock")
-                TextFormField(
-                  controller: _symbol,
-                  decoration: const InputDecoration(
-                    labelText: "Mã tài sản (BTC, ETH, FPT...)",
-                    prefixIcon: Icon(Icons.tag),
-                  ),
-                  validator: (v) {
-                    if (_assetType == "crypto" || _assetType == "stock") {
-                      return (v == null || v.trim().isEmpty)
-                          ? "Không được bỏ trống"
-                          : null;
-                    }
-                    return null;
+              const SizedBox(height: 8),
+
+              // =========================
+              // NAME
+              // =========================
+              TextFormField(
+                controller: nameCtrl,
+                decoration:
+                    const InputDecoration(labelText: 'Tên khoản đầu tư'),
+                validator: (v) =>
+                    v == null || v.isEmpty ? 'Không được để trống' : null,
+              ),
+
+              // =========================
+              // BANK FORM
+              // =========================
+              if (type == 'bank') ...[
+                const SizedBox(height: 8),
+
+                /// BANK NAME
+                DropdownButtonFormField<String>(
+                  value: bankName,
+                  decoration: const InputDecoration(labelText: 'Ngân hàng'),
+                  items: bankRates.keys
+                      .map(
+                        (b) => DropdownMenuItem(
+                          value: b,
+                          child: Text(b),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (v) {
+                    setState(() {
+                      bankName = v!;
+                      rateCtrl.text = bankRates[bankName]!.toString();
+                    });
                   },
                 ),
 
-              if (_assetType == "crypto" || _assetType == "stock")
-                const Padding(
-                  padding: EdgeInsets.only(top: 4),
-                  child: Text(
-                    "Giá sẽ được cập nhật tự động từ API",
-                    style: TextStyle(fontSize: 12),
-                  ),
-                ),
+                const SizedBox(height: 8),
 
-              const SizedBox(height: 12),
-
-              // Giá mua
-              TextFormField(
-                controller: _buy,
-                keyboardType: TextInputType.number,
-                inputFormatters: [_moneyFormatter()],
-                decoration: const InputDecoration(
-                  labelText: "Giá mua (VND)",
-                  prefixIcon: Icon(Icons.money),
-                ),
-                validator: (v) =>
-                    _parseMoney(v ?? "") <= 0 ? "Nhập số hợp lệ" : null,
-              ),
-              const SizedBox(height: 12),
-
-              // Giá hiện tại (custom)
-              if (_assetType == "custom")
                 TextFormField(
-                  controller: _current,
+                  controller: amountCtrl,
                   keyboardType: TextInputType.number,
-                  inputFormatters: [_moneyFormatter()],
-                  decoration: const InputDecoration(
-                    labelText: "Giá hiện tại (VND)",
-                    prefixIcon: Icon(Icons.trending_up),
-                  ),
-                  validator: (v) =>
-                      _parseMoney(v ?? "") <= 0 ? "Nhập số hợp lệ" : null,
+                  decoration:
+                      const InputDecoration(labelText: 'Số tiền gửi'),
+                  validator: _validateNumber,
                 ),
-              if (_assetType == "custom") const SizedBox(height: 12),
 
-              // Số lượng
-              TextFormField(
-                controller: _qty,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  labelText: "Số lượng",
-                  prefixIcon: Icon(Icons.numbers),
+                const SizedBox(height: 8),
+
+                TextFormField(
+                  controller: rateCtrl,
+                  keyboardType: TextInputType.number,
+                  decoration:
+                      const InputDecoration(labelText: 'Lãi suất % / năm'),
+                  validator: _validateNumber,
                 ),
-                validator: (v) =>
-                    double.tryParse(v ?? "") == null ? "Nhập số hợp lệ" : null,
-              ),
-              const SizedBox(height: 24),
 
-              // Lưu
+                const SizedBox(height: 8),
+
+                // START DATE
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Ngày gửi'),
+                  subtitle:
+                      Text(DateFormat('dd/MM/yyyy').format(startDate)),
+                  trailing: const Icon(Icons.calendar_today),
+                  onTap: _pickDate,
+                ),
+              ],
+
+              // =========================
+              // STOCK FORM
+              // =========================
+              if (type == 'stock') ...[
+                const SizedBox(height: 8),
+                TextFormField(
+                  controller: priceCtrl,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: 'Giá mua'),
+                  validator: _validateNumber,
+                ),
+                const SizedBox(height: 8),
+                TextFormField(
+                  controller: qtyCtrl,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: 'Số lượng'),
+                  validator: _validateNumber,
+                ),
+              ],
+
+              const SizedBox(height: 20),
+
+              // =========================
+              // SAVE
+              // =========================
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  child: const Text("Lưu"),
-                  onPressed: () async {
-                    if (!_formKey.currentState!.validate()) return;
-
-                    _updateApiConfig();
-
-                    final buyPrice = _parseMoney(_buy.text);
-                    final qty = double.tryParse(_qty.text) ?? 0;
-
-                    final currentPrice = await fetchAutoPrice(buyPrice);
-
-                    final totalInvested = buyPrice * qty;
-                    final profitLoss = (currentPrice - buyPrice) * qty;
-
-                    final inv = Investment(
-                      userId: 0,
-                      name: _name.text.trim(),
-                      type: _assetType,
-                      buyPrice: buyPrice,
-                      currentPrice: currentPrice,
-                      quantity: qty,
-                      totalInvested: totalInvested,
-                      profitLoss: profitLoss,
-                      autoUpdate: _autoUpdate,
-                      symbol: _symbol.text.trim(),
-                      apiSource: apiSource,
-                      apiPath: apiPath,
-                      createdAt: DateTime.now(),
-                    );
-
-                    final ok =
-                        await context.read<InvestmentProvider>().add(inv);
-
-                    if (ok && mounted) Navigator.pop(context, true);
-                  },
+                  onPressed: _save,
+                  child: const Text('Lưu'),
                 ),
               ),
-              const SizedBox(height: 20),
             ],
           ),
         ),
       ),
     );
+  }
+
+  // =========================
+  // HELPERS
+  // =========================
+
+  String? _validateNumber(String? v) {
+    if (v == null || v.isEmpty) return 'Không được để trống';
+    if (double.tryParse(v) == null) return 'Giá trị không hợp lệ';
+    return null;
+  }
+
+  Future<void> _pickDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: startDate,
+      firstDate: DateTime(2000),
+      lastDate: DateTime.now(),
+    );
+    if (picked != null) {
+      setState(() => startDate = picked);
+    }
+  }
+
+  Future<void> _save() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    final prov = context.read<InvestmentProvider>();
+
+    if (type == 'bank') {
+      await prov.add(
+        Investment(
+          name: nameCtrl.text,
+          type: 'bank',
+          bankName: bankName,
+          buyPrice: double.parse(amountCtrl.text),
+          currentPrice: double.parse(amountCtrl.text),
+          quantity: 1,
+          interestRate: double.parse(rateCtrl.text),
+          startDate: startDate,
+          createdAt: DateTime.now(),
+        ),
+      );
+    } else {
+      await prov.add(
+        Investment(
+          name: nameCtrl.text,
+          type: 'stock',
+          buyPrice: double.parse(priceCtrl.text),
+          currentPrice: double.parse(priceCtrl.text),
+          quantity: double.parse(qtyCtrl.text),
+          createdAt: DateTime.now(),
+        ),
+      );
+    }
+
+    if (mounted) Navigator.pop(context, true);
   }
 }

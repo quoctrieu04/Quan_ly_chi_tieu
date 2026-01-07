@@ -40,7 +40,8 @@ class _EditBankAccountFormState extends State<EditBankAccountForm> {
     super.initState();
     _nameCtl = TextEditingController(text: widget.initialName);
     _bankNameCtl = TextEditingController(text: widget.initialBankName ?? '');
-    _bankNumberCtl = TextEditingController(text: widget.initialBankNumber ?? '');
+    _bankNumberCtl =
+        TextEditingController(text: widget.initialBankNumber ?? '');
     _balanceCtl = TextEditingController(text: widget.initialBalance.toString());
   }
 
@@ -161,7 +162,6 @@ class _EditBankAccountFormState extends State<EditBankAccountForm> {
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
             ),
             const SizedBox(height: 12),
-
             TextFormField(
               controller: _nameCtl,
               decoration: const InputDecoration(labelText: 'Tên tài khoản'),
@@ -181,11 +181,15 @@ class _EditBankAccountFormState extends State<EditBankAccountForm> {
             const SizedBox(height: 8),
             TextFormField(
               controller: _balanceCtl,
-              decoration: const InputDecoration(labelText: 'Số dư hiện tại'),
+              decoration: const InputDecoration(
+                labelText: 'Số dư hiện tại',
+                helperText: 'Không thể chỉnh sửa số dư',
+              ),
               keyboardType: TextInputType.number,
+              readOnly: true,
+              enabled: false, // làm mờ + không focus
             ),
             const SizedBox(height: 16),
-
             SizedBox(
               width: double.infinity,
               height: 48,
@@ -196,7 +200,6 @@ class _EditBankAccountFormState extends State<EditBankAccountForm> {
               ),
             ),
             const SizedBox(height: 12),
-
             SizedBox(
               width: double.infinity,
               height: 48,
