@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:chitieu/api/bankaccount/bank_account_provider.dart';
-import 'package:chitieu/widgets/create_bank_account_form.dart';
 import 'package:chitieu/widgets/edit_bank_account_form.dart';
+import 'package:chitieu/widgets/create_bank_account_form.dart';
+
 import 'package:intl/intl.dart';
 
 String formatMoney(num v) {
@@ -32,7 +33,7 @@ class AccountsListPage extends StatelessWidget {
                 shape: const RoundedRectangleBorder(
                   borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
                 ),
-                builder: (_) => const CreateBankAccountForm(),
+                builder: (_) => CreateBankAccountForm(),
               );
               if (created == true && context.mounted) {
                 prov.fetch();

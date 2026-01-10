@@ -1,9 +1,41 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import 'package:flutter/services.dart';
 
 import 'package:chitieu/api/investment/investment_provider.dart';
 import 'package:chitieu/api/investment/investment_model.dart';
+import 'package:chitieu/api/bankaccount/bank_account_provider.dart';
+
+/// ===============================
+/// FORMAT TIỀN: 1.222.333
+/// ===============================
+class MoneyInputFormatter extends TextInputFormatter {
+  final _formatter = NumberFormat('#,###', 'vi_VN');
+
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    final digits = newValue.text.replaceAll(RegExp(r'[^0-9]'), '');
+
+    if (digits.isEmpty) {
+      return const TextEditingValue(
+        text: '',
+        selection: TextSelection.collapsed(offset: 0),
+      );
+    }
+
+    final number = int.parse(digits);
+    final formatted = _formatter.format(number);
+
+    return TextEditingValue(
+      text: formatted,
+      selection: TextSelection.collapsed(offset: formatted.length),
+    );
+  }
+}
 
 class CreateInvestmentForm extends StatefulWidget {
   const CreateInvestmentForm({super.key});
@@ -16,37 +48,60 @@ class _CreateInvestmentFormState extends State<CreateInvestmentForm> {
   final _formKey = GlobalKey<FormState>();
 
   String type = 'bank';
+  String? selectedAccount;
 
-  /// ===== BANK =====
+  // ===== BANK =====
   String bankName = 'VCB';
+  int termMonths = 12;
 
-  /// Lãi suất gợi ý (tham khảo)
-  final Map<String, double> bankRates = const {
-    'VCB': 5.5,
-    'BIDV': 5.3,
-    'VietinBank': 5.4,
-    'MB': 5.8,
-    'ACB': 6.0,
-    'Techcombank': 5.7,
-  };
+  final List<int> termOptions = const [1, 3, 6, 12];
 
   final nameCtrl = TextEditingController();
-  final amountCtrl = TextEditingController(); // bank
-  final rateCtrl = TextEditingController();   // bank
-  final priceCtrl = TextEditingController();  // stock
-  final qtyCtrl = TextEditingController();    // stock
+  final amountCtrl = TextEditingController();
+  final rateCtrl = TextEditingController();
 
   DateTime startDate = DateTime.now();
+
+  // ===============================
+  // PARSE SỐ CHUẨN VN
+  // ===============================
+  double _parseNumber(String input) {
+    return double.parse(
+      input.replaceAll('.', '').replaceAll(',', '.'),
+    );
+  }
+
+  String? _validateNumber(String? v) {
+    if (v == null || v.isEmpty) return 'Không được để trống';
+    try {
+      final n = _parseNumber(v);
+      if (n <= 0) return 'Giá trị phải > 0';
+    } catch (_) {
+      return 'Giá trị không hợp lệ';
+    }
+    return null;
+  }
 
   @override
   void initState() {
     super.initState();
-    // set lãi suất mặc định theo ngân hàng đầu tiên
-    rateCtrl.text = bankRates[bankName]!.toString();
+    final bankAccountProvider = context.read<BankAccountProvider>();
+    if (!bankAccountProvider.loading &&
+        bankAccountProvider.items.isEmpty) {
+      bankAccountProvider.fetchAccounts();
+    }
+  }
+
+  void _showMessage(String msg) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(msg)));
   }
 
   @override
   Widget build(BuildContext context) {
+    final bankAccountProvider = context.watch<BankAccountProvider>();
+
     return Padding(
       padding: EdgeInsets.only(
         left: 16,
@@ -58,7 +113,6 @@ class _CreateInvestmentFormState extends State<CreateInvestmentForm> {
         key: _formKey,
         child: SingleChildScrollView(
           child: Column(
-            mainAxisSize: MainAxisSize.min,
             children: [
               const Text(
                 'Thêm đầu tư',
@@ -75,6 +129,7 @@ class _CreateInvestmentFormState extends State<CreateInvestmentForm> {
                 items: const [
                   DropdownMenuItem(value: 'bank', child: Text('Ngân hàng')),
                   DropdownMenuItem(value: 'stock', child: Text('Cổ phiếu')),
+                  DropdownMenuItem(value: 'real_estate', child: Text('Bất động sản')),
                 ],
                 onChanged: (v) => setState(() => type = v!),
               ),
@@ -82,7 +137,32 @@ class _CreateInvestmentFormState extends State<CreateInvestmentForm> {
               const SizedBox(height: 8),
 
               // =========================
-              // NAME
+              // Tài khoản nguồn tiền
+              // =========================
+              bankAccountProvider.loading
+                  ? const CircularProgressIndicator()
+                  : DropdownButtonFormField<String>(
+                      value: selectedAccount,
+                      decoration: const InputDecoration(
+                        labelText: 'Tài khoản nguồn tiền',
+                      ),
+                      validator: (v) =>
+                          v == null ? 'Vui lòng chọn tài khoản' : null,
+                      items: bankAccountProvider.items
+                          .map(
+                            (acc) => DropdownMenuItem(
+                              value: acc.id.toString(),
+                              child: Text(
+                                  '${acc.name} - ${acc.bankname ?? ""}'),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (v) =>
+                          setState(() => selectedAccount = v),
+                    ),
+
+              // =========================
+              // Tên đầu tư
               // =========================
               TextFormField(
                 controller: nameCtrl,
@@ -97,12 +177,19 @@ class _CreateInvestmentFormState extends State<CreateInvestmentForm> {
               // =========================
               if (type == 'bank') ...[
                 const SizedBox(height: 8),
-
-                /// BANK NAME
                 DropdownButtonFormField<String>(
                   value: bankName,
                   decoration: const InputDecoration(labelText: 'Ngân hàng'),
-                  items: bankRates.keys
+                  items: const [
+                    'VCB',
+                    'BIDV',
+                    'VietinBank',
+                    'MB',
+                    'ACB',
+                    'Techcombank',
+                    'TPBank',
+                    'Sacombank'
+                  ]
                       .map(
                         (b) => DropdownMenuItem(
                           value: b,
@@ -110,26 +197,31 @@ class _CreateInvestmentFormState extends State<CreateInvestmentForm> {
                         ),
                       )
                       .toList(),
-                  onChanged: (v) {
-                    setState(() {
-                      bankName = v!;
-                      rateCtrl.text = bankRates[bankName]!.toString();
-                    });
-                  },
+                  onChanged: (v) => setState(() => bankName = v!),
                 ),
-
                 const SizedBox(height: 8),
-
                 TextFormField(
                   controller: amountCtrl,
                   keyboardType: TextInputType.number,
+                  inputFormatters: [MoneyInputFormatter()],
                   decoration:
                       const InputDecoration(labelText: 'Số tiền gửi'),
                   validator: _validateNumber,
                 ),
-
                 const SizedBox(height: 8),
-
+                DropdownButtonFormField<int>(
+                  value: termMonths,
+                  decoration: const InputDecoration(labelText: 'Kỳ hạn'),
+                  items: termOptions
+                      .map(
+                        (m) => DropdownMenuItem(
+                          value: m,
+                          child: Text('$m tháng'),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (v) => setState(() => termMonths = v!),
+                ),
                 TextFormField(
                   controller: rateCtrl,
                   keyboardType: TextInputType.number,
@@ -137,10 +229,6 @@ class _CreateInvestmentFormState extends State<CreateInvestmentForm> {
                       const InputDecoration(labelText: 'Lãi suất % / năm'),
                   validator: _validateNumber,
                 ),
-
-                const SizedBox(height: 8),
-
-                // START DATE
                 ListTile(
                   contentPadding: EdgeInsets.zero,
                   title: const Text('Ngày gửi'),
@@ -151,31 +239,8 @@ class _CreateInvestmentFormState extends State<CreateInvestmentForm> {
                 ),
               ],
 
-              // =========================
-              // STOCK FORM
-              // =========================
-              if (type == 'stock') ...[
-                const SizedBox(height: 8),
-                TextFormField(
-                  controller: priceCtrl,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: 'Giá mua'),
-                  validator: _validateNumber,
-                ),
-                const SizedBox(height: 8),
-                TextFormField(
-                  controller: qtyCtrl,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: 'Số lượng'),
-                  validator: _validateNumber,
-                ),
-              ],
+              const SizedBox(height: 12),
 
-              const SizedBox(height: 20),
-
-              // =========================
-              // SAVE
-              // =========================
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
@@ -190,14 +255,35 @@ class _CreateInvestmentFormState extends State<CreateInvestmentForm> {
     );
   }
 
-  // =========================
-  // HELPERS
-  // =========================
+  Future<void> _save() async {
+    if (!_formKey.currentState!.validate()) return;
 
-  String? _validateNumber(String? v) {
-    if (v == null || v.isEmpty) return 'Không được để trống';
-    if (double.tryParse(v) == null) return 'Giá trị không hợp lệ';
-    return null;
+    final amountValue = _parseNumber(amountCtrl.text);
+
+    final prov = context.read<InvestmentProvider>();
+
+    final success = await prov.add(
+      Investment(
+        name: nameCtrl.text,
+        type: type,
+        bankName: bankName,
+        buyPrice: amountValue,
+        currentPrice: amountValue,
+        quantity: 1,
+        interestRate: _parseNumber(rateCtrl.text),
+        termMonths: termMonths,
+        startDate: startDate,
+        createdAt: DateTime.now(),
+        accountSource: selectedAccount,
+      ),
+    );
+
+    if (success) {
+      Navigator.pop(context, true);
+      _showMessage('Đã lưu khoản đầu tư');
+    } else {
+      _showMessage('Lưu khoản đầu tư không thành công');
+    }
   }
 
   Future<void> _pickDate() async {
@@ -210,40 +296,5 @@ class _CreateInvestmentFormState extends State<CreateInvestmentForm> {
     if (picked != null) {
       setState(() => startDate = picked);
     }
-  }
-
-  Future<void> _save() async {
-    if (!_formKey.currentState!.validate()) return;
-
-    final prov = context.read<InvestmentProvider>();
-
-    if (type == 'bank') {
-      await prov.add(
-        Investment(
-          name: nameCtrl.text,
-          type: 'bank',
-          bankName: bankName,
-          buyPrice: double.parse(amountCtrl.text),
-          currentPrice: double.parse(amountCtrl.text),
-          quantity: 1,
-          interestRate: double.parse(rateCtrl.text),
-          startDate: startDate,
-          createdAt: DateTime.now(),
-        ),
-      );
-    } else {
-      await prov.add(
-        Investment(
-          name: nameCtrl.text,
-          type: 'stock',
-          buyPrice: double.parse(priceCtrl.text),
-          currentPrice: double.parse(priceCtrl.text),
-          quantity: double.parse(qtyCtrl.text),
-          createdAt: DateTime.now(),
-        ),
-      );
-    }
-
-    if (mounted) Navigator.pop(context, true);
   }
 }

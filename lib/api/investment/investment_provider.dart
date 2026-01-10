@@ -12,11 +12,16 @@ class InvestmentProvider extends ChangeNotifier {
 
   List<Investment> get items => _items;
 
-  List<Investment> get banks => _items.where((e) => e.type == 'bank').toList();
+  // =========================
+  // FILTER
+  // =========================
+  List<Investment> get banks =>
+      _items.where((e) => e.type == 'bank').toList();
 
   List<Investment> get stocks =>
       _items.where((e) => e.type == 'stock').toList();
-
+  List<Investment> get realEstates =>
+    _items.where((e) => e.type == 'real_estate').toList();
   // =========================
   // FETCH
   // =========================
@@ -27,11 +32,18 @@ class InvestmentProvider extends ChangeNotifier {
     try {
       final rawList = await api.fetch(); // List<dynamic>
 
-      _items
-        ..clear()
-        ..addAll(
-          rawList.map((e) => Investment.fromJson(e)),
+      if (rawList is List) {
+        _items
+          ..clear()
+          ..addAll(
+            rawList.map((e) => Investment.fromJson(e)),
+          );
+
+        // Sort mới nhất lên trên
+        _items.sort(
+          (a, b) => b.createdAt.compareTo(a.createdAt),
         );
+      }
     } catch (e) {
       debugPrint("❌ Fetch investment error: $e");
     } finally {
@@ -44,24 +56,32 @@ class InvestmentProvider extends ChangeNotifier {
   // CREATE
   // =========================
   Future<bool> add(Investment inv) async {
-    final ok = await api.create(inv.toJson());
-    if (ok) {
-      await fetch(); // reload từ server cho chắc
+    try {
+      final ok = await api.create(inv.toJson());
+      if (ok) {
+        await fetch(); // reload từ server cho chắc
+      }
+      return ok;
+    } catch (e) {
+      debugPrint("❌ Error when adding investment: $e");
+      return false;
     }
-    return ok;
   }
 
   // =========================
-  // UPDATE PRICE (STOCK)
+  // UPDATE PRICE (CHỈ STOCK)
   // =========================
   Future<bool> updatePrice(int id, double price) async {
+    final idx = _items.indexWhere((e) => e.id == id);
+    if (idx == -1) return false;
+
+    final inv = _items[idx];
+    if (inv.type != 'stock') return false; // ⛔ bank không update giá
+
     final ok = await api.updatePrice(id, price);
     if (ok) {
-      final idx = _items.indexWhere((e) => e.id == id);
-      if (idx != -1) {
-        _items[idx] = _items[idx].copyWith(currentPrice: price);
-        notifyListeners();
-      }
+      _items[idx] = inv.copyWith(currentPrice: price);
+      notifyListeners();
     }
     return ok;
   }
@@ -77,20 +97,35 @@ class InvestmentProvider extends ChangeNotifier {
     }
     return ok;
   }
+
   // =========================
   // SUMMARY
   // =========================
 
-  double get totalInvested {
-    return _items.fold(0, (sum, e) => sum + e.totalInvested);
-  }
+  double get totalInvested =>
+      _items.fold(0, (sum, e) => sum + e.totalInvested);
 
-  double get totalProfit {
-    return _items.fold(0, (sum, e) => sum + e.profitLoss);
-  }
+  double get totalProfit =>
+      _items.fold(0, (sum, e) => sum + e.profitLoss);
 
   double get totalProfitPercent {
     if (totalInvested == 0) return 0;
     return totalProfit / totalInvested * 100;
   }
+
+  // =========================
+  // OPTIONAL (RẤT HAY DÙNG)
+  // =========================
+
+  double get bankTotalInvested =>
+      banks.fold(0, (sum, e) => sum + e.totalInvested);
+
+  double get bankTotalProfit =>
+      banks.fold(0, (sum, e) => sum + e.profitLoss);
+
+  double get stockTotalInvested =>
+      stocks.fold(0, (sum, e) => sum + e.totalInvested);
+
+  double get stockTotalProfit =>
+      stocks.fold(0, (sum, e) => sum + e.profitLoss);
 }

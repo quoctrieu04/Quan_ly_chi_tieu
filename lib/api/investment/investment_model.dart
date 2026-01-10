@@ -1,31 +1,16 @@
 class Investment {
   final int? id;
-
-  /// Tên khoản đầu tư
   final String name;
-
-  /// 'bank' | 'stock'
   final String type;
-
-  /// Giá mua (bank = số tiền gửi)
   final double buyPrice;
-
-  /// Giá hiện tại (bank = buyPrice)
   final double currentPrice;
-
-  /// Số lượng (bank = 1)
   final double quantity;
-
-  /// Ngân hàng (%/năm)
   final double? interestRate;
-
-  /// Ngày bắt đầu gửi (bank)
   final DateTime? startDate;
-
-  /// Thời điểm tạo bản ghi
-  final DateTime createdAt;
   final String? bankName;
-
+  final int? termMonths;
+  final DateTime createdAt;
+  final String? accountSource;
 
   Investment({
     this.id,
@@ -36,16 +21,16 @@ class Investment {
     required this.quantity,
     this.interestRate,
     this.startDate,
-    required this.createdAt,
     this.bankName,
-
+    this.termMonths,
+    required this.createdAt,
+    this.accountSource,
   });
 
   // ===================================================
   // JSON
   // ===================================================
 
-  /// Map JSON → Model
   factory Investment.fromJson(Map<String, dynamic> json) {
     return Investment(
       id: json['id'],
@@ -54,18 +39,21 @@ class Investment {
       buyPrice: (json['buy_price'] ?? 0).toDouble(),
       currentPrice: (json['current_price'] ?? 0).toDouble(),
       quantity: (json['quantity'] ?? 1).toDouble(),
-      interestRate: json['interest_rate']?.toDouble(),
+      interestRate: json['interest_rate'] != null
+          ? (json['interest_rate'] as num).toDouble()
+          : null,
       startDate: json['start_date'] != null && json['start_date'] != ''
           ? DateTime.parse(json['start_date'])
           : null,
+      bankName: json['bank_name'],
+      termMonths: json['term_months'],
       createdAt: json['created_at'] != null
           ? DateTime.parse(json['created_at'])
           : DateTime.now(),
-      bankName: json['bank_name'],
+      accountSource: json['accountSource'], 
     );
   }
 
-  /// Model → Map JSON (gửi lên API)
   Map<String, dynamic> toJson() {
     return {
       'name': name,
@@ -76,7 +64,8 @@ class Investment {
       'interest_rate': interestRate,
       'start_date': startDate?.toIso8601String(),
       'bank_name': bankName,
-
+      'term_months': termMonths,
+      'accountSource': accountSource,
     };
   }
 
@@ -96,6 +85,8 @@ class Investment {
       quantity: quantity,
       interestRate: interestRate,
       startDate: startDate,
+      bankName: bankName,
+      termMonths: termMonths,
       createdAt: createdAt,
     );
   }
@@ -121,15 +112,16 @@ class Investment {
     return profitLoss / totalInvested * 100;
   }
 
-  /// Lãi ngân hàng – lãi đơn theo ngày
+  /// Lãi ngân hàng – lãi đơn theo tháng (theo công thức bạn đưa)
   double get _bankProfit {
-    if (interestRate == null || startDate == null) return 0;
+    if (interestRate == null || startDate == null || termMonths == null) return 0;
 
-    final days = DateTime.now().difference(startDate!).inDays;
-    if (days <= 0) return 0;
+    // Tính số tháng gửi
+    final months = termMonths!;
 
+    // Tính lãi đơn theo công thức
     return totalInvested *
         (interestRate! / 100) *
-        (days / 365);
+        (months / 12);  // Lãi suất theo tháng
   }
 }

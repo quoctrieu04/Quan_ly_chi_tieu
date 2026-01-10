@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:chitieu/api/bankaccount/bank_account_provider.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
+import 'package:chitieu/api/bankaccount/bank_account_provider.dart';
 
+/// =======================
+/// FORMAT NHẬP TIỀN
+/// =======================
 class _MoneyInputFormatter extends TextInputFormatter {
   final _fmt = NumberFormat('#,###', 'vi_VN');
 
@@ -31,6 +34,9 @@ class _MoneyInputFormatter extends TextInputFormatter {
   }
 }
 
+/// =======================
+/// FORM TẠO TÀI KHOẢN
+/// =======================
 class CreateBankAccountForm extends StatefulWidget {
   const CreateBankAccountForm({super.key});
 
@@ -40,11 +46,14 @@ class CreateBankAccountForm extends StatefulWidget {
 
 class _CreateBankAccountFormState extends State<CreateBankAccountForm> {
   final _formKey = GlobalKey<FormState>();
+
   final _titleCtrl = TextEditingController();
   final _bankNameCtrl = TextEditingController();
   final _bankNumberCtrl = TextEditingController();
   final _initAmountCtrl = TextEditingController();
+
   String _currency = 'VND';
+  bool _submitting = false;
 
   @override
   void dispose() {
@@ -55,10 +64,21 @@ class _CreateBankAccountFormState extends State<CreateBankAccountForm> {
     super.dispose();
   }
 
+  /// =======================
+  /// PARSE TIỀN AN TOÀN
+  /// =======================
+  double _parseMoney(String text) {
+    final raw = text
+        .replaceAll('.', '')
+        .replaceAll(',', '')
+        .replaceAll(RegExp(r'[^0-9\-]'), '');
+
+    return double.tryParse(raw) ?? 0;
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final bankAccProv = context.read<BankAccountProvider>(); // ✅ rename
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
 
     return SafeArea(
@@ -72,6 +92,7 @@ class _CreateBankAccountFormState extends State<CreateBankAccountForm> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                // Drag bar
                 Container(
                   width: 40,
                   height: 4,
@@ -81,11 +102,14 @@ class _CreateBankAccountFormState extends State<CreateBankAccountForm> {
                   ),
                 ),
                 const SizedBox(height: 16),
+
                 const Text(
                   'Thêm tài khoản ngân hàng',
                   style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
                 ),
                 const SizedBox(height: 16),
+
+                /// Tên tài khoản
                 TextFormField(
                   controller: _titleCtrl,
                   textInputAction: TextInputAction.next,
@@ -94,9 +118,13 @@ class _CreateBankAccountFormState extends State<CreateBankAccountForm> {
                     border: OutlineInputBorder(),
                   ),
                   validator: (v) =>
-                      (v == null || v.isEmpty) ? 'Vui lòng nhập tên' : null,
+                      (v == null || v.trim().isEmpty)
+                          ? 'Vui lòng nhập tên tài khoản'
+                          : null,
                 ),
                 const SizedBox(height: 12),
+
+                /// Ngân hàng / ví
                 TextFormField(
                   controller: _bankNameCtrl,
                   textInputAction: TextInputAction.next,
@@ -106,6 +134,8 @@ class _CreateBankAccountFormState extends State<CreateBankAccountForm> {
                   ),
                 ),
                 const SizedBox(height: 12),
+
+                /// Số tài khoản
                 TextFormField(
                   controller: _bankNumberCtrl,
                   textInputAction: TextInputAction.next,
@@ -116,19 +146,31 @@ class _CreateBankAccountFormState extends State<CreateBankAccountForm> {
                   keyboardType: TextInputType.number,
                 ),
                 const SizedBox(height: 12),
+
+                /// Số dư ban đầu
                 TextFormField(
                   controller: _initAmountCtrl,
                   textInputAction: TextInputAction.done,
-                  keyboardType: TextInputType.number, 
-                  inputFormatters: [
-                    _MoneyInputFormatter(), 
-                  ],
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [_MoneyInputFormatter()],
                   decoration: const InputDecoration(
                     labelText: 'Số dư ban đầu',
                     border: OutlineInputBorder(),
                   ),
+                  validator: (v) {
+                    if (v == null || v.trim().isEmpty) {
+                      return 'Vui lòng nhập số dư ban đầu';
+                    }
+                    final parsed = _parseMoney(v);
+                    if (parsed <= 0) {
+                      return 'Số dư ban đầu phải lớn hơn 0';
+                    }
+                    return null;
+                  },
                 ),
                 const SizedBox(height: 12),
+
+                /// Loại tiền
                 DropdownButtonFormField<String>(
                   value: _currency,
                   decoration: const InputDecoration(
@@ -142,35 +184,59 @@ class _CreateBankAccountFormState extends State<CreateBankAccountForm> {
                   onChanged: (v) => setState(() => _currency = v ?? 'VND'),
                 ),
                 const SizedBox(height: 20),
+
+                /// Nút lưu
                 SizedBox(
                   width: double.infinity,
                   height: 48,
                   child: ElevatedButton.icon(
-                    icon: const Icon(Icons.check),
-                    label: const Text('Lưu tài khoản'),
-                    onPressed: () async {
-                      if (!_formKey.currentState!.validate()) return;
+                    icon: _submitting
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.check),
+                    label: Text(_submitting ? 'Đang lưu...' : 'Lưu tài khoản'),
+                    onPressed: _submitting
+                        ? null
+                        : () async {
+                            if (!_formKey.currentState!.validate()) return;
 
-                      final bankAccProv = context.read<BankAccountProvider>();
-                      debugPrint('[UI] Bắt đầu tạo tài khoản mới...');
-                      final success = await bankAccProv.createBankAccount(
-                        title: _titleCtrl.text.trim(),
-                        bankName: _bankNameCtrl.text.trim(),
-                        bankNumber: _bankNumberCtrl.text.trim(),
-                        initAmount:
-                            double.tryParse(_initAmountCtrl.text.trim()) ?? 0,
-                        currency: _currency,
-                      );
-                      debugPrint('[UI] Kết quả tạo tài khoản: $success');
+                            final initAmount =
+                                _parseMoney(_initAmountCtrl.text);
 
-                      if (success && context.mounted) {
-                        Navigator.pop(context, true);
-                      } else {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Tạo tài khoản thất bại')),
-                        );
-                      }
-                    },
+                            setState(() => _submitting = true);
+
+                            final success = await context
+                                .read<BankAccountProvider>()
+                                .createBankAccount(
+                                  title: _titleCtrl.text.trim(),
+                                  bankName: _bankNameCtrl.text.trim().isEmpty
+                                      ? null
+                                      : _bankNameCtrl.text.trim(),
+                                  bankNumber:
+                                      _bankNumberCtrl.text.trim().isEmpty
+                                          ? null
+                                          : _bankNumberCtrl.text.trim(),
+                                  initAmount: initAmount,
+                                  currency: _currency,
+                                );
+
+                            if (!mounted) return;
+                            setState(() => _submitting = false);
+
+                            if (success) {
+                              Navigator.pop(context, true);
+                            } else {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content:
+                                      Text('Tạo tài khoản không thành công'),
+                                ),
+                              );
+                            }
+                          },
                   ),
                 ),
               ],

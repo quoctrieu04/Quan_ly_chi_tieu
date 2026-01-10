@@ -214,7 +214,7 @@ class _AccountsPageState extends State<AccountsPage> {
     await savingProv.fetch(year: year, month: month);
 
     await Future.wait([
-      walletProv.fetch(),
+      walletProv.fetchAccounts(), // 🔥 FIX
       inProv.fetch(year: year, month: month),
       outProv.fetch(year: year, month: month),
       bankProv.fetch(year: year, month: month),
@@ -474,24 +474,8 @@ class _AccountsPageState extends State<AccountsPage> {
                   FeatureItem(
                     icon: Icons.trending_up_rounded,
                     label: 'Đầu tư',
-                    onTap: () async {
-                      final prov = context.read<InvestmentProvider>();
-
-                      if (prov.items.isEmpty) {
-                        final created = await showModalBottomSheet<bool>(
-                          context: context,
-                          isScrollControlled: true,
-                          useSafeArea: true,
-                          builder: (_) => CreateInvestmentForm(),
-                        );
-
-                        if (created == true && context.mounted) {
-                          await prov.fetch();
-                          Navigator.pushNamed(context, '/investment');
-                        }
-                      } else {
-                        Navigator.pushNamed(context, '/investment');
-                      }
+                    onTap: () {
+                      Navigator.pushNamed(context, '/investment');
                     },
                   ),
                   FeatureItem(
