@@ -20,8 +20,10 @@ class InvestmentProvider extends ChangeNotifier {
 
   List<Investment> get stocks =>
       _items.where((e) => e.type == 'stock').toList();
+
   List<Investment> get realEstates =>
-    _items.where((e) => e.type == 'real_estate').toList();
+      _items.where((e) => e.type == 'real_estate').toList();
+
   // =========================
   // FETCH
   // =========================
@@ -30,16 +32,12 @@ class InvestmentProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final rawList = await api.fetch(); // List<dynamic>
-
+      final rawList = await api.fetch();
       if (rawList is List) {
         _items
           ..clear()
-          ..addAll(
-            rawList.map((e) => Investment.fromJson(e)),
-          );
+          ..addAll(rawList.map((e) => Investment.fromJson(e)));
 
-        // Sort mới nhất lên trên
         _items.sort(
           (a, b) => b.createdAt.compareTo(a.createdAt),
         );
@@ -53,30 +51,38 @@ class InvestmentProvider extends ChangeNotifier {
   }
 
   // =========================
-  // CREATE
+  // CREATE (RAW LEDGER)
   // =========================
-  Future<bool> add(Investment inv) async {
+  Future<bool> addRaw(Map<String, dynamic> payload) async {
     try {
-      final ok = await api.create(inv.toJson());
+      debugPrint("📤 addRaw payload: $payload");
+
+      final ok = await api.createRaw(payload);
+
+      debugPrint("📥 addRaw result: $ok");
+
       if (ok) {
-        await fetch(); // reload từ server cho chắc
+        await fetch();
+        return true;
       }
-      return ok;
-    } catch (e) {
-      debugPrint("❌ Error when adding investment: $e");
+
+      return false;
+    } catch (e, s) {
+      debugPrint("🔥 addRaw exception: $e");
+      debugPrint("📍 stacktrace: $s");
       return false;
     }
   }
 
   // =========================
-  // UPDATE PRICE (CHỈ STOCK)
+  // UPDATE PRICE (STOCK)
   // =========================
   Future<bool> updatePrice(int id, double price) async {
     final idx = _items.indexWhere((e) => e.id == id);
     if (idx == -1) return false;
 
     final inv = _items[idx];
-    if (inv.type != 'stock') return false; // ⛔ bank không update giá
+    if (inv.type != 'stock') return false;
 
     final ok = await api.updatePrice(id, price);
     if (ok) {
@@ -99,9 +105,8 @@ class InvestmentProvider extends ChangeNotifier {
   }
 
   // =========================
-  // SUMMARY
+  // SUMMARY (UI ONLY)
   // =========================
-
   double get totalInvested =>
       _items.fold(0, (sum, e) => sum + e.totalInvested);
 
@@ -112,10 +117,6 @@ class InvestmentProvider extends ChangeNotifier {
     if (totalInvested == 0) return 0;
     return totalProfit / totalInvested * 100;
   }
-
-  // =========================
-  // OPTIONAL (RẤT HAY DÙNG)
-  // =========================
 
   double get bankTotalInvested =>
       banks.fold(0, (sum, e) => sum + e.totalInvested);
