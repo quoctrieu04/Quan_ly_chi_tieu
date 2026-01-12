@@ -2,15 +2,22 @@ class Investment {
   final int? id;
   final String name;
   final String type;
+
   final double buyPrice;
   final double currentPrice;
   final double quantity;
+
+  // Bank fields
   final double? interestRate;
   final DateTime? startDate;
   final String? bankName;
   final int? termMonths;
+
   final DateTime createdAt;
-  final String? accountSource;
+
+  // ✅ FIX: accountSource nên là int? (id tài khoản)
+  final int? accountSource;
+  final DateTime? closedAt;
 
   Investment({
     this.id,
@@ -25,17 +32,19 @@ class Investment {
     this.termMonths,
     required this.createdAt,
     this.accountSource,
+    this.closedAt,
   });
 
   // ===================================================
   // JSON
   // ===================================================
-
   factory Investment.fromJson(Map<String, dynamic> json) {
+    final dynamic acc = json['accountSource'] ?? json['account_source'];
+
     return Investment(
       id: json['id'],
       name: json['name'] ?? '',
-      type: json['type'],
+      type: json['type'] ?? '',
       buyPrice: (json['buy_price'] ?? 0).toDouble(),
       currentPrice: (json['current_price'] ?? 0).toDouble(),
       quantity: (json['quantity'] ?? 1).toDouble(),
@@ -43,14 +52,18 @@ class Investment {
           ? (json['interest_rate'] as num).toDouble()
           : null,
       startDate: json['start_date'] != null && json['start_date'] != ''
-          ? DateTime.parse(json['start_date'])
+          ? DateTime.tryParse(json['start_date'].toString())
           : null,
-      bankName: json['bank_name'],
-      termMonths: json['term_months'],
-      createdAt: json['created_at'] != null
-          ? DateTime.parse(json['created_at'])
+      bankName: (json['bank_name'] ?? json['bankName'])?.toString(),
+      termMonths: json['term_months'] is int
+          ? json['term_months']
+          : int.tryParse((json['term_months'] ?? '').toString()),
+      createdAt: json['created_at'] != null && json['created_at'] != ''
+          ? DateTime.tryParse(json['created_at'].toString()) ?? DateTime.now()
           : DateTime.now(),
-      accountSource: json['accountSource'], 
+      accountSource: acc == null ? null : int.tryParse(acc.toString()),
+      closedAt:
+          json['closed_at'] != null ? DateTime.parse(json['closed_at']) : null,
     );
   }
 
@@ -65,6 +78,8 @@ class Investment {
       'start_date': startDate?.toIso8601String(),
       'bank_name': bankName,
       'term_months': termMonths,
+
+      // ✅ FIX: gửi int
       'accountSource': accountSource,
     };
   }
@@ -72,22 +87,29 @@ class Investment {
   // ===================================================
   // COPY
   // ===================================================
-
   Investment copyWith({
     double? currentPrice,
+    double? buyPrice,
+    double? quantity,
+    double? interestRate,
+    DateTime? startDate,
+    String? bankName,
+    int? termMonths,
+    int? accountSource,
   }) {
     return Investment(
       id: id,
       name: name,
       type: type,
-      buyPrice: buyPrice,
+      buyPrice: buyPrice ?? this.buyPrice,
       currentPrice: currentPrice ?? this.currentPrice,
-      quantity: quantity,
-      interestRate: interestRate,
-      startDate: startDate,
-      bankName: bankName,
-      termMonths: termMonths,
+      quantity: quantity ?? this.quantity,
+      interestRate: interestRate ?? this.interestRate,
+      startDate: startDate ?? this.startDate,
+      bankName: bankName ?? this.bankName,
+      termMonths: termMonths ?? this.termMonths,
       createdAt: createdAt,
+      accountSource: accountSource ?? this.accountSource,
     );
   }
 
@@ -100,9 +122,7 @@ class Investment {
 
   /// Lãi / lỗ
   double get profitLoss {
-    if (type == 'bank') {
-      return _bankProfit;
-    }
+    if (type == 'bank') return _bankProfit;
     return (currentPrice - buyPrice) * quantity;
   }
 
@@ -112,16 +132,12 @@ class Investment {
     return profitLoss / totalInvested * 100;
   }
 
-  /// Lãi ngân hàng – lãi đơn theo tháng (theo công thức bạn đưa)
+  /// Lãi ngân hàng – lãi đơn theo kỳ hạn (termMonths)
   double get _bankProfit {
-    if (interestRate == null || startDate == null || termMonths == null) return 0;
+    if (interestRate == null || startDate == null || termMonths == null)
+      return 0;
 
-    // Tính số tháng gửi
     final months = termMonths!;
-
-    // Tính lãi đơn theo công thức
-    return totalInvested *
-        (interestRate! / 100) *
-        (months / 12);  // Lãi suất theo tháng
+    return totalInvested * (interestRate! / 100) * (months / 12);
   }
 }

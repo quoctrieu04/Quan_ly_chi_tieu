@@ -1,16 +1,30 @@
 import 'package:flutter/material.dart';
+
 import 'investment_service.dart';
 import 'investment_model.dart';
+import '../bankaccount/bank_account_model.dart';
+
+/// 🔹 Kiểu rút tiền
+enum WithdrawType {
+  interest, // rút lãi
+  all,      // rút toàn bộ (vốn + lãi)
+}
 
 class InvestmentProvider extends ChangeNotifier {
   final InvestmentService api;
 
   InvestmentProvider({required this.api});
 
+  // =========================
+  // STATE
+  // =========================
   final List<Investment> _items = [];
+  final List<BankAccount> _bankAccounts = [];
+
   bool loading = false;
 
   List<Investment> get items => _items;
+  List<BankAccount> get bankAccounts => _bankAccounts;
 
   // =========================
   // FILTER
@@ -25,25 +39,23 @@ class InvestmentProvider extends ChangeNotifier {
       _items.where((e) => e.type == 'real_estate').toList();
 
   // =========================
-  // FETCH
+  // FETCH INVESTMENTS
   // =========================
   Future<void> fetch() async {
     loading = true;
     notifyListeners();
 
     try {
-      final rawList = await api.fetch();
-      if (rawList is List) {
+      final raw = await api.fetch();
+      if (raw is List) {
         _items
           ..clear()
-          ..addAll(rawList.map((e) => Investment.fromJson(e)));
+          ..addAll(raw.map((e) => Investment.fromJson(e)));
 
-        _items.sort(
-          (a, b) => b.createdAt.compareTo(a.createdAt),
-        );
+        _items.sort((a, b) => b.createdAt.compareTo(a.createdAt));
       }
     } catch (e) {
-      debugPrint("❌ Fetch investment error: $e");
+      debugPrint('❌ fetch investments error: $e');
     } finally {
       loading = false;
       notifyListeners();
@@ -51,31 +63,124 @@ class InvestmentProvider extends ChangeNotifier {
   }
 
   // =========================
-  // CREATE (RAW LEDGER)
+  // FETCH BANK ACCOUNTS
+  // =========================
+  Future<void> fetchBankAccounts() async {
+    try {
+      final raw = await api.fetchBankAccounts();
+      if (raw is List) {
+        _bankAccounts
+          ..clear()
+          ..addAll(raw.map((e) => BankAccount.fromJson(e)));
+        notifyListeners();
+      }
+    } catch (e) {
+      debugPrint('❌ fetch bank accounts error: $e');
+    }
+  }
+
+  // =========================
+  // CREATE INVESTMENT
   // =========================
   Future<bool> addRaw(Map<String, dynamic> payload) async {
     try {
-      debugPrint("📤 addRaw payload: $payload");
-
       final ok = await api.createRaw(payload);
-
-      debugPrint("📥 addRaw result: $ok");
-
       if (ok) {
         await fetch();
-        return true;
+        await fetchBankAccounts();
       }
-
-      return false;
-    } catch (e, s) {
-      debugPrint("🔥 addRaw exception: $e");
-      debugPrint("📍 stacktrace: $s");
+      return ok;
+    } catch (e) {
+      debugPrint('❌ addRaw error: $e');
       return false;
     }
   }
 
   // =========================
-  // UPDATE PRICE (STOCK)
+  // TOP UP (BANK)
+  // =========================
+  Future<bool> topUpBank(
+    int investmentId,
+    double amount,
+    int accountSourceId,
+  ) async {
+    try {
+      final ok = await api.topUpBank(
+        investmentId: investmentId,
+        amount: amount,
+        accountSourceId: accountSourceId,
+      );
+
+      if (ok) {
+        await fetch();
+        await fetchBankAccounts();
+      }
+      return ok;
+    } catch (e) {
+      debugPrint('❌ topUpBank error: $e');
+      return false;
+    }
+  }
+
+  // =========================
+  // ✅ WITHDRAW (BANK) – FIXED
+  // =========================
+  Future<bool> withdrawBank(
+    int investmentId,
+    int receiveAccountId, {
+    required WithdrawType withdrawType,
+    double? amount,
+  }) async {
+    try {
+      final ok = await api.withdrawBank(
+        investmentId: investmentId,
+        receiveAccountId: receiveAccountId,
+        withdrawType: withdrawType,
+        amount: amount,
+      );
+
+      if (ok) {
+        await fetch();
+        await fetchBankAccounts();
+      }
+
+      return ok;
+    } catch (e) {
+      debugPrint('❌ withdrawBank error: $e');
+      return false;
+    }
+  }
+
+  // =========================
+  // REAL ESTATE COST
+  // =========================
+  Future<bool> addRealEstateCost(
+    int investmentId,
+    double amount,
+    int accountSourceId,
+    String note,
+  ) async {
+    try {
+      final ok = await api.addRealEstateCost({
+        'investment_id': investmentId,
+        'amount': amount,
+        'accountSource': accountSourceId,
+        'note': note,
+      });
+
+      if (ok) {
+        await fetch();
+        await fetchBankAccounts();
+      }
+      return ok;
+    } catch (e) {
+      debugPrint('❌ addRealEstateCost error: $e');
+      return false;
+    }
+  }
+
+  // =========================
+  // UPDATE STOCK PRICE
   // =========================
   Future<bool> updatePrice(int id, double price) async {
     final idx = _items.indexWhere((e) => e.id == id);
@@ -93,19 +198,25 @@ class InvestmentProvider extends ChangeNotifier {
   }
 
   // =========================
-  // DELETE
+  // DELETE INVESTMENT
   // =========================
   Future<bool> remove(int id) async {
-    final ok = await api.delete(id);
-    if (ok) {
-      _items.removeWhere((e) => e.id == id);
-      notifyListeners();
+    try {
+      final ok = await api.delete(id);
+      if (ok) {
+        _items.removeWhere((e) => e.id == id);
+        notifyListeners();
+        await fetchBankAccounts();
+      }
+      return ok;
+    } catch (e) {
+      debugPrint('❌ remove investment error: $e');
+      return false;
     }
-    return ok;
   }
 
   // =========================
-  // SUMMARY (UI ONLY)
+  // SUMMARY (UI)
   // =========================
   double get totalInvested =>
       _items.fold(0, (sum, e) => sum + e.totalInvested);
@@ -117,16 +228,4 @@ class InvestmentProvider extends ChangeNotifier {
     if (totalInvested == 0) return 0;
     return totalProfit / totalInvested * 100;
   }
-
-  double get bankTotalInvested =>
-      banks.fold(0, (sum, e) => sum + e.totalInvested);
-
-  double get bankTotalProfit =>
-      banks.fold(0, (sum, e) => sum + e.profitLoss);
-
-  double get stockTotalInvested =>
-      stocks.fold(0, (sum, e) => sum + e.totalInvested);
-
-  double get stockTotalProfit =>
-      stocks.fold(0, (sum, e) => sum + e.profitLoss);
 }
