@@ -19,8 +19,7 @@ class TransactionProvider extends ChangeNotifier {
   /// 🔄 Lấy danh sách tất cả giao dịch
   /// ==============================
   Future<void> fetchAll() async {
-    final tk = _auth.token;
-    if (tk == null || tk.isEmpty || tk == 'null') return;
+    if (!_auth.isAuthenticated) return;
 
     loading = true;
     notifyListeners();
@@ -39,17 +38,16 @@ class TransactionProvider extends ChangeNotifier {
   /// 💾 Ghi giao dịch mới (thu hoặc chi)
   /// ==============================
   Future<void> create({
-    required bool isIncome, // true = tiền vào, false = tiền ra
+    required bool isIncome,
     required int bankId,
     required int categoryId,
     required num amount,
     String? content,
-    required int month,   // ✅ thêm
-    required int year, 
+    required int month,
+    required int year,
     String? occurredAt,
   }) async {
-    final tk = _auth.token;
-    if (tk == null || tk.isEmpty || tk == 'null') {
+    if (!_auth.isAuthenticated) {
       throw Exception('Chưa đăng nhập');
     }
 
@@ -60,12 +58,12 @@ class TransactionProvider extends ChangeNotifier {
         categoryId: categoryId,
         amount: amount,
         content: content,
-        month: month,   // ✅ thêm
-        year: year, 
-        occurredAt: occurredAt, 
+        month: month,
+        year: year,
+        occurredAt: occurredAt,
       );
 
-      // ✅ Sau khi lưu thành công, tải lại danh sách
+      // ✅ Reload list
       await fetchAll();
     } on DioException catch (e) {
       final code = e.response?.statusCode;
@@ -74,7 +72,7 @@ class TransactionProvider extends ChangeNotifier {
       debugPrint('❌ TransactionProvider.create lỗi Dio: $code $msg');
 
       if (code == 500) {
-        throw Exception('Lỗi máy chủ khi lưu giao dịch. Vui lòng thử lại sau.');
+        throw Exception('Lỗi máy chủ khi lưu giao dịch.');
       } else if (code == 400 || code == 422) {
         throw Exception('Dữ liệu không hợp lệ: $msg');
       } else {

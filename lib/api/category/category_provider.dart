@@ -55,18 +55,18 @@ class CategoryProvider extends ChangeNotifier implements Refreshable {
 
   // ---- API ------------------------------------------------------------------
 
-  /// Lấy danh sách danh mục
+  /// 📂 Lấy danh sách danh mục
   Future<void> fetchAll({String type = 'out'}) async {
     _currentType = type;
 
-    final tk = auth.token;
-    if (tk == null || tk.isEmpty || tk == 'null') {
-      debugPrint('CategoryProvider.fetchAll: skip (no token yet)');
+    if (!auth.isAuthenticated) {
+      debugPrint('CategoryProvider.fetchAll: skip (not authenticated)');
       return;
     }
 
     loading = true;
     notifyListeners();
+
     try {
       final r = await _dio.get(
         '/categories',
@@ -77,10 +77,12 @@ class CategoryProvider extends ChangeNotifier implements Refreshable {
       final rawList = _extractList(body);
 
       _items = rawList
-          .map((e) => cm.Category.fromJson(Map<String, dynamic>.from(e as Map)))
+          .map((e) => cm.Category.fromJson(
+                Map<String, dynamic>.from(e as Map),
+              ))
           .toList();
     } catch (e) {
-      debugPrint('❌ Lỗi fetchAll: $e');
+      debugPrint('❌ CategoryProvider.fetchAll lỗi: $e');
       rethrow;
     } finally {
       loading = false;
@@ -91,17 +93,18 @@ class CategoryProvider extends ChangeNotifier implements Refreshable {
   @override
   Future<void> refresh() => fetchAll(type: _currentType);
 
-  /// ✅ Tạo danh mục mới (Laravel: tạo cả Budget nếu là "chi")
+  /// ➕ Tạo danh mục mới
   Future<cm.Category> create(String name, {String type = 'out'}) async {
-    final tk = auth.token;
-    if (tk == null || tk.isEmpty || tk == 'null') {
+    if (!auth.isAuthenticated) {
       throw Exception('Chưa đăng nhập');
     }
 
-    // Laravel controller đọc cả "loai" hoặc "type", nhưng chuẩn bạn đang dùng là "loai"
     final r = await _dio.post(
       '/categories',
-      data: jsonEncode({'loai': type == 'in' ? 'thu' : 'chi', 'title': name}),
+      data: jsonEncode({
+        'loai': type == 'in' ? 'thu' : 'chi',
+        'title': name,
+      }),
       options: Options(headers: {'Content-Type': 'application/json'}),
     );
 
@@ -118,14 +121,13 @@ class CategoryProvider extends ChangeNotifier implements Refreshable {
     return cat;
   }
 
-  /// Cập nhật tên danh mục
+  /// ✏️ Cập nhật danh mục
   Future<void> update({
     required int id,
     required String name,
     String type = 'out',
   }) async {
-    final tk = auth.token;
-    if (tk == null || tk.isEmpty || tk == 'null') {
+    if (!auth.isAuthenticated) {
       throw Exception('Chưa đăng nhập');
     }
 
@@ -142,10 +144,9 @@ class CategoryProvider extends ChangeNotifier implements Refreshable {
     }
   }
 
-  /// Xoá danh mục
+  /// ❌ Xóa danh mục
   Future<void> delete({required int id}) async {
-    final tk = auth.token;
-    if (tk == null || tk.isEmpty || tk == 'null') {
+    if (!auth.isAuthenticated) {
       throw Exception('Chưa đăng nhập');
     }
 

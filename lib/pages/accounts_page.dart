@@ -288,7 +288,7 @@ class _AccountsPageState extends State<AccountsPage> {
 
     final walletProv = context.watch<BankAccountProvider>();
     final totalBalance =
-        walletProv.items.fold<double>(0, (s, w) => s + w.balance);
+        walletProv.items.fold<double>(0, (s, w) => s + (w.balance ?? 0));
 
     final incomeProv = context.watch<IncomeProvider>();
     final incomes = incomeProv.items;
@@ -410,19 +410,25 @@ class _AccountsPageState extends State<AccountsPage> {
                     onTap: () async {
                       final prov = context.read<BankAccountProvider>();
 
+                      if (prov.loading) return;
+
+                      // ✅ Delay 1 frame để thoát gesture
+                      await Future.delayed(Duration.zero);
+
+                      if (!context.mounted) return;
+
                       if (prov.items.isEmpty) {
-                        // 👉 CHƯA CÓ → mở form thêm
                         final created = await showModalBottomSheet<bool>(
                           context: context,
                           isScrollControlled: true,
                           useSafeArea: true,
                           builder: (_) => const CreateBankAccountForm(),
                         );
+
                         if (created == true && context.mounted) {
                           await prov.fetch();
                         }
                       } else {
-                        // 👉 ĐÃ CÓ → mở trang quản lý
                         Navigator.pushNamed(context, '/accounts');
                       }
                     },

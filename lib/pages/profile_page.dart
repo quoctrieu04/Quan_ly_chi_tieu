@@ -77,7 +77,7 @@ class _ProfilePageState extends State<ProfilePage> {
         context: context,
         isScrollControlled: true,
         useSafeArea: true,
-        showDragHandle: true,
+        
         builder: (ctx) => const _ChangePasswordSheet(),
       );
     });

@@ -1,18 +1,14 @@
-// lib/utils/safe_ui.dart
 import 'dart:async';
 import 'package:flutter/material.dart';
 
-/// Kiểm tra "mounted" tương thích nhiều version Flutter:
+/// ================================
+/// CONTEXT MOUNTED CHECK (COMPAT)
+/// ================================
 bool _isContextMounted(BuildContext context) {
-  // Trên Flutter mới: context.mounted có sẵn.
   try {
-    // ignore: unnecessary_statements
-    // Nếu BuildContext có getter mounted, dòng dưới sẽ không throw.
-    // Ta đọc gián tiếp qua Object? để không cần ràng buộc SDK.
-    final _ = (context as dynamic).mounted as bool;
-    return _;
+    final mounted = (context as dynamic).mounted as bool;
+    return mounted;
   } catch (_) {
-    // Trên Flutter cũ, fallback: nếu owner element đã unmount, dependOn... sẽ throw.
     try {
       context.getElementForInheritedWidgetOfExactType<InheritedWidget>();
       return true;
@@ -22,29 +18,28 @@ bool _isContextMounted(BuildContext context) {
   }
 }
 
-/// Hiển thị SnackBar an toàn:
-/// - Dùng maybeOf để không crash nếu chưa có ScaffoldMessenger.
-/// - Ẩn snack hiện tại trước khi show cái mới.
-/// - Không bắt buộc post-frame (nếu đang ở trong frame hợp lệ).
+/// ================================
+/// SAFE SNACKBAR
+/// ================================
 void safeShowSnackBar(BuildContext context, SnackBar snackBar) {
-  if (!_isContextMounted(context)) return;
-  final messenger = ScaffoldMessenger.maybeOf(context);
-  if (messenger == null) {
-    // Nếu chưa có ScaffoldMessenger trong cây, đợi tới frame kế tiếp.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!_isContextMounted(context)) return;
-      final m2 = ScaffoldMessenger.maybeOf(context);
-      if (m2 == null) return;
-      m2.hideCurrentSnackBar();
-      m2.showSnackBar(snackBar);
-    });
-    return;
-  }
-  messenger.hideCurrentSnackBar();
-  messenger.showSnackBar(snackBar);
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    if (!_isContextMounted(context)) return;
+
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    if (messenger == null) return;
+
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(snackBar);
+  });
 }
 
-/// Hiển thị BottomSheet an toàn, trả về Future<T?> như showModalBottomSheet:
+/// ================================
+/// SAFE MODAL BOTTOM SHEET
+/// ❌ KHÔNG override showModalBottomSheet
+/// ❌ KHÔNG đệ quy
+/// ✅ Delay 1 frame để thoát gesture
+/// ================================
 Future<T?> safeShowModalBottomSheet<T>({
   required BuildContext context,
   required WidgetBuilder builder,
@@ -53,30 +48,21 @@ Future<T?> safeShowModalBottomSheet<T>({
   ShapeBorder? shape,
   Clip? clipBehavior,
   bool useSafeArea = false,
-}) {
-  final c = Completer<T?>();
-  // Nếu context chưa sẵn sàng, đợi đến frame sau.
-  void _open() async {
-    if (!_isContextMounted(context)) {
-      if (!c.isCompleted) c.complete(null);
-      return;
-    }
-    final r = await showModalBottomSheet<T>(
-      context: context,
-      isScrollControlled: isScrollControlled,
-      backgroundColor: backgroundColor,
-      shape: shape,
-      clipBehavior: clipBehavior,
-      useSafeArea: useSafeArea,
-      builder: builder,
-    );
-    if (!c.isCompleted) c.complete(r);
-  }
+}) async {
+  if (!_isContextMounted(context)) return null;
 
-  // Thử mở ngay; nếu gọi từ trong build, Flutter vẫn cho phép.
-  // Nếu bạn muốn bắt buộc đợi frame, hãy giữ addPostFrameCallback như bản cũ.
-  // Ở đây mình chọn mở ngay cho ít độ trễ.
-  // Nếu gặp trường hợp hiếm gây assert, đổi sang addPostFrameCallback.
-  _open();
-  return c.future;
+  // ✅ Thoát gesture / build phase
+  await Future.delayed(Duration.zero);
+
+  if (!_isContextMounted(context)) return null;
+
+  return await showModalBottomSheet<T>(
+    context: context,
+    isScrollControlled: isScrollControlled,
+    backgroundColor: backgroundColor,
+    shape: shape,
+    clipBehavior: clipBehavior,
+    useSafeArea: useSafeArea,
+    builder: builder,
+  );
 }

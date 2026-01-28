@@ -1,0 +1,4 @@
+enum CreateInvestmentMode {
+  create,
+  renew,
+}

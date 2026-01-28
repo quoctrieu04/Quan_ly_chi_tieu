@@ -1,20 +1,18 @@
-import 'package:chitieu/api/investment/investment_provider.dart';
-import 'package:chitieu/api/investment/investment_service.dart';
-import 'package:chitieu/api/transaction/transaction_provider.dart';
-import 'package:chitieu/pages/accounts_list_page.dart';
-import 'package:chitieu/pages/income_list_page.dart';
-import 'package:chitieu/pages/investment_page.dart';
-import 'package:chitieu/pages/saving_list_page.dart';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:dio/dio.dart';
 
+// --- i18n (CUSTOM – CỦA BẠN) ---
+import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:chitieu/l10n/app_localizations.dart';
+
 // --- Voice ---
-import 'package:chitieu/core/voice/voice_synonym_store.dart';
+import 'core/voice/voice_synonym_store.dart';
 
 // --- Auth ---
-import 'package:chitieu/auth/auth_provider.dart';
-import 'package:chitieu/auth/auth_service.dart';
+import 'auth/auth_provider.dart';
+import 'auth/auth_service.dart';
 
 // --- Settings ---
 import 'pages/setting/settings_provider.dart';
@@ -26,14 +24,11 @@ import 'pages/setting/setting_page.dart';
 import 'pages/setting/money_settings_page.dart';
 import 'pages/note_page.dart';
 
-// --- i18n ---
-import 'package:flutter_localizations/flutter_localizations.dart';
-import 'package:chitieu/l10n/app_localizations.dart';
-
 // --- BankAccount ---
 import 'api/bankaccount/bank_account_service.dart';
 import 'api/bankaccount/bank_account_provider.dart';
-import 'package:chitieu/pages/accounts_page.dart';
+import 'pages/accounts_page.dart';
+import 'pages/accounts_list_page.dart';
 
 // --- Money ---
 import 'core/money/money_settings_provider.dart';
@@ -46,13 +41,14 @@ import 'core/budget/budgets_provider.dart';
 // --- Category ---
 import 'api/category/category_provider.dart';
 
-// --- Transactions (Mới) ---
+// --- Transactions ---
 import 'api/in_invoice/in_invoice_service.dart';
 import 'api/in_invoice/in_invoice_provider.dart';
 import 'api/out_invoice/out_invoice_service.dart';
 import 'api/out_invoice/out_invoice_provider.dart';
 import 'api/bank_transaction/bank_transaction_service.dart';
 import 'api/bank_transaction/bank_transaction_provider.dart';
+import 'api/transaction/transaction_provider.dart';
 import 'pages/transactions_page.dart';
 
 // --- Date ---
@@ -61,55 +57,95 @@ import 'core/date/year_month_provider.dart';
 // --- Income ---
 import 'api/income/income_service.dart';
 import 'api/income/income_provider.dart';
+import 'pages/income_list_page.dart';
 
+// --- Saving ---
 import 'api/saving/saving_service.dart';
 import 'api/saving/saving_provider.dart';
-
 import 'api/saving_transaction/saving_transaction_service.dart';
 import 'api/saving_transaction/saving_transaction_provider.dart';
+import 'pages/saving_list_page.dart';
 
+// --- Investment ---
+import 'api/investment/investment_service.dart';
+import 'api/investment/investment_provider.dart';
+import 'pages/investment_page.dart';
+
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // 🔹 Tải dữ liệu học giọng nói sớm trước khi app chạy
+  // 🔹 Voice preload
   final voiceStore = VoiceSynonymStore();
   await voiceStore.load();
-  print('✅ VoiceSynonymStore loaded at startup');
 
   const rawBase = String.fromEnvironment(
     'API_BASE',
-    defaultValue: 'http://192.168.1.67:8000',
+    defaultValue: 'https://thuchi.itcctv-soft.com',
   );
 
-  final authApi = AuthService(rawBase);
+  final authApi = AuthService();
 
-  final dio = Dio(BaseOptions(
-    baseUrl: '$rawBase/',
-    connectTimeout: const Duration(seconds: 10),
-    receiveTimeout: const Duration(seconds: 30),
-    headers: {'Accept': 'application/json'},
-    validateStatus: (s) => s != null && s < 500,
-  ));
+  // =======================
+  // 🔥 DIO DUY NHẤT
+  // =======================
+  final dio = Dio(
+    BaseOptions(
+      baseUrl: '$rawBase/',
+      connectTimeout: const Duration(seconds: 10),
+      receiveTimeout: const Duration(seconds: 30),
+      headers: {'Accept': 'application/json'},
+      validateStatus: (s) => s != null && s < 500,
+    ),
+  );
 
-  // Thêm token vào mọi request
-  dio.interceptors.add(InterceptorsWrapper(
-    onRequest: (options, handler) async {
-      var p = options.path;
-      if (!p.startsWith('http')) {
-        if (p.startsWith('/')) p = p.substring(1);
-        if (!p.startsWith('api/')) p = 'api/$p';
-        options.path = p;
-      }
+  dio.interceptors.add(
+    InterceptorsWrapper(
+      onRequest: (options, handler) async {
+        // Chuẩn hóa path để luôn thành /api/...
+        var p = options.path;
+        if (!p.startsWith('http')) {
+          if (p.startsWith('/')) p = p.substring(1);
+          if (!p.startsWith('api/')) p = 'api/$p';
+          options.path = p;
+        }
 
-      final token = await authApi.getToken();
-      if (token != null && token.isNotEmpty && token != 'null') {
-        options.headers['Authorization'] = 'Bearer $token';
-      } else {
-        options.headers.remove('Authorization');
-      }
-      handler.next(options);
-    },
-  ));
+        final token = await authApi.getAccessToken();
+
+        if (token != null && token.isNotEmpty && token != 'null') {
+          options.headers['Authorization'] = 'Bearer $token';
+        } else {
+          options.headers.remove('Authorization');
+        }
+
+        handler.next(options);
+      },
+
+      // ✅ BẮT LỖI TOÀN CỤC Ở ĐÂY
+      onError: (DioException e, handler) async {
+        final status = e.response?.statusCode;
+
+        // 1) Token hết hạn / sai token
+        if (status == 401) {
+          await authApi.logout(); 
+          final ctx = navigatorKey.currentContext;
+          if (ctx != null) {
+            ctx.read<AuthProvider>().logout();
+          }
+        }
+
+        // 2) Mất mạng / timeout
+        if (e.type == DioExceptionType.connectionTimeout ||
+            e.type == DioExceptionType.receiveTimeout ||
+            e.type == DioExceptionType.connectionError) {
+          // Không crash, chỉ log
+          debugPrint("🌐 Network error: ${e.message}");
+        }
+
+        handler.next(e);
+      },
+    ),
+  );
 
   final moneyProv = MoneySettingsProvider(MoneySettingsService());
   await moneyProv.init();
@@ -117,7 +153,7 @@ Future<void> main() async {
   runApp(
     MultiProvider(
       providers: [
-        Provider<Dio>(create: (_) => dio),
+        Provider<Dio>.value(value: dio),
         ChangeNotifierProvider(create: (_) => YearMonthProvider()),
         ChangeNotifierProvider(create: (_) => SettingsProvider()),
         ChangeNotifierProvider<MoneySettingsProvider>.value(value: moneyProv),
@@ -125,47 +161,12 @@ Future<void> main() async {
 
         // ===== BankAccount =====
         ChangeNotifierProxyProvider<AuthProvider, BankAccountProvider>(
-          create: (context) {
-            final auth = context.read<AuthProvider>();
-            final dioLocal = Dio(BaseOptions(
-                baseUrl: '$rawBase/', headers: {'Accept': 'application/json'}));
-            dioLocal.interceptors.add(InterceptorsWrapper(
-              onRequest: (options, handler) async {
-                final token = auth.token;
-                if (token != null && token.isNotEmpty && token != 'null') {
-                  options.headers['Authorization'] = 'Bearer $token';
-                } else {
-                  options.headers.remove('Authorization');
-                }
-                handler.next(options);
-              },
-            ));
-            return BankAccountProvider(service: BankAccountService(dioLocal));
-          },
-          update: (context, auth, prev) {
-            final dioLocal = Dio(BaseOptions(
-                baseUrl: '$rawBase/', headers: {'Accept': 'application/json'}));
-            dioLocal.interceptors.add(InterceptorsWrapper(
-              onRequest: (options, handler) async {
-                final token = auth.token;
-                if (token != null && token.isNotEmpty && token != 'null') {
-                  options.headers['Authorization'] = 'Bearer $token';
-                } else {
-                  options.headers.remove('Authorization');
-                }
-                handler.next(options);
-              },
-            ));
-            final service = BankAccountService(dioLocal);
-            final provider = prev ?? BankAccountProvider(service: service);
-            provider.updateService(service);
-
-            if (auth.isAuthenticated) {
-              provider.fetchAccounts(token: auth.token);
-            } else {
-              provider.clear();
-            }
-            return provider;
+          create: (ctx) =>
+              BankAccountProvider(service: BankAccountService(ctx.read<Dio>())),
+          update: (ctx, auth, prev) {
+            final p = prev!;
+            p.updateAuthToken(auth.accessToken);
+            return p;
           },
         ),
 
@@ -174,54 +175,40 @@ Future<void> main() async {
           create: (ctx) =>
               CategoryProvider(ctx.read<Dio>(), ctx.read<AuthProvider>()),
           update: (ctx, auth, prev) {
-            final p = prev ?? CategoryProvider(ctx.read<Dio>(), auth);
-            if ((auth.token ?? '').isEmpty) {
+            final p = prev!;
+            if (!auth.isAuthenticated) {
               p.clear();
             } else if (p.items.isEmpty && !p.loading) {
               p.refresh();
             }
+
             return p;
           },
         ),
 
         // ===== Budgets =====
         ChangeNotifierProxyProvider<AuthProvider, BudgetsProvider>(
-          create: (context) {
-            final auth = context.read<AuthProvider>();
-            final dioInstance = context.read<Dio>();
-            return BudgetsProvider(BudgetService(dioInstance, auth));
-          },
-          update: (context, auth, prev) {
-            final dioInstance = context.read<Dio>();
-            final provider =
-                prev ?? BudgetsProvider(BudgetService(dioInstance, auth));
-
-            if ((auth.token ?? '').isEmpty) {
-              provider.clear();
-            } else {
-              final ym = context.read<YearMonthProvider>().ym;
-              if (provider.items.isEmpty && !provider.loading) {
-                provider.loadForMonth(year: ym.year, month: ym.month);
-              }
+          create: (ctx) => BudgetsProvider(BudgetService(ctx.read<Dio>())),
+          update: (ctx, auth, prev) {
+            final p = prev!;
+            if (!auth.isAuthenticated) {
+              p.clear();
             }
-            return provider;
+
+            return p;
           },
         ),
 
         // ===== Income =====
         ChangeNotifierProxyProvider<AuthProvider, IncomeProvider>(
-          create: (context) =>
-              IncomeProvider(IncomeService(dio), context.read<AuthProvider>()),
-          update: (context, auth, prev) {
-            final p = prev ?? IncomeProvider(IncomeService(dio), auth);
-            final token = auth.token ?? '';
-            final ym = context.read<YearMonthProvider>().ym;
-
-            if (token.isEmpty) {
+          create: (ctx) =>
+              IncomeProvider(IncomeService(dio), ctx.read<AuthProvider>()),
+          update: (ctx, auth, prev) {
+            final p = prev!;
+            if (!auth.isAuthenticated) {
               p.clear();
-            } else if (!p.loading) {
-              p.fetch(year: ym.year, month: ym.month);
             }
+
             return p;
           },
         ),
@@ -245,17 +232,12 @@ Future<void> main() async {
             bankAccounts: ctx.read<BankAccountProvider>(),
           ),
         ),
-
         ChangeNotifierProvider(
-          create: (context) => TransactionProvider(
-            context.read<Dio>(),
-            context.read<AuthProvider>(),
-          ),
+          create: (ctx) =>
+              TransactionProvider(ctx.read<Dio>(), ctx.read<AuthProvider>()),
         ),
         ChangeNotifierProvider(
-          create: (ctx) => SavingProvider(
-            api: SavingService(ctx.read<Dio>()),
-          ),
+          create: (ctx) => SavingProvider(api: SavingService(ctx.read<Dio>())),
         ),
         ChangeNotifierProvider(
           create: (ctx) => SavingTransactionProvider(
@@ -263,9 +245,8 @@ Future<void> main() async {
           ),
         ),
         ChangeNotifierProvider(
-          create: (ctx) => InvestmentProvider(
-            api: InvestmentService(ctx.read<Dio>()),
-          ),
+          create: (ctx) =>
+              InvestmentProvider(api: InvestmentService(ctx.read<Dio>())),
         ),
       ],
       child: const MyApp(),
@@ -275,23 +256,32 @@ Future<void> main() async {
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
+
   @override
   Widget build(BuildContext context) {
     final settings = context.watch<SettingsProvider>();
     return MaterialApp(
+      navigatorKey: navigatorKey,
       debugShowCheckedModeBanner: false,
+      title: 'Chi Tiêu',
+
+      // ✅ i18n CUSTOM
       localizationsDelegates: const [
         AppLocalizations.delegate,
         GlobalMaterialLocalizations.delegate,
-        GlobalCupertinoLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
       ],
-      supportedLocales: const [Locale('vi'), Locale('en')],
+      supportedLocales: const [
+        Locale('vi'),
+        Locale('en'),
+      ],
       locale: settings.locale,
+
       themeMode: settings.themeMode,
       theme: ThemeData(
         useMaterial3: false,
-        colorScheme: ColorScheme.fromSeed(seedColor: settings.seed), 
+        colorScheme: ColorScheme.fromSeed(seedColor: settings.seed),
         scaffoldBackgroundColor: const Color(0xFFFAF3E6),
       ),
       darkTheme: ThemeData.dark().copyWith(
@@ -300,7 +290,7 @@ class MyApp extends StatelessWidget {
           brightness: Brightness.dark,
         ),
       ),
-      title: 'Chi Tiêu',
+
       home: const HomeScaffold(),
       routes: {
         '/settings/money': (_) => const MoneySettingsPage(),
@@ -316,12 +306,14 @@ class MyApp extends StatelessWidget {
 
 class HomeScaffold extends StatefulWidget {
   const HomeScaffold({super.key});
+
   @override
   State<HomeScaffold> createState() => _HomeScaffoldState();
 }
 
 class _HomeScaffoldState extends State<HomeScaffold> {
   int _currentIndex = 0;
+
   final List<Widget> _pages = const [
     BudgetsPage(),
     AccountsPage(),
@@ -330,16 +322,23 @@ class _HomeScaffoldState extends State<HomeScaffold> {
   ];
 
   void _onTabSelected(int index) => setState(() => _currentIndex = index);
-  void _onFabPressed() => Navigator.of(context)
-      .push(MaterialPageRoute(builder: (_) => const NotePage()));
+
+  void _onFabPressed() {
+    Navigator.of(context)
+        .push(MaterialPageRoute(builder: (_) => const NotePage()));
+  }
 
   @override
   Widget build(BuildContext context) {
     final t = AppLocalizations.of(context)!;
+
     return Scaffold(
       extendBody: true,
       body: SafeArea(
-        child: IndexedStack(index: _currentIndex, children: _pages),
+        child: IndexedStack(
+          index: _currentIndex,
+          children: _pages,
+        ),
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: _onFabPressed,
@@ -348,59 +347,38 @@ class _HomeScaffoldState extends State<HomeScaffold> {
         child: const Icon(Icons.assignment),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
-      bottomNavigationBar: SafeArea(
-        top: false,
-        child: BottomAppBar(
-          shape: const CircularNotchedRectangle(),
-          notchMargin: 8,
-          color: Colors.white,
-          elevation: 8,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 6),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      _NavItem(
-                        icon: Icons.wallet_rounded,
-                        label: t.tabBudgets,
-                        selected: _currentIndex == 0,
-                        onTap: () => _onTabSelected(0),
-                      ),
-                      _NavItem(
-                        icon: Icons.account_balance_rounded,
-                        label: t.tabAccounts,
-                        selected: _currentIndex == 1,
-                        onTap: () => _onTabSelected(1),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 64),
-                Expanded(
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      _NavItem(
-                        icon: Icons.insights_rounded,
-                        label: t.tabAnalytics,
-                        selected: _currentIndex == 2,
-                        onTap: () => _onTabSelected(2),
-                      ),
-                      _NavItem(
-                        icon: Icons.settings_rounded,
-                        label: t.tabSettings,
-                        selected: _currentIndex == 3,
-                        onTap: () => _onTabSelected(3),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+      bottomNavigationBar: BottomAppBar(
+        shape: const CircularNotchedRectangle(),
+        notchMargin: 8,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          children: [
+            _NavItem(
+              icon: Icons.wallet_rounded,
+              label: t.tabBudgets,
+              selected: _currentIndex == 0,
+              onTap: () => _onTabSelected(0),
             ),
-          ),
+            _NavItem(
+              icon: Icons.account_balance_rounded,
+              label: t.tabAccounts,
+              selected: _currentIndex == 1,
+              onTap: () => _onTabSelected(1),
+            ),
+            const SizedBox(width: 48),
+            _NavItem(
+              icon: Icons.insights_rounded,
+              label: t.tabAnalytics,
+              selected: _currentIndex == 2,
+              onTap: () => _onTabSelected(2),
+            ),
+            _NavItem(
+              icon: Icons.settings_rounded,
+              label: t.tabSettings,
+              selected: _currentIndex == 3,
+              onTap: () => _onTabSelected(3),
+            ),
+          ],
         ),
       ),
     );
@@ -433,16 +411,12 @@ class _NavItem extends StatelessWidget {
           children: [
             Icon(icon, size: 24, color: color),
             const SizedBox(height: 4),
-            Flexible(
-              child: Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: selected ? FontWeight.bold : FontWeight.w500,
-                  color: color,
-                ),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: selected ? FontWeight.bold : FontWeight.w500,
+                color: color,
               ),
             ),
           ],

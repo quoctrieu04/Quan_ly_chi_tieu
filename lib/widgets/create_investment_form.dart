@@ -1,3 +1,4 @@
+import 'package:chitieu/widgets/models/create_investment_mode.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
@@ -5,6 +6,7 @@ import 'package:flutter/services.dart';
 
 import 'package:chitieu/api/investment/investment_provider.dart';
 import 'package:chitieu/api/bankaccount/bank_account_provider.dart';
+import 'package:chitieu/api/investment/investment_model.dart';
 
 /// ===============================
 /// FORMAT TIỀN: 1.000.000
@@ -18,7 +20,6 @@ class MoneyInputFormatter extends TextInputFormatter {
     TextEditingValue newValue,
   ) {
     final digits = newValue.text.replaceAll(RegExp(r'[^0-9]'), '');
-
     if (digits.isEmpty) {
       return const TextEditingValue(
         text: '',
@@ -37,7 +38,14 @@ class MoneyInputFormatter extends TextInputFormatter {
 }
 
 class CreateInvestmentForm extends StatefulWidget {
-  const CreateInvestmentForm({super.key});
+  final CreateInvestmentMode mode;
+  final Investment? baseInvestment;
+
+  const CreateInvestmentForm({
+    super.key,
+    this.mode = CreateInvestmentMode.create,
+    this.baseInvestment,
+  });
 
   @override
   State<CreateInvestmentForm> createState() => _CreateInvestmentFormState();
@@ -55,58 +63,27 @@ class _CreateInvestmentFormState extends State<CreateInvestmentForm> {
   final List<int> termOptions = const [1, 3, 6, 12];
 
   final nameCtrl = TextEditingController();
-  final amountCtrl = TextEditingController(); // dùng cho bank và real_estate
+  final amountCtrl = TextEditingController();
   final rateCtrl = TextEditingController();
-
-  DateTime startDate = DateTime.now(); // dùng cho bank
+  DateTime startDate = DateTime.now();
 
   // ===== STOCK =====
   final stockPriceCtrl = TextEditingController();
   final stockQtyCtrl = TextEditingController(text: '1');
 
   // ===== REAL ESTATE =====
-  final reLocationCtrl = TextEditingController(); // địa chỉ / vị trí
-  final reNoteCtrl = TextEditingController();     // mô tả
-  final reQtyCtrl = TextEditingController(text: '1'); // số lượng (mặc định 1)
+  final reLocationCtrl = TextEditingController();
+  final reNoteCtrl = TextEditingController();
+  final reQtyCtrl = TextEditingController(text: '1');
   DateTime reBuyDate = DateTime.now();
 
-  // ===============================
-  // PARSE SỐ VN
-  // ===============================
   double _parseNumber(String input) {
     final cleaned = input.replaceAll('.', '').replaceAll(',', '').trim();
     if (cleaned.isEmpty) return 0;
     return double.parse(cleaned);
   }
 
-  // ===============================
-  // VALIDATORS
-  // ===============================
-  String? validateAmount(String? v) {
-    if (v == null || v.trim().isEmpty) return 'Không được để trống';
-    final n = _parseNumber(v);
-    if (n <= 0) return 'Số tiền phải > 0';
-    return null;
-  }
-
-  String? validateRate(String? v) {
-    if (v == null || v.trim().isEmpty) return null;
-
-    final cleaned = v.replaceAll(',', '.').trim();
-    final n = double.tryParse(cleaned);
-
-    if (n == null) return 'Lãi suất không hợp lệ';
-    if (n < 0) return 'Lãi suất phải ≥ 0';
-
-    return null;
-  }
-
-  String? validateQty(String? v) {
-    if (v == null || v.trim().isEmpty) return 'Không được để trống';
-    final n = int.tryParse(v.trim());
-    if (n == null || n <= 0) return 'Số lượng phải > 0';
-    return null;
-  }
+  String _fmt(num v) => NumberFormat('#,###', 'vi_VN').format(v);
 
   @override
   void initState() {
@@ -115,12 +92,24 @@ class _CreateInvestmentFormState extends State<CreateInvestmentForm> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<BankAccountProvider>().fetchAccounts();
     });
-  }
 
-  void _showMessage(String msg) {
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(msg)));
+    /// ===============================
+    /// PREFILL KHI GIA HẠN (CHỈ BANK)
+    /// ===============================
+    if (widget.mode == CreateInvestmentMode.renew &&
+        widget.baseInvestment != null) {
+      final inv = widget.baseInvestment!;
+
+      type = 'bank'; // 🔒 khóa loại
+      bankName = inv.bankName ?? bankName;
+      termMonths = inv.termMonths ?? termMonths;
+
+      nameCtrl.text = '${inv.name} (gia hạn)';
+      amountCtrl.text = _fmt(inv.totalInvested + inv.profitLoss);
+
+      rateCtrl.text = inv.interestRate?.toString() ?? '';
+      startDate = DateTime.now();
+    }
   }
 
   @override
@@ -134,6 +123,12 @@ class _CreateInvestmentFormState extends State<CreateInvestmentForm> {
     reNoteCtrl.dispose();
     reQtyCtrl.dispose();
     super.dispose();
+  }
+
+  void _showMessage(String msg) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(msg)));
   }
 
   @override
@@ -152,9 +147,12 @@ class _CreateInvestmentFormState extends State<CreateInvestmentForm> {
         child: SingleChildScrollView(
           child: Column(
             children: [
-              const Text(
-                'Thêm đầu tư',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              Text(
+                widget.mode == CreateInvestmentMode.renew
+                    ? 'Gia hạn tiền gửi'
+                    : 'Thêm đầu tư',
+                style:
+                    const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 16),
 
@@ -165,12 +163,15 @@ class _CreateInvestmentFormState extends State<CreateInvestmentForm> {
                 items: const [
                   DropdownMenuItem(value: 'bank', child: Text('Ngân hàng')),
                   DropdownMenuItem(value: 'stock', child: Text('Cổ phiếu')),
-                  DropdownMenuItem(value: 'real_estate', child: Text('Bất động sản')), // ✅ NEW
+                  DropdownMenuItem(
+                      value: 'real_estate', child: Text('Bất động sản')),
                 ],
-                onChanged: (v) {
-                  if (v == null) return;
-                  setState(() => type = v);
-                },
+                onChanged: widget.mode == CreateInvestmentMode.renew
+                    ? null
+                    : (v) {
+                        if (v == null) return;
+                        setState(() => type = v);
+                      },
               ),
 
               const SizedBox(height: 8),
@@ -178,7 +179,8 @@ class _CreateInvestmentFormState extends State<CreateInvestmentForm> {
               /// ===== Tài khoản nguồn =====
               DropdownButtonFormField<String>(
                 value: selectedAccount,
-                decoration: const InputDecoration(labelText: 'Tài khoản nguồn tiền'),
+                decoration:
+                    const InputDecoration(labelText: 'Tài khoản nguồn tiền'),
                 validator: (v) => v == null ? 'Vui lòng chọn tài khoản' : null,
                 items: bankAccountProvider.items
                     .map(
@@ -191,15 +193,16 @@ class _CreateInvestmentFormState extends State<CreateInvestmentForm> {
                 onChanged: (v) => setState(() => selectedAccount = v),
               ),
 
-              /// ===== Tên đầu tư =====
               TextFormField(
                 controller: nameCtrl,
-                decoration: const InputDecoration(labelText: 'Tên khoản đầu tư'),
-                validator: (v) => v == null || v.isEmpty ? 'Không được để trống' : null,
+                decoration:
+                    const InputDecoration(labelText: 'Tên khoản đầu tư'),
+                validator: (v) =>
+                    v == null || v.isEmpty ? 'Không được để trống' : null,
               ),
 
               /// =========================
-              /// BANK FORM
+              /// BANK FORM (GIỮ NGUYÊN)
               /// =========================
               if (type == 'bank') ...[
                 const SizedBox(height: 8),
@@ -213,7 +216,9 @@ class _CreateInvestmentFormState extends State<CreateInvestmentForm> {
                     'MB',
                     'ACB',
                     'Techcombank',
-                  ].map((b) => DropdownMenuItem(value: b, child: Text(b))).toList(),
+                  ]
+                      .map((b) => DropdownMenuItem(value: b, child: Text(b)))
+                      .toList(),
                   onChanged: (v) => setState(() => bankName = v!),
                 ),
                 const SizedBox(height: 8),
@@ -222,22 +227,23 @@ class _CreateInvestmentFormState extends State<CreateInvestmentForm> {
                   keyboardType: TextInputType.number,
                   inputFormatters: [MoneyInputFormatter()],
                   decoration: const InputDecoration(labelText: 'Số tiền gửi'),
-                  validator: validateAmount,
                 ),
                 const SizedBox(height: 8),
                 DropdownButtonFormField<int>(
                   value: termMonths,
                   decoration: const InputDecoration(labelText: 'Kỳ hạn'),
                   items: termOptions
-                      .map((m) => DropdownMenuItem(value: m, child: Text('$m tháng')))
+                      .map((m) =>
+                          DropdownMenuItem(value: m, child: Text('$m tháng')))
                       .toList(),
                   onChanged: (v) => setState(() => termMonths = v!),
                 ),
                 TextFormField(
                   controller: rateCtrl,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  decoration: const InputDecoration(labelText: 'Lãi suất % / năm'),
-                  validator: validateRate,
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  decoration:
+                      const InputDecoration(labelText: 'Lãi suất % / năm'),
                 ),
                 ListTile(
                   contentPadding: EdgeInsets.zero,
@@ -249,7 +255,7 @@ class _CreateInvestmentFormState extends State<CreateInvestmentForm> {
               ],
 
               /// =========================
-              /// STOCK FORM (tối thiểu)
+              /// STOCK FORM (GIỮ NGUYÊN)
               /// =========================
               if (type == 'stock') ...[
                 const SizedBox(height: 8),
@@ -257,27 +263,26 @@ class _CreateInvestmentFormState extends State<CreateInvestmentForm> {
                   controller: stockPriceCtrl,
                   keyboardType: TextInputType.number,
                   inputFormatters: [MoneyInputFormatter()],
-                  decoration: const InputDecoration(labelText: 'Giá mua / cổ phiếu'),
-                  validator: validateAmount,
+                  decoration:
+                      const InputDecoration(labelText: 'Giá mua / cổ phiếu'),
                 ),
                 const SizedBox(height: 8),
                 TextFormField(
                   controller: stockQtyCtrl,
                   keyboardType: TextInputType.number,
                   decoration: const InputDecoration(labelText: 'Số lượng'),
-                  validator: validateQty,
                 ),
               ],
 
               /// =========================
-              /// REAL ESTATE FORM ✅ NEW
+              /// REAL ESTATE FORM (GIỮ NGUYÊN)
               /// =========================
               if (type == 'real_estate') ...[
                 const SizedBox(height: 8),
                 TextFormField(
                   controller: reLocationCtrl,
-                  decoration: const InputDecoration(labelText: 'Vị trí / Địa chỉ'),
-                  validator: (v) => v == null || v.trim().isEmpty ? 'Không được để trống' : null,
+                  decoration:
+                      const InputDecoration(labelText: 'Vị trí / Địa chỉ'),
                 ),
                 const SizedBox(height: 8),
                 TextFormField(
@@ -285,20 +290,19 @@ class _CreateInvestmentFormState extends State<CreateInvestmentForm> {
                   keyboardType: TextInputType.number,
                   inputFormatters: [MoneyInputFormatter()],
                   decoration: const InputDecoration(labelText: 'Giá mua (VNĐ)'),
-                  validator: validateAmount,
                 ),
                 const SizedBox(height: 8),
                 TextFormField(
                   controller: reQtyCtrl,
                   keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: 'Số lượng (mặc định 1)'),
-                  validator: validateQty,
+                  decoration:
+                      const InputDecoration(labelText: 'Số lượng (mặc định 1)'),
                 ),
                 const SizedBox(height: 8),
                 TextFormField(
                   controller: reNoteCtrl,
-                  decoration: const InputDecoration(labelText: 'Mô tả / Ghi chú (tuỳ chọn)'),
-                  maxLines: 2,
+                  decoration: const InputDecoration(
+                      labelText: 'Mô tả / Ghi chú (tuỳ chọn)'),
                 ),
                 ListTile(
                   contentPadding: EdgeInsets.zero,
@@ -310,7 +314,6 @@ class _CreateInvestmentFormState extends State<CreateInvestmentForm> {
               ],
 
               const SizedBox(height: 12),
-
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
@@ -325,34 +328,27 @@ class _CreateInvestmentFormState extends State<CreateInvestmentForm> {
     );
   }
 
-  // ===============================
-  // SAVE
-  // ===============================
+  /// ===============================
+  /// SAVE
+  /// ===============================
   Future<void> _save() async {
-    debugPrint('💾 SAVE CLICKED');
-
-    if (!_formKey.currentState!.validate()) {
-      debugPrint('❌ FORM INVALID');
-      return;
-    }
+    if (!_formKey.currentState!.validate()) return;
 
     final investmentProv = context.read<InvestmentProvider>();
-
-    // ✅ Common accountSource
     final accountSourceId = int.parse(selectedAccount!);
 
-    // BANK
-    if (type == 'bank') {
-      final amount = _parseNumber(amountCtrl.text);
-      final rate = rateCtrl.text.trim().isEmpty
-          ? 0
-          : double.parse(rateCtrl.text.replaceAll(',', '.'));
+    final amount = _parseNumber(amountCtrl.text);
+    final rate = rateCtrl.text.trim().isEmpty
+        ? 0
+        : double.parse(rateCtrl.text.replaceAll(',', '.'));
 
-      final ok = await investmentProv.addRaw({
+    // ===== BANK =====
+    if (type == 'bank') {
+      // 1️⃣ TẠO KHOẢN ĐẦU TƯ MỚI (GIỐNG TẠO BAN ĐẦU)
+      await investmentProv.addRaw({
         'name': nameCtrl.text,
-        'type': type,
-        'buy_price': amount,
-        'bank_id': accountSourceId, // (nếu backend bạn đang dùng vậy)
+        'type': 'bank',
+        'buy_price': amount, // ✅ dùng buy_price
         'accountSource': accountSourceId,
         'interest_rate': rate,
         'term_months': termMonths,
@@ -360,65 +356,15 @@ class _CreateInvestmentFormState extends State<CreateInvestmentForm> {
         'bank_name': bankName,
       });
 
-      if (ok) {
-        Navigator.pop(context, true);
-        _showMessage('✅ Đã lưu khoản đầu tư');
-      } else {
-        _showMessage('❌ Lưu không thành công');
+      // 2️⃣ NẾU LÀ GIA HẠN → ĐÓNG KHOẢN CŨ
+      if (widget.mode == CreateInvestmentMode.renew) {
+        await investmentProv.closeInvestment(widget.baseInvestment!.id!);
       }
-      return;
     }
 
-    // STOCK
-    if (type == 'stock') {
-      final price = _parseNumber(stockPriceCtrl.text);
-      final qty = double.parse(stockQtyCtrl.text.trim());
-
-      final ok = await investmentProv.addRaw({
-        'name': nameCtrl.text,
-        'type': type,
-        'buy_price': price,       // giá mua
-        'current_price': price,   // lúc tạo = giá mua
-        'quantity': qty,
-        'accountSource': accountSourceId,
-      });
-
-      if (ok) {
-        Navigator.pop(context, true);
-        _showMessage('✅ Đã lưu khoản đầu tư');
-      } else {
-        _showMessage('❌ Lưu không thành công');
-      }
-      return;
-    }
-
-    // REAL ESTATE ✅ NEW
-    if (type == 'real_estate') {
-      final buy = _parseNumber(amountCtrl.text);
-      final qty = double.parse(reQtyCtrl.text.trim());
-
-      final ok = await investmentProv.addRaw({
-        'name': nameCtrl.text,
-        'type': type,
-        'buy_price': buy,
-        'current_price': buy, // tạm để = buy (nếu backend cần)
-        'quantity': qty,      // số lượng BĐS (thường 1)
-        'accountSource': accountSourceId,
-
-        // extra fields (backend có thể lưu hoặc ignore)
-        'location': reLocationCtrl.text.trim(),
-        'note': reNoteCtrl.text.trim(),
-        'buy_date': reBuyDate.toIso8601String(),
-      });
-
-      if (ok) {
-        Navigator.pop(context, true);
-        _showMessage('✅ Đã lưu khoản đầu tư');
-      } else {
-        _showMessage('❌ Lưu không thành công');
-      }
-      return;
-    }
+    if (!mounted) return;
+    _showMessage('✅ Thành công');
+    Navigator.pop(context, true);
   }
 
   Future<void> _pickBankDate() async {

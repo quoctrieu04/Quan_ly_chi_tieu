@@ -17,8 +17,7 @@ class IncomeProvider extends ChangeNotifier {
 
   /// 📅 Lấy nguồn thu (theo tháng/năm)
   Future<void> fetch({required int year, required int month}) async {
-    final tk = _auth.token;
-    if (tk == null || tk.isEmpty || tk == 'null') return;
+    if (!_auth.isAuthenticated) return;
 
     loading = true;
     notifyListeners();
@@ -33,8 +32,10 @@ class IncomeProvider extends ChangeNotifier {
     }
   }
 
-  /// 📁 Lấy toàn bộ danh mục thu nhập (dành cho picker)
+  /// 📁 Lấy toàn bộ danh mục thu nhập (picker)
   Future<void> fetchAll() async {
+    if (!_auth.isAuthenticated) return;
+
     loading = true;
     notifyListeners();
 
@@ -48,13 +49,15 @@ class IncomeProvider extends ChangeNotifier {
     }
   }
 
-  /// ➕ Tạo danh mục thu nhập theo tháng/năm
+  /// ➕ Tạo danh mục thu nhập
   Future<bool> createIncomeCategory(
     String title, {
     String currency = 'VND',
     required int year,
     required int month,
   }) async {
+    if (!_auth.isAuthenticated) return false;
+
     error = null;
     try {
       final created = await _service.create(
@@ -63,10 +66,12 @@ class IncomeProvider extends ChangeNotifier {
         year: year,
         month: month,
       );
+
       _items.add(created);
       _items.sort(
         (a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()),
       );
+
       notifyListeners();
       return true;
     } catch (e) {
@@ -81,14 +86,20 @@ class IncomeProvider extends ChangeNotifier {
     required String title,
     String? currency,
   }) async {
+    if (!_auth.isAuthenticated) return false;
+
     error = null;
     try {
-      final updated = await _service.update(id, title: title, currency: currency);
+      final updated =
+          await _service.update(id, title: title, currency: currency);
+
       final idx = _items.indexWhere((e) => e.id == id);
       if (idx != -1) _items[idx] = updated;
+
       _items.sort(
         (a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()),
       );
+
       notifyListeners();
       return true;
     } catch (e) {
@@ -99,6 +110,8 @@ class IncomeProvider extends ChangeNotifier {
 
   /// ❌ Xóa danh mục
   Future<bool> deleteIncomeCategory(int id) async {
+    if (!_auth.isAuthenticated) return false;
+
     error = null;
     try {
       await _service.delete(id);

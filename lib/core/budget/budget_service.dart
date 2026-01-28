@@ -1,19 +1,10 @@
 import 'dart:convert';
 import 'package:dio/dio.dart';
-import 'package:chitieu/auth/auth_provider.dart';
 
 class BudgetService {
   final Dio dio;
-  final AuthProvider auth;
 
-  BudgetService(this.dio, this.auth);
-
-  /// Headers mặc định (gộp token nếu có)
-  Map<String, String> get _headers => {
-        'Authorization': 'Bearer ${auth.token ?? ''}',
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      };
+  BudgetService(this.dio);
 
   /// 🧾 Lấy danh sách ngân sách (summary)
   Future<Map<String, dynamic>> getBudgets({
@@ -26,7 +17,6 @@ class BudgetService {
         'month': month,
         'year': year,
       },
-      options: Options(headers: _headers),
     );
 
     if (res.statusCode != 200) {
@@ -36,7 +26,8 @@ class BudgetService {
     final data = res.data;
     return {
       'data': data['data'] ?? data['budgets'] ?? [],
-      'total_assigned': data['total_assigned'] ?? data['total_allocated'] ?? 0,
+      'total_assigned':
+          data['total_assigned'] ?? data['total_allocated'] ?? 0,
     };
   }
 
@@ -49,18 +40,17 @@ class BudgetService {
     final body = {
       'month': month,
       'year': year,
-      'allocations': items.map((e) {
-        return {
-          'category_id': e['category_id'],
-          'amount': e['amount'],
-        };
-      }).toList(),
+      'allocations': items
+          .map((e) => {
+                'category_id': e['category_id'],
+                'amount': e['amount'],
+              })
+          .toList(),
     };
 
     final res = await dio.post(
       'api/budgets/allocate',
       data: json.encode(body),
-      options: Options(headers: _headers),
     );
 
     if (res.statusCode != 201) {
@@ -68,7 +58,7 @@ class BudgetService {
     }
   }
 
-  /// 💵 Phân bổ 1 danh mục duy nhất (khi nhấn nút +)
+  /// 💵 Phân bổ 1 danh mục duy nhất
   Future<void> setOne({
     required int year,
     required int month,
@@ -86,7 +76,6 @@ class BudgetService {
     final res = await dio.post(
       'api/budgets/allocate',
       data: json.encode(body),
-      options: Options(headers: _headers),
     );
 
     if (res.statusCode != 201) {
@@ -94,7 +83,7 @@ class BudgetService {
     }
   }
 
-  /// 📊 Lấy tổng chi tiêu thực tế theo danh mục
+  /// 📊 Tổng chi tiêu theo danh mục
   Future<Map<int, num>> getSpentByCategory({
     required int year,
     required int month,
@@ -105,7 +94,6 @@ class BudgetService {
         'month': month,
         'year': year,
       },
-      options: Options(headers: _headers),
     );
 
     if (res.statusCode != 200) return {};
@@ -115,19 +103,19 @@ class BudgetService {
 
     if (data is List) {
       for (final item in data) {
-        if (item is Map<String, dynamic>) {
-          final catId = int.tryParse(item['category_id'].toString()) ?? 0;
-          final spent = num.tryParse(item['spent'].toString()) ?? 0;
-          if (catId > 0) result[catId] = spent;
-        }
+        final catId =
+            int.tryParse(item['category_id'].toString()) ?? 0;
+        final spent =
+            num.tryParse(item['spent'].toString()) ?? 0;
+        if (catId > 0) result[catId] = spent;
       }
     } else if (data is Map && data['data'] is List) {
-      for (final item in (data['data'] as List)) {
-        if (item is Map<String, dynamic>) {
-          final catId = int.tryParse(item['category_id'].toString()) ?? 0;
-          final spent = num.tryParse(item['spent'].toString()) ?? 0;
-          if (catId > 0) result[catId] = spent;
-        }
+      for (final item in data['data']) {
+        final catId =
+            int.tryParse(item['category_id'].toString()) ?? 0;
+        final spent =
+            num.tryParse(item['spent'].toString()) ?? 0;
+        if (catId > 0) result[catId] = spent;
       }
     } else if (data is Map) {
       data.forEach((k, v) {

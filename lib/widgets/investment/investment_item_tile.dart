@@ -32,7 +32,6 @@ class InvestmentItemTile extends StatelessWidget {
                 : Icons.trending_up,
             color: isClosed ? Colors.grey : null,
           ),
-
           title: Text(
             investment.name,
             style: TextStyle(
@@ -40,7 +39,6 @@ class InvestmentItemTile extends StatelessWidget {
               color: isClosed ? Colors.grey : null,
             ),
           ),
-
           subtitle: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -55,7 +53,6 @@ class InvestmentItemTile extends StatelessWidget {
                 'Vốn: ${moneyFmt.format(investment.totalInvested)}',
                 style: const TextStyle(fontSize: 13),
               ),
-
               if (isClosed)
                 const Padding(
                   padding: EdgeInsets.only(top: 4),
@@ -70,19 +67,21 @@ class InvestmentItemTile extends StatelessWidget {
                 ),
             ],
           ),
-
           trailing: _buildTrailing(context, profit, moneyFmt, isClosed),
-
           onTap: isClosed
               ? null
-              : () {
-                  Navigator.push(
+              : () async {
+                  final needReload = await Navigator.push(
                     context,
                     MaterialPageRoute(
                       builder: (_) =>
                           InvestmentDetailPage(investment: investment),
                     ),
                   );
+
+                  if (needReload == true && context.mounted) {
+                    context.read<InvestmentProvider>().fetch();
+                  }
                 },
         ),
       ),

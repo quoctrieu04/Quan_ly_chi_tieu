@@ -50,12 +50,14 @@ class _LoginPageState extends State<LoginPage> {
                           .read<AuthProvider>()
                           .login(_email.text, _pass.text);
                       if (ok && mounted) {
-                        safeShowSnackBar(
+                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                          safeShowSnackBar(
                             context,
                             const SnackBar(
-                                content: Text('Đăng nhập thành công')));
-                        Navigator.pop(
-                            context); // quay lại SettingsPage hoặc Home
+                                content: Text('Đăng nhập thành công')),
+                          );
+                          Navigator.pop(context);
+                        });
                       }
                     },
               child: auth.loading

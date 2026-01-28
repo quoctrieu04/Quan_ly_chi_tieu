@@ -7,7 +7,7 @@ import '../bankaccount/bank_account_model.dart';
 /// 🔹 Kiểu rút tiền
 enum WithdrawType {
   interest, // rút lãi
-  all,      // rút toàn bộ (vốn + lãi)
+  all, // rút toàn bộ (vốn + lãi)
 }
 
 class InvestmentProvider extends ChangeNotifier {
@@ -29,8 +29,7 @@ class InvestmentProvider extends ChangeNotifier {
   // =========================
   // FILTER
   // =========================
-  List<Investment> get banks =>
-      _items.where((e) => e.type == 'bank').toList();
+  List<Investment> get banks => _items.where((e) => e.type == 'bank').toList();
 
   List<Investment> get stocks =>
       _items.where((e) => e.type == 'stock').toList();
@@ -50,9 +49,12 @@ class InvestmentProvider extends ChangeNotifier {
       if (raw is List) {
         _items
           ..clear()
-          ..addAll(raw.map((e) => Investment.fromJson(e)));
-
-        _items.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+          ..addAll(
+            raw
+                .map((e) => Investment.fromJson(e))
+                // 🔥 CHỈ GIỮ KHOẢN ĐANG HOẠT ĐỘNG
+                .where((i) => i.closedAt == null && i.buyPrice > 0),
+          );
       }
     } catch (e) {
       debugPrint('❌ fetch investments error: $e');
@@ -82,17 +84,13 @@ class InvestmentProvider extends ChangeNotifier {
   // =========================
   // CREATE INVESTMENT
   // =========================
-  Future<bool> addRaw(Map<String, dynamic> payload) async {
+  Future<void> addRaw(Map<String, dynamic> payload) async {
     try {
-      final ok = await api.createRaw(payload);
-      if (ok) {
-        await fetch();
-        await fetchBankAccounts();
-      }
-      return ok;
+      await api.createRaw(payload);
+      await fetch();
+      await fetchBankAccounts();
     } catch (e) {
-      debugPrint('❌ addRaw error: $e');
-      return false;
+      rethrow; // 🔥 đẩy lỗi lên UI
     }
   }
 
@@ -125,29 +123,24 @@ class InvestmentProvider extends ChangeNotifier {
   // =========================
   // ✅ WITHDRAW (BANK) – FIXED
   // =========================
-  Future<bool> withdrawBank(
+  Future<void> withdrawBank(
     int investmentId,
     int receiveAccountId, {
     required WithdrawType withdrawType,
     double? amount,
   }) async {
     try {
-      final ok = await api.withdrawBank(
+      await api.withdrawBank(
         investmentId: investmentId,
         receiveAccountId: receiveAccountId,
         withdrawType: withdrawType,
         amount: amount,
       );
 
-      if (ok) {
-        await fetch();
-        await fetchBankAccounts();
-      }
-
-      return ok;
+      await fetch();
+      await fetchBankAccounts();
     } catch (e) {
-      debugPrint('❌ withdrawBank error: $e');
-      return false;
+      rethrow; // 🔥 đẩy lỗi lên UI
     }
   }
 
@@ -218,14 +211,64 @@ class InvestmentProvider extends ChangeNotifier {
   // =========================
   // SUMMARY (UI)
   // =========================
-  double get totalInvested =>
-      _items.fold(0, (sum, e) => sum + e.totalInvested);
+  double get totalInvested => _items
+      .where((e) => e.closedAt == null)
+      .fold(0, (sum, e) => sum + e.totalInvested);
 
-  double get totalProfit =>
-      _items.fold(0, (sum, e) => sum + e.profitLoss);
+  double get totalProfit => _items
+      .where((e) => e.closedAt == null)
+      .fold(0, (sum, e) => sum + e.profitLoss);
 
   double get totalProfitPercent {
     if (totalInvested == 0) return 0;
     return totalProfit / totalInvested * 100;
+  }
+
+  // =========================
+  // 🔁 RENEW BANK INVESTMENT (GIA HẠN)
+  // =========================
+  Future<void> renewBankInvestment(int investmentId) async {
+    try {
+      await api.renewBankInvestment(investmentId);
+
+      // Sau khi gia hạn:
+      await fetch();
+      await fetchBankAccounts();
+    } catch (e) {
+      rethrow; // đẩy lỗi lên UI
+    }
+  }
+
+  // =========================
+  // 🔁 RENEW USING CREATE FORM
+  // (Đóng khoản cũ + tạo khoản mới)
+  // =========================
+  Future<void> renewUsingCreateForm({
+    required int oldInvestmentId,
+    required Map<String, dynamic> payload,
+  }) async {
+    try {
+      // 1️⃣ Đóng / tất toán khoản cũ
+      await api.closeInvestment(oldInvestmentId);
+
+      // 2️⃣ Tạo khoản đầu tư mới (dùng payload từ form)
+      await api.createRaw(payload);
+
+      // 3️⃣ Reload dữ liệu
+      await fetch();
+      await fetchBankAccounts();
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  Future<void> closeInvestment(int investmentId) async {
+    try {
+      await api.closeInvestment(investmentId);
+      await fetch();
+      await fetchBankAccounts();
+    } catch (e) {
+      rethrow;
+    }
   }
 }

@@ -36,13 +36,15 @@ class InvestmentService {
   // =========================
   // CREATE INVESTMENT
   // =========================
-  Future<bool> createRaw(Map<String, dynamic> data) async {
+  Future<void> createRaw(Map<String, dynamic> data) async {
     try {
-      final res = await dio.post("investments", data: data);
-      return res.statusCode == 200 || res.statusCode == 201;
-    } catch (e) {
-      debugPrint("❌ CREATE INVESTMENT ERROR: $e");
-      return false;
+      await dio.post("investments", data: data);
+    } on DioException catch (e) {
+      if (e.response != null) {
+        final msg = e.response?.data['message'] ?? 'Lỗi không xác định';
+        throw Exception(msg); // 🔥 NÉM LỖI LÊN UI
+      }
+      throw Exception('Không kết nối được server');
     }
   }
 
@@ -145,6 +147,38 @@ class InvestmentService {
     } catch (e) {
       debugPrint("❌ REAL ESTATE COST ERROR: $e");
       return false;
+    }
+  }
+
+  // =========================
+  // 🔁 RENEW BANK INVESTMENT
+  // =========================
+  Future<bool> renewBankInvestment(int investmentId) async {
+    try {
+      final res = await dio.post(
+        "investments/$investmentId/renew",
+      );
+
+      debugPrint('✅ RENEW STATUS: ${res.statusCode}');
+      debugPrint('✅ RENEW RESPONSE: ${res.data}');
+
+      return res.statusCode == 200;
+    } on DioException catch (e) {
+      debugPrint('❌ RENEW ERROR: ${e.response?.data}');
+      final msg = e.response?.data['message'] ?? 'Gia hạn thất bại';
+      throw Exception(msg);
+    }
+  }
+
+  // =========================
+// 🔒 CLOSE INVESTMENT (ĐÓNG KHOẢN CŨ)
+// =========================
+  Future<void> closeInvestment(int investmentId) async {
+    try {
+      await dio.post("investments/$investmentId/close");
+    } on DioException catch (e) {
+      final msg = e.response?.data['message'] ?? 'Không thể đóng khoản đầu tư';
+      throw Exception(msg);
     }
   }
 }

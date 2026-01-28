@@ -96,6 +96,7 @@ class Investment {
     String? bankName,
     int? termMonths,
     int? accountSource,
+    DateTime? closedAt,
   }) {
     return Investment(
       id: id,
@@ -110,6 +111,7 @@ class Investment {
       termMonths: termMonths ?? this.termMonths,
       createdAt: createdAt,
       accountSource: accountSource ?? this.accountSource,
+      closedAt: closedAt ?? this.closedAt,
     );
   }
 

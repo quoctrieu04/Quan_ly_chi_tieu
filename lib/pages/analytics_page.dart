@@ -1,9 +1,10 @@
 import 'dart:convert';
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:fl_chart/fl_chart.dart';
-import 'package:http/http.dart' as http;
+
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:chitieu/l10n/app_localizations.dart';
@@ -16,7 +17,6 @@ import 'package:chitieu/auth/auth_provider.dart';
 import 'package:chitieu/auth/auth_service.dart';
 
 // ================= CONFIG =================
-const String _API_BASE_URL = "http://192.168.1.67:8000";
 
 /// ===============================================================
 ///  ANALYTICS (CÓ LƯU DỰ BÁO THÁNG TRƯỚC)
@@ -60,105 +60,40 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
 
   // ================= FETCH DỰ BÁO =================
   Future<void> _fetchPrediction() async {
-    try {
-      _safeSetState(() {
-        _loadingAI = true;
-        _aiError = null;
-      });
+  try {
+    _safeSetState(() {
+      _loadingAI = true;
+      _aiError = null;
+    });
 
-      final token = await _getAccessTokenFromYourAuth();
-      final uri = Uri.parse("$_API_BASE_URL/api/predict").replace(
-        queryParameters: {
-          'year': _ym.year.toString(),
-          'month': _ym.month.toString(),
-        },
-      );
+    final dio = context.read<Dio>(); // ✅ Dio đã có interceptor
 
-      final res = await http.get(uri, headers: {
-        "Authorization": "Bearer $token",
-        "Accept": "application/json",
-      }).timeout(const Duration(seconds: 12));
+    final res = await dio.get(
+      'predict',
+      queryParameters: {
+        'year': _ym.year,
+        'month': _ym.month,
+      },
+    );
 
-      if (res.statusCode == 200) {
-        final data = jsonDecode(res.body);
-        final num? v =
-            (data['prediction'] as num?) ?? (data['predicted_expense'] as num?);
+    final data = res.data as Map<String, dynamic>;
+    final num? v =
+        (data['prediction'] as num?) ?? (data['predicted_expense'] as num?);
 
-        final rawAlerts = data['alerts'];
-        final List<Map<String, dynamic>> alerts =
-            (rawAlerts is List) ? rawAlerts.cast<Map<String, dynamic>>() : [];
-
-        // lọc cảnh báo
-        List<Map<String, dynamic>> filtered = alerts.where((a) {
-          final st = (a['status'] ?? 'new').toString().toLowerCase();
-          final active = st == 'new' || st == 'open';
-          final createdAt = (a['created_at'] ?? '').toString();
-          DateTime? dt;
-          try {
-            dt = DateTime.parse(createdAt).toLocal();
-          } catch (_) {}
-          final inMonth =
-              dt != null && dt.year == _ym.year && dt.month == _ym.month;
-          return active && inMonth;
-        }).toList();
-
-        filtered.sort((a, b) {
-          DateTime pa, pb;
-          try {
-            pa = DateTime.parse(a['created_at']).toLocal();
-          } catch (_) {
-            pa = DateTime.fromMillisecondsSinceEpoch(0);
-          }
-          try {
-            pb = DateTime.parse(b['created_at']).toLocal();
-          } catch (_) {
-            pb = DateTime.fromMillisecondsSinceEpoch(0);
-          }
-          return pb.compareTo(pa);
-        });
-
-        // loại trùng
-        final seenCodes = <String>{};
-        filtered = filtered.where((a) {
-          final code = (a['code'] ?? '').toString();
-          if (seenCodes.contains(code)) return false;
-          seenCodes.add(code);
-          return true;
-        }).toList();
-
-        _safeSetState(() {
-          _predictedExpense = v?.toDouble();
-          _alerts = filtered;
-          _loadingAI = false;
-        });
-
-        // 🔹 Lưu dự báo tháng hiện tại
-        final prefs = await SharedPreferences.getInstance();
-        final key = 'prediction_${_ym.year}_${_ym.month}';
-        await prefs.setDouble(key, _predictedExpense ?? 0);
-
-        return;
-      }
-
-      if (res.statusCode == 401) {
-        _safeSetState(() {
-          _aiError = "Bạn chưa đăng nhập hoặc phiên đã hết hạn (401).";
-          _loadingAI = false;
-        });
-        return;
-      }
-
-      _safeSetState(() {
-        _aiError = "Lỗi API: ${res.statusCode}";
-        _loadingAI = false;
-      });
-    } catch (e) {
-      _safeSetState(() {
-        _aiError = "Không kết nối được tới server: $e";
-        _loadingAI = false;
-      });
-    }
+    _safeSetState(() {
+      _predictedExpense = v?.toDouble();
+      _loadingAI = false;
+    });
+  } on DioException catch (e) {
+    _safeSetState(() {
+      _aiError = e.response?.statusCode == 401
+          ? "Phiên đăng nhập đã hết hạn"
+          : "Lỗi API";
+      _loadingAI = false;
+    });
   }
+}
+
 
   // ================= CHI & DỰ BÁO THÁNG TRƯỚC =================
   Future<void> _computePrevMonthSpent() async {
@@ -190,15 +125,7 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
     } catch (_) {}
   }
 
-  Future<String> _getAccessTokenFromYourAuth() async {
-    final auth = context.read<AuthProvider>();
-    if (auth.isAuthenticated && auth.token != null && auth.token!.isNotEmpty) {
-      return auth.token!;
-    }
-    final t = await AuthService.readToken();
-    if (t != null && t.isNotEmpty) return t;
-    throw "Chưa đăng nhập";
-  }
+  
 
   // ================= BUILD =================
   @override
