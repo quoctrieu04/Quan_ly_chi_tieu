@@ -52,8 +52,7 @@ class InvestmentProvider extends ChangeNotifier {
           ..addAll(
             raw
                 .map((e) => Investment.fromJson(e))
-                // 🔥 CHỈ GIỮ KHOẢN ĐANG HOẠT ĐỘNG
-                .where((i) => i.closedAt == null && i.buyPrice > 0),
+                .where((i) => i.closedAt == null),
           );
       }
     } catch (e) {
@@ -239,36 +238,7 @@ class InvestmentProvider extends ChangeNotifier {
     }
   }
 
-  // =========================
-  // 🔁 RENEW USING CREATE FORM
-  // (Đóng khoản cũ + tạo khoản mới)
-  // =========================
-  Future<void> renewUsingCreateForm({
-    required int oldInvestmentId,
-    required Map<String, dynamic> payload,
-  }) async {
-    try {
-      // 1️⃣ Đóng / tất toán khoản cũ
-      await api.closeInvestment(oldInvestmentId);
+  
 
-      // 2️⃣ Tạo khoản đầu tư mới (dùng payload từ form)
-      await api.createRaw(payload);
-
-      // 3️⃣ Reload dữ liệu
-      await fetch();
-      await fetchBankAccounts();
-    } catch (e) {
-      rethrow;
-    }
-  }
-
-  Future<void> closeInvestment(int investmentId) async {
-    try {
-      await api.closeInvestment(investmentId);
-      await fetch();
-      await fetchBankAccounts();
-    } catch (e) {
-      rethrow;
-    }
-  }
+ 
 }

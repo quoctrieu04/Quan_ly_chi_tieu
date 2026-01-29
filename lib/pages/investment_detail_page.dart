@@ -1,5 +1,6 @@
 import 'package:chitieu/api/bankaccount/bank_account_provider.dart';
 import 'package:chitieu/widgets/create_investment_form.dart';
+import 'package:chitieu/widgets/investment/bank/bank_renew_form.dart';
 import 'package:chitieu/widgets/models/create_investment_mode.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -284,8 +285,7 @@ class _InvestmentDetailPageState extends State<InvestmentDetailPage> {
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
-      builder: (_) => CreateInvestmentForm(
-        mode: CreateInvestmentMode.renew,
+      builder: (_) => BankRenewForm(
         baseInvestment: investment,
       ),
     );

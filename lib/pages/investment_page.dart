@@ -1,5 +1,5 @@
 import 'package:chitieu/api/investment/investment_provider.dart';
-import 'package:chitieu/widgets/create_investment_form.dart';
+import 'package:chitieu/widgets/investment/create_investment_sheet.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -16,7 +16,7 @@ class InvestmentListPage extends StatelessWidget {
         context: context,
         isScrollControlled: true,
         useSafeArea: true,
-        builder: (_) => const CreateInvestmentForm(),
+        builder: (_) => const CreateInvestmentSheet(),
       );
 
       if (created == true && context.mounted) {
