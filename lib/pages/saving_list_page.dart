@@ -96,7 +96,7 @@ class SavingListPage extends StatelessWidget {
                         );
 
                         if (ok == true) {
-                          await prov.remove(s.id!);
+                          await prov.remove(s.id);
                           await prov.fetch(
                               year: ym.year, month: ym.month);
                         }

@@ -1,4 +1,5 @@
-
+import 'package:chitieu/api/real_estate/real_estate_provider.dart';
+import 'package:chitieu/api/real_estate/real_estate_service.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:dio/dio.dart';
@@ -127,7 +128,7 @@ Future<void> main() async {
 
         // 1) Token hết hạn / sai token
         if (status == 401) {
-          await authApi.logout(); 
+          await authApi.logout();
           final ctx = navigatorKey.currentContext;
           if (ctx != null) {
             ctx.read<AuthProvider>().logout();
@@ -247,6 +248,11 @@ Future<void> main() async {
         ChangeNotifierProvider(
           create: (ctx) =>
               InvestmentProvider(api: InvestmentService(ctx.read<Dio>())),
+        ),
+        ChangeNotifierProvider(
+          create: (ctx) => RealEstateProvider(
+            service: RealEstateService(ctx.read<Dio>()),
+          )..fetch(),
         ),
       ],
       child: const MyApp(),

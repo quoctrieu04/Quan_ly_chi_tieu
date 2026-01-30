@@ -9,11 +9,11 @@ class RealEstateProvider extends ChangeNotifier {
 
   bool _loading = false;
   String? _error;
-  List<RealEstateInvestment> _items = [];
+  List<RealEstate> _items = [];
 
   bool get loading => _loading;
   String? get error => _error;
-  List<RealEstateInvestment> get items => _items;
+  List<RealEstate> get items => _items;
 
   void _setLoading(bool v) {
     _loading = v;
@@ -25,14 +25,15 @@ class RealEstateProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// ===============================
-  /// FETCH LIST (OPTIONAL)
-  /// ===============================
+  // ===============================
+  // FETCH LIST
+  // ===============================
   Future<void> fetch() async {
     _setLoading(true);
     _setError(null);
     try {
-      _items = await service.getAll();
+      final data = await service.fetch();
+      _items = data.map((e) => RealEstate.fromJson(e)).toList();
     } catch (e) {
       _setError(e.toString());
     } finally {
@@ -40,10 +41,10 @@ class RealEstateProvider extends ChangeNotifier {
     }
   }
 
-  /// ===============================
-  /// CREATE INVESTMENT
-  /// ===============================
-  Future<RealEstateInvestment?> create({
+  // ===============================
+  // CREATE REAL ESTATE
+  // ===============================
+  Future<void> create({
     required String name,
     required String propertyType,
     required String address,
@@ -54,22 +55,49 @@ class RealEstateProvider extends ChangeNotifier {
   }) async {
     _setError(null);
     try {
-      final item = await service.createInvestment(
-        name: name,
-        propertyType: propertyType,
-        address: address,
-        purchasePrice: purchasePrice,
-        purchaseDate: purchaseDate,
-        accountSourceId: accountSourceId,
-        notes: notes,
-      );
+      await service.create({
+        'name': name,
+        'property_type': propertyType,
+        'address': address,
+        'purchase_price': purchasePrice,
+        'purchase_date':
+            purchaseDate.toIso8601String().substring(0, 10),
+        'account_source_id': accountSourceId,
+        'note': notes,
+      });
 
-      _items = [item, ..._items];
-      notifyListeners();
-      return item;
+      await fetch(); // backend là source of truth
     } catch (e) {
       _setError(e.toString());
-      return null;
+      rethrow;
+    }
+  }
+
+  // ===============================
+  // ADD REAL ESTATE COST ✅ (CHUẨN)
+  // ===============================
+  Future<void> addCost({
+    required int realEstateId,
+    required double amount,
+    required int accountSourceId,
+    String? note,
+    DateTime? costDate,
+  }) async {
+    _setError(null);
+
+    try {
+      await service.addCost(
+        realEstateId: realEstateId,
+        amount: amount,
+        accountSourceId: accountSourceId,
+        note: note,
+        costDate: costDate,
+      );
+
+      await fetch(); // reload lại danh sách & chi tiết
+    } catch (e) {
+      _setError(e.toString());
+      rethrow;
     }
   }
 }

@@ -1,38 +1,39 @@
-class RealEstateInvestment {
+class RealEstate {
   final int id;
   final String name;
   final String propertyType;
   final String? address;
   final double purchasePrice;
+  final double totalCost;
   final DateTime purchaseDate;
-  final int accountSourceId;
-  final String status;
-  final String? notes;
+  final DateTime? soldAt;
+  final String? note;
 
-  RealEstateInvestment({
+  RealEstate({
     required this.id,
     required this.name,
     required this.propertyType,
-    this.address,
     required this.purchasePrice,
+    required this.totalCost,
     required this.purchaseDate,
-    required this.accountSourceId,
-    required this.status,
-    this.notes,
+    this.address,
+    this.soldAt,
+    this.note,
   });
 
-  factory RealEstateInvestment.fromJson(Map<String, dynamic> json) {
-    return RealEstateInvestment(
+  factory RealEstate.fromJson(Map<String, dynamic> json) {
+    return RealEstate(
       id: json['id'],
       name: json['name'],
       propertyType: json['property_type'],
       address: json['address'],
-      purchasePrice:
-          (json['purchase_price'] as num).toDouble(),
+      purchasePrice: double.parse(json['purchase_price'].toString()),
+      totalCost: double.parse(json['total_cost'].toString()),
       purchaseDate: DateTime.parse(json['purchase_date']),
-      accountSourceId: json['account_source_id'],
-      status: json['status'],
-      notes: json['notes'],
+      soldAt: json['sold_at'] != null
+          ? DateTime.parse(json['sold_at'])
+          : null,
+      note: json['note'],
     );
   }
 }
