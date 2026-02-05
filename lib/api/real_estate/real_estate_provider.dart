@@ -1,11 +1,16 @@
 import 'package:flutter/material.dart';
 import 'real_estate_service.dart';
+import 'real_estate_income_plan_service.dart';
 import 'real_estate_model.dart';
 
 class RealEstateProvider extends ChangeNotifier {
   final RealEstateService service;
+  final RealEstateIncomePlanService incomePlanService;
 
-  RealEstateProvider({required this.service});
+  RealEstateProvider({
+    required this.service,
+    required this.incomePlanService,
+  });
 
   bool _loading = false;
   String? _error;
@@ -60,13 +65,12 @@ class RealEstateProvider extends ChangeNotifier {
         'property_type': propertyType,
         'address': address,
         'purchase_price': purchasePrice,
-        'purchase_date':
-            purchaseDate.toIso8601String().substring(0, 10),
+        'purchase_date': purchaseDate.toIso8601String().substring(0, 10),
         'account_source_id': accountSourceId,
         'note': notes,
       });
 
-      await fetch(); // backend là source of truth
+      await fetch();
     } catch (e) {
       _setError(e.toString());
       rethrow;
@@ -74,7 +78,7 @@ class RealEstateProvider extends ChangeNotifier {
   }
 
   // ===============================
-  // ADD REAL ESTATE COST ✅ (CHUẨN)
+  // ADD COST
   // ===============================
   Future<void> addCost({
     required int realEstateId,
@@ -84,7 +88,6 @@ class RealEstateProvider extends ChangeNotifier {
     DateTime? costDate,
   }) async {
     _setError(null);
-
     try {
       await service.addCost(
         realEstateId: realEstateId,
@@ -94,10 +97,15 @@ class RealEstateProvider extends ChangeNotifier {
         costDate: costDate,
       );
 
-      await fetch(); // reload lại danh sách & chi tiết
+      await fetch();
     } catch (e) {
       _setError(e.toString());
       rethrow;
     }
   }
+
+  // ===============================
+  // ✅ CREATE INCOME PLAN (ĐÚNG)
+  // ===============================
+  
 }

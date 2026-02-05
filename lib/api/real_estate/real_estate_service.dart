@@ -32,7 +32,7 @@ class RealEstateService {
   }
 
   // =========================
-  // ADD REAL ESTATE COST ✅ (CHUẨN BACKEND)
+  // ADD REAL ESTATE COST
   // =========================
   Future<void> addCost({
     required int realEstateId,
@@ -59,6 +59,62 @@ class RealEstateService {
     }
   }
 
+  // =====================================================
+  // ❌ DEPRECATED: THU TIỀN NGAY (KHÔNG DÙNG NỮA)
+  // =====================================================
+  @Deprecated('Không dùng addIncome – dùng income plan + collect')
+  Future<void> addIncome(
+    int realEstateId,
+    Map<String, dynamic> data,
+  ) async {
+    try {
+      await dio.post(
+        "real-estates/$realEstateId/incomes",
+        data: data,
+      );
+    } on DioException catch (e) {
+      final msg =
+          e.response?.data['message'] ?? 'Không thể thêm thu nhập BĐS';
+      throw Exception(msg);
+    }
+  }
+
+  // =====================================================
+  // CREATE INCOME PLAN (KHOẢN THU ĐỊNH KỲ)
+  // =====================================================
+  Future<void> createIncomePlan(
+    int realEstateId,
+    Map<String, dynamic> data,
+  ) async {
+    try {
+      await dio.post(
+        "real-estates/$realEstateId/income-plans",
+        data: data,
+      );
+    } on DioException catch (e) {
+      final msg =
+          e.response?.data['message'] ?? 'Không thể tạo khoản thu';
+      throw Exception(msg);
+    }
+  }
+
+  // =====================================================
+  // COLLECT INCOME (THU TIỀN THEO KỲ)
+  // =====================================================
+  Future<void> collectIncome({
+    required int incomePlanId,
+  }) async {
+    try {
+      await dio.post(
+        "income-plans/$incomePlanId/collect",
+      );
+    } on DioException catch (e) {
+      final msg =
+          e.response?.data['message'] ?? 'Không thể thu tiền';
+      throw Exception(msg);
+    }
+  }
+
   // =========================
   // SELL REAL ESTATE
   // =========================
@@ -73,7 +129,8 @@ class RealEstateService {
         "real-estates/$realEstateId/sell",
         data: {
           'sell_price': sellPrice,
-          'sell_date': sellDate?.toIso8601String(),
+          'sell_date':
+              sellDate?.toIso8601String().substring(0, 10),
           'note': note,
         },
       );
@@ -84,4 +141,15 @@ class RealEstateService {
       throw Exception(msg);
     }
   }
+  Future<void> collectIncomePlan(int planId) async {
+  try {
+    await dio.post(
+      'real-estate-income-plans/$planId/collect',
+    );
+  } on DioException catch (e) {
+    final msg =
+        e.response?.data['message'] ?? 'Không thể thu tiền';
+    throw Exception(msg);
+  }
+}
 }

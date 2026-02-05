@@ -1,5 +1,8 @@
+import 'package:chitieu/api/real_estate/real_estate_income_plan_provider.dart';
 import 'package:chitieu/api/real_estate/real_estate_provider.dart';
+import 'package:chitieu/pages/real_estate_income_plan_detail_page.dart';
 import 'package:chitieu/widgets/investment/real_estate/add_real_estate_cost_sheet.dart';
+import 'package:chitieu/widgets/investment/real_estate/add_real_estate_income_sheet.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -104,9 +107,15 @@ class _RealEstateDetailPageState extends State<RealEstateDetailPage> {
             valueColor: Colors.green,
           ),
           _InfoRow(
+            label: 'Tổng thu',
+            value: _money(realEstate.totalIncome ?? 0),
+            valueColor: Colors.green,
+          ),
+          _InfoRow(
             label: 'Lãi / Lỗ',
-            value: '0',
-            valueColor: Colors.grey,
+            value: _money(realEstate.profit ?? 0),
+            valueColor:
+                (realEstate.profit ?? 0) >= 0 ? Colors.green : Colors.red,
           ),
 
           const SizedBox(height: 24),
@@ -139,6 +148,56 @@ class _RealEstateDetailPageState extends State<RealEstateDetailPage> {
                   realEstate = updated;
                 });
               }
+            },
+          ),
+          ElevatedButton.icon(
+            icon: const Icon(Icons.trending_up),
+            label: const Text('Thêm thu nhập'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.green.shade600,
+            ),
+            onPressed: () async {
+              final incomeProv = context.read<RealEstateIncomePlanProvider>();
+
+              // 🔥 BẮT BUỘC LOAD PLAN TRƯỚC
+              await incomeProv.load(realEstate.id);
+
+              if (!context.mounted) return;
+
+              // =========================
+              // CHƯA CÓ KHOẢN THU
+              // =========================
+              if (incomeProv.plan == null) {
+                final created = await showModalBottomSheet<bool>(
+                  context: context,
+                  isScrollControlled: true,
+                  builder: (_) => AddRealEstateIncomePlanSheet(
+                    realEstateId: realEstate.id,
+                  ),
+                );
+
+                if (created == true) {
+                  await incomeProv.load(realEstate.id);
+                }
+
+                return;
+              }
+
+              // =========================
+              // ĐÃ CÓ KHOẢN THU
+              // =========================
+              await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => RealEstateIncomePlanDetailPage(
+                    
+                    realEstate: realEstate,
+                  ),
+                ),
+              );
+
+              // quay lại thì reload lại plan
+              await incomeProv.load(realEstate.id);
             },
           ),
 
