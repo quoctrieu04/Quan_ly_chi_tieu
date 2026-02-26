@@ -1,7 +1,11 @@
+import 'package:chitieu/api/investment/investment_transaction_provider.dart';
+import 'package:chitieu/api/investment/investment_transaction_service.dart';
 import 'package:chitieu/api/real_estate/real_estate_income_plan_provider.dart';
 import 'package:chitieu/api/real_estate/real_estate_income_plan_service.dart';
 import 'package:chitieu/api/real_estate/real_estate_provider.dart';
 import 'package:chitieu/api/real_estate/real_estate_service.dart';
+import 'package:chitieu/financial_transaction/financial_transaction_provider.dart';
+import 'package:chitieu/financial_transaction/financial_transaction_service.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:dio/dio.dart';
@@ -259,6 +263,16 @@ Future<void> main() async {
         ),
         ChangeNotifierProvider(
           create: (ctx) => RealEstateIncomePlanProvider(ctx.read<Dio>()),
+        ),
+        ChangeNotifierProvider(
+          create: (context) => InvestmentTransactionProvider(
+            InvestmentTransactionService(context.read<Dio>()),
+          ),
+        ),
+        ChangeNotifierProvider(
+          create: (ctx) => FinancialTransactionProvider(
+            FinancialTransactionService(ctx.read<Dio>()),
+          ),
         ),
       ],
       child: const MyApp(),

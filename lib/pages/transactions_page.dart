@@ -4,11 +4,15 @@ import 'package:intl/intl.dart';
 
 import 'package:chitieu/api/out_invoice/out_invoice_provider.dart';
 import 'package:chitieu/api/in_invoice/in_invoice_provider.dart';
-// import 'package:chitieu/api/out_invoice/out_invoice_model.dart';
-// import 'package:chitieu/api/in_invoice/in_invoice_model.dart';
 
 import 'package:chitieu/core/money/money_formatter.dart';
 import 'package:chitieu/core/money/money_settings_provider.dart';
+import 'package:chitieu/core/money/money_settings.dart';
+
+import 'package:chitieu/financial_transaction/financial_transaction_model.dart';
+import 'package:chitieu/financial_transaction/financial_transaction_provider.dart';
+
+enum HistoryTab { transaction, investment }
 
 class TransactionsPage extends StatefulWidget {
   const TransactionsPage({super.key});
@@ -22,6 +26,8 @@ class _TransactionsPageState extends State<TransactionsPage> {
   late int _month;
   int? _day;
   bool _inited = false;
+
+  HistoryTab _tab = HistoryTab.transaction;
 
   @override
   void didChangeDependencies() {
@@ -42,30 +48,34 @@ class _TransactionsPageState extends State<TransactionsPage> {
 
     _inited = true;
 
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      await _fetchAll();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _fetchCurrentTab();
     });
   }
 
-  /// 🔄 Gọi API lấy danh sách chi & thu theo năm/tháng/ngày
-  Future<void> _fetchAll() async {
-    debugPrint('🚀 Fetching transactions for $_day/$_month/$_year');
-    await Future.wait([
-      context.read<OutInvoiceProvider>().fetch(year: _year, month: _month, day: _day),
-      context.read<InInvoiceProvider>().fetch(year: _year, month: _month, day: _day),
-    ]);
+  Future<void> _fetchCurrentTab() async {
+    if (_tab == HistoryTab.transaction) {
+      await Future.wait([
+        context.read<OutInvoiceProvider>().fetch(year: _year, month: _month, day: _day),
+        context.read<InInvoiceProvider>().fetch(year: _year, month: _month, day: _day),
+      ]);
+    } else {
+      // ✅ Tab Đầu tư: đọc lịch sử chung
+      await context.read<FinancialTransactionProvider>().fetchByMonth(
+            year: _year,
+            month: _month,
+            day: _day,
+            category: 'investment', // backend phải map investment => real_estate + investment_bank
+          );
+    }
   }
 
-  /// 📅 Chọn lại ngày -> gọi API mới
   Future<void> _pickMonthDay() async {
     final picked = await showDatePicker(
       context: context,
       initialDate: DateTime(_year, _month, _day ?? 1),
-      firstDate: DateTime(2020, 1, 1),
-      lastDate: DateTime(2035, 12, 31),
-      helpText: 'Chọn ngày',
-      cancelText: 'HUỶ',
-      confirmText: 'OK',
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2035),
     );
 
     if (picked == null) return;
@@ -76,145 +86,207 @@ class _TransactionsPageState extends State<TransactionsPage> {
       _day = picked.day;
     });
 
-    // 🟢 Gọi lại API sau khi chọn ngày
-    await _fetchAll();
+    await _fetchCurrentTab();
   }
 
   @override
   Widget build(BuildContext context) {
-    final outProv = context.watch<OutInvoiceProvider>();
-    final inProv = context.watch<InInvoiceProvider>();
-    final settings = context.watch<MoneySettingsProvider>().settings;
+    final MoneySettings settings = context.watch<MoneySettingsProvider>().settings;
 
     final localeTag = Localizations.localeOf(context).toLanguageTag();
-    final monthLabel =
-        DateFormat.yMMMM(localeTag).format(DateTime(_year, _month));
+    final monthLabel = DateFormat.yMMMM(localeTag).format(DateTime(_year, _month));
     final dayLabel = (_day != null)
-        ? DateFormat('dd MMMM yyyy', localeTag)
-            .format(DateTime(_year, _month, _day!))
+        ? DateFormat('dd MMMM yyyy', localeTag).format(DateTime(_year, _month, _day!))
         : null;
-
-    // 🧾 Gộp danh sách chi & thu
-    final List<_TxnRow> combined = [
-      ...outProv.items.map((e) => _TxnRow(
-            id: e.id,
-            amount: e.amount,
-            type: 'out',
-            content: e.content,
-            date: e.occurredAt ?? e.createdAt ?? DateTime.now(),
-            label: e.categoryName ?? 'Chi: ${e.outcatId}',
-          )),
-      ...inProv.items.map((e) => _TxnRow(
-            id: e.id,
-            amount: e.amount,
-            type: 'in',
-            content: e.content,
-            date: e.occurredAt ?? e.createdAt ?? DateTime.now(),
-            label: e.categoryName ?? 'Thu: ${e.incatId}',
-          )),
-    ];
-
-    // 🕓 Lọc theo ngày cụ thể (nếu có)
-    final txs = (_day == null)
-        ? combined
-        : combined.where((t) =>
-            t.date.year == _year &&
-            t.date.month == _month &&
-            t.date.day == _day);
-
-    final loading = outProv.loading || inProv.loading;
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          _day == null
-              ? 'Tất cả giao dịch • $monthLabel'
-              : 'Tất cả giao dịch • $dayLabel',
-        ),
+        title: Text(_day == null ? 'Lịch sử • $monthLabel' : 'Lịch sử • $dayLabel'),
         actions: [
           IconButton(
             icon: const Icon(Icons.calendar_month_rounded),
-            tooltip: 'Chọn ngày',
             onPressed: _pickMonthDay,
           ),
         ],
       ),
-      body: RefreshIndicator(
-        onRefresh: _fetchAll,
-        child: Builder(
-          builder: (context) {
-            if (loading) {
-              return const Center(child: CircularProgressIndicator());
-            }
+      body: Column(
+        children: [
+          _buildTabSwitcher(),
+          Expanded(
+            child: RefreshIndicator(
+              onRefresh: _fetchCurrentTab,
+              child: _tab == HistoryTab.transaction
+                  ? _buildTransactionList(settings)
+                  : _buildInvestmentList(settings),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
-            if (txs.isEmpty) {
-              return const Center(child: Text('Chưa có dữ liệu'));
-            }
+  Widget _buildTabSwitcher() {
+    return Padding(
+      padding: const EdgeInsets.all(12),
+      child: Row(
+        children: [
+          _tabBtn('Giao dịch', HistoryTab.transaction),
+          const SizedBox(width: 8),
+          _tabBtn('Đầu tư', HistoryTab.investment),
+        ],
+      ),
+    );
+  }
 
-            // 🔽 Sắp xếp mới nhất -> cũ nhất
-            final sorted = txs.toList()
-              ..sort((a, b) => b.date.compareTo(a.date));
+  Widget _tabBtn(String label, HistoryTab tab) {
+    final active = _tab == tab;
+    const color = Color(0xFF8B5E00);
 
-            return ListView.builder(
-              physics: const AlwaysScrollableScrollPhysics(),
-              itemCount: sorted.length,
-              itemBuilder: (ctx, i) {
-                final tx = sorted[i];
-                final isOut = tx.type == 'out';
-                final sign = isOut ? '-' : '+';
-                final color =
-                    isOut ? const Color(0xFFD64545) : const Color(0xFF1F9D4C);
-                final dateStr =
-                    DateFormat('dd/MM/yyyy HH:mm').format(tx.date);
-
-                return ListTile(
-                  leading: CircleAvatar(
-                    backgroundColor: color.withOpacity(.15),
-                    child: Icon(
-                      isOut
-                          ? Icons.call_made_rounded
-                          : Icons.call_received_rounded,
-                      color: color,
-                    ),
-                  ),
-                  title: Text(
-                    tx.label,
-                    style: const TextStyle(fontWeight: FontWeight.w700),
-                  ),
-                  subtitle: Text(
-                    (tx.content?.isNotEmpty == true)
-                        ? tx.content!
-                        : dateStr,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  trailing: Text(
-                    '$sign${MoneyFormatter(settings).format(tx.amount)}',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w800,
-                      color: color,
-                    ),
-                  ),
-                );
-              },
-            );
-          },
+    return Expanded(
+      child: InkWell(
+        onTap: () {
+          if (_tab == tab) return;
+          setState(() => _tab = tab);
+          WidgetsBinding.instance.addPostFrameCallback((_) => _fetchCurrentTab());
+        },
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: color),
+            color: active ? color.withOpacity(.15) : null,
+          ),
+          child: Center(
+            child: Text(
+              label,
+              style: const TextStyle(fontWeight: FontWeight.w700, color: color),
+            ),
+          ),
         ),
+      ),
+    );
+  }
+
+  // ================= GIAO DỊCH THƯỜNG =================
+
+  Widget _buildTransactionList(MoneySettings settings) {
+    final outProv = context.watch<OutInvoiceProvider>();
+    final inProv = context.watch<InInvoiceProvider>();
+
+    if (outProv.loading || inProv.loading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    final rows = [
+      ...outProv.items.map((e) => _TxnRow(
+            amount: e.amount,
+            type: 'out',
+            date: e.occurredAt ?? e.createdAt ?? DateTime.now(),
+            label: e.categoryName ?? 'Chi',
+            content: e.content,
+          )),
+      ...inProv.items.map((e) => _TxnRow(
+            amount: e.amount,
+            type: 'in',
+            date: e.occurredAt ?? e.createdAt ?? DateTime.now(),
+            label: e.categoryName ?? 'Thu',
+            content: e.content,
+          )),
+    ]..sort((a, b) => b.date.compareTo(a.date));
+
+    if (rows.isEmpty) return const Center(child: Text('Chưa có dữ liệu'));
+
+    return ListView.builder(
+      physics: const AlwaysScrollableScrollPhysics(),
+      itemCount: rows.length,
+      itemBuilder: (_, i) => _transactionTile(rows[i], settings),
+    );
+  }
+
+  Widget _transactionTile(_TxnRow tx, MoneySettings settings) {
+    final isOut = tx.type == 'out';
+    final color = isOut ? const Color(0xFFD64545) : const Color(0xFF1F9D4C);
+    final sign = isOut ? '-' : '+';
+
+    return ListTile(
+      leading: CircleAvatar(
+        backgroundColor: color.withOpacity(.15),
+        child: Icon(
+          isOut ? Icons.call_made_rounded : Icons.call_received_rounded,
+          color: color,
+        ),
+      ),
+      title: Text(tx.label, style: const TextStyle(fontWeight: FontWeight.w700)),
+      subtitle: Text(
+        tx.content ?? DateFormat('dd/MM/yyyy HH:mm').format(tx.date),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
+      trailing: Text(
+        '$sign${MoneyFormatter(settings).format(tx.amount)}',
+        style: TextStyle(fontWeight: FontWeight.w800, color: color),
+      ),
+    );
+  }
+
+  // ================= ĐẦU TƯ (LỊCH SỬ CHUNG) =================
+
+  Widget _buildInvestmentList(MoneySettings settings) {
+    final prov = context.watch<FinancialTransactionProvider>();
+
+    if (prov.loading) return const Center(child: CircularProgressIndicator());
+    if (prov.items.isEmpty) return const Center(child: Text('Chưa có lịch sử đầu tư'));
+
+    return ListView.builder(
+      physics: const AlwaysScrollableScrollPhysics(),
+      itemCount: prov.items.length,
+      itemBuilder: (_, i) => _investmentTile(prov.items[i], settings),
+    );
+  }
+
+  Widget _investmentTile(FinancialTransaction tx, MoneySettings settings) {
+    final isOut = tx.direction == 'out';
+    final color = isOut ? const Color(0xFFD64545) : const Color(0xFF1F9D4C);
+    final sign = isOut ? '-' : '+';
+
+    final subtitle = (tx.description != null && tx.description!.trim().isNotEmpty)
+        ? tx.description!
+        : DateFormat('dd/MM/yyyy HH:mm').format(tx.occurredAt);
+
+    return ListTile(
+      leading: CircleAvatar(
+        backgroundColor: color.withOpacity(.15),
+        child: Icon(
+          isOut ? Icons.call_made_rounded : Icons.call_received_rounded,
+          color: color,
+        ),
+      ),
+      title: Text(
+        tx.title.isNotEmpty ? tx.title : 'Giao dịch',
+        style: const TextStyle(fontWeight: FontWeight.w700),
+      ),
+      subtitle: Text(
+        subtitle,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
+      trailing: Text(
+        '$sign${MoneyFormatter(settings).format(tx.amount)}',
+        style: TextStyle(fontWeight: FontWeight.w800, color: color),
       ),
     );
   }
 }
 
 class _TxnRow {
-  final int id;
   final num amount;
-  final String type; // "out" | "in"
-  final String? content;
+  final String type;
   final DateTime date;
   final String label;
+  final String? content;
 
   _TxnRow({
-    required this.id,
     required this.amount,
     required this.type,
     required this.date,
