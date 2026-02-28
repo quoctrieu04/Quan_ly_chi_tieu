@@ -104,8 +104,30 @@ class RealEstateProvider extends ChangeNotifier {
     }
   }
 
+    // ===============================
+  // SELL REAL ESTATE
   // ===============================
-  // ✅ CREATE INCOME PLAN (ĐÚNG)
-  // ===============================
+  Future<double> sell({
+    required int realEstateId,
+    required double sellPrice,
+    required DateTime sellDate,
+    required int accountTargetId,
+  }) async {
+    _setError(null);
+    try {
+      final profit = await service.sell(
+        realEstateId: realEstateId,
+        sellPrice: sellPrice,
+        sellDate: sellDate,
+        accountTargetId: accountTargetId,
+      );
+
+      await fetch();
+      return profit;
+    } catch (e) {
+      _setError(e.toString());
+      rethrow;
+    }
+  }
   
 }

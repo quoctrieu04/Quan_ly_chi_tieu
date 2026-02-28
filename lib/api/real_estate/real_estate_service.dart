@@ -118,38 +118,30 @@ class RealEstateService {
   // =========================
   // SELL REAL ESTATE
   // =========================
+    // =========================
+  // SELL REAL ESTATE
+  // =========================
   Future<double> sell({
     required int realEstateId,
     required double sellPrice,
-    DateTime? sellDate,
-    String? note,
+    required int accountTargetId,
+    required DateTime sellDate,
   }) async {
     try {
       final res = await dio.post(
         "real-estates/$realEstateId/sell",
         data: {
           'sell_price': sellPrice,
-          'sell_date':
-              sellDate?.toIso8601String().substring(0, 10),
-          'note': note,
+          'sell_date': sellDate.toIso8601String().substring(0, 10),
+          'account_target_id': accountTargetId,
         },
       );
 
+      // backend trả { message, profit }
       return double.parse(res.data['profit'].toString());
     } on DioException catch (e) {
       final msg = e.response?.data['message'] ?? 'Không thể bán BĐS';
       throw Exception(msg);
     }
   }
-  Future<void> collectIncomePlan(int planId) async {
-  try {
-    await dio.post(
-      'real-estate-income-plans/$planId/collect',
-    );
-  } on DioException catch (e) {
-    final msg =
-        e.response?.data['message'] ?? 'Không thể thu tiền';
-    throw Exception(msg);
-  }
-}
 }

@@ -1,8 +1,10 @@
+import 'package:chitieu/api/bankaccount/bank_account_provider.dart';
 import 'package:chitieu/api/real_estate/real_estate_income_plan_provider.dart';
 import 'package:chitieu/api/real_estate/real_estate_provider.dart';
 import 'package:chitieu/pages/real_estate_income_plan_detail_page.dart';
 import 'package:chitieu/widgets/investment/real_estate/add_real_estate_cost_sheet.dart';
 import 'package:chitieu/widgets/investment/real_estate/add_real_estate_income_sheet.dart';
+import 'package:chitieu/widgets/investment/real_estate/sell_real_estate_sheet.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -190,7 +192,6 @@ class _RealEstateDetailPageState extends State<RealEstateDetailPage> {
                 context,
                 MaterialPageRoute(
                   builder: (_) => RealEstateIncomePlanDetailPage(
-                    
                     realEstate: realEstate,
                   ),
                 ),
@@ -206,8 +207,51 @@ class _RealEstateDetailPageState extends State<RealEstateDetailPage> {
           OutlinedButton.icon(
             icon: const Icon(Icons.sell),
             label: const Text('Đánh dấu đã bán'),
-            onPressed: () {
-              // TODO: nghiệp vụ bán BĐS
+            onPressed: () async {
+              // đảm bảo có danh sách tài khoản để chọn
+              final bankProv = context.read<BankAccountProvider>();
+              if (bankProv.items.isEmpty && !bankProv.loading) {
+                await bankProv.fetchAccounts();
+              }
+              if (!context.mounted) return;
+
+              final result = await showModalBottomSheet<Map<String, dynamic>>(
+                context: context,
+                isScrollControlled: true,
+                useSafeArea: true,
+                builder: (_) => SellRealEstateSheet(
+                  realEstateId: realEstate.id,
+                  realEstateName: realEstate.name ?? 'Bất động sản',
+                ),
+              );
+
+              if (result == null || !context.mounted) return;
+
+              try {
+                final prov = context.read<RealEstateProvider>();
+                final profit = await prov.sell(
+                  realEstateId: realEstate.id,
+                  sellPrice: (result['sell_price'] as double),
+                  sellDate: (result['sell_date'] as DateTime),
+                  accountTargetId: (result['account_target_id'] as int),
+                );
+
+                if (!context.mounted) return;
+
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                      content:
+                          Text('Đã bán. Lãi/Lỗ: ${profit.toStringAsFixed(0)}')),
+                );
+
+                // index() chỉ show whereNull(sold_at) -> quay lại list
+                Navigator.pop(context, true);
+              } catch (e) {
+                if (!context.mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(e.toString())),
+                );
+              }
             },
           ),
         ],
