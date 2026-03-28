@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -13,8 +12,7 @@ import 'package:chitieu/api/category/category_model.dart';
 import 'package:chitieu/core/budget/budgets_provider.dart';
 import 'package:chitieu/core/budget/budget_model.dart';
 import 'package:chitieu/api/bankaccount/bank_account_provider.dart';
-import 'package:chitieu/auth/auth_provider.dart';
-import 'package:chitieu/auth/auth_service.dart';
+import 'package:month_picker_dialog/month_picker_dialog.dart';
 
 // ================= CONFIG =================
 
@@ -34,6 +32,9 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
   double? _predictedExpense; // dự báo tháng hiện tại
   double? _prevMonthSpent; // chi tiêu tháng trước
   double? _prevMonthPredicted; // 🔹 dự báo tháng trước
+  double? _forecastEndOfMonth;
+  double? _spentMtdLive;
+  String? _aiAlertMessage;
   List<dynamic> _alerts = [];
   String? _aiError;
 
@@ -60,40 +61,117 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
 
   // ================= FETCH DỰ BÁO =================
   Future<void> _fetchPrediction() async {
-  try {
-    _safeSetState(() {
-      _loadingAI = true;
-      _aiError = null;
-    });
+    try {
+      _safeSetState(() {
+        _loadingAI = true;
+        _aiError = null;
+      });
 
-    final dio = context.read<Dio>(); // ✅ Dio đã có interceptor
+      final dio = context.read<Dio>();
 
-    final res = await dio.get(
-      'predict',
-      queryParameters: {
-        'year': _ym.year,
-        'month': _ym.month,
-      },
-    );
+      final v2Res = await dio.get(
+        'predict/v2',
+        queryParameters: {
+          'year': _ym.year,
+          'month': _ym.month,
+        },
+      );
 
-    final data = res.data as Map<String, dynamic>;
-    final num? v =
-        (data['prediction'] as num?) ?? (data['predicted_expense'] as num?);
+      final v2Root = (v2Res.data is Map<String, dynamic>)
+          ? v2Res.data as Map<String, dynamic>
+          : <String, dynamic>{};
 
-    _safeSetState(() {
-      _predictedExpense = v?.toDouble();
-      _loadingAI = false;
-    });
-  } on DioException catch (e) {
-    _safeSetState(() {
-      _aiError = e.response?.statusCode == 401
-          ? "Phiên đăng nhập đã hết hạn"
-          : "Lỗi API";
-      _loadingAI = false;
-    });
+      final v2Data = (v2Root['data'] is Map<String, dynamic>)
+          ? v2Root['data'] as Map<String, dynamic>
+          : v2Root;
+
+      final num? v2PredictedNextMonthNum =
+          v2Data['predicted_next_month'] as num?;
+      final num? forecastEndOfMonthNum =
+          v2Data['forecast_end_of_month'] as num?;
+      final num? spentMtdNum = v2Data['spent_mtd'] as num?;
+      final List<dynamic> alertsRaw = (v2Data['alerts'] as List?) ?? const [];
+
+      double predictedNextMonth = v2PredictedNextMonthNum?.toDouble() ?? 0.0;
+
+      final forecastEndOfMonth = forecastEndOfMonthNum?.toDouble() ?? 0.0;
+      final spentMtd = spentMtdNum?.toDouble() ?? 0.0;
+
+      try {
+        final monthlyRes = await dio.get(
+          'predict',
+          queryParameters: {
+            'year': _ym.year,
+            'month': _ym.month,
+          },
+        );
+
+        final monthlyRoot = (monthlyRes.data is Map<String, dynamic>)
+            ? monthlyRes.data as Map<String, dynamic>
+            : <String, dynamic>{};
+
+        final num? mlPredictedNextMonthNum =
+            monthlyRoot['predicted_next_month_expense'] as num?;
+
+        if (mlPredictedNextMonthNum != null) {
+          predictedNextMonth = mlPredictedNextMonthNum.toDouble();
+        }
+
+        debugPrint('predict OK => $predictedNextMonth');
+      } on DioException catch (e) {
+        debugPrint(
+          'predict FAILED: status=${e.response?.statusCode}, body=${e.response?.data}',
+        );
+      } catch (e) {
+        debugPrint('predict FAILED (unknown): $e');
+      }
+
+      String? alertMessage;
+      if (alertsRaw.isNotEmpty && alertsRaw.first is Map) {
+        final first = Map<String, dynamic>.from(alertsRaw.first as Map);
+        alertMessage =
+            (first['message'] ?? first['title'] ?? '').toString().trim();
+        if (alertMessage.isEmpty) {
+          alertMessage = null;
+        }
+      }
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setDouble(
+        'prediction_${_ym.year}_${_ym.month}',
+        predictedNextMonth,
+      );
+
+      _safeSetState(() {
+        _predictedExpense = predictedNextMonth;
+        _forecastEndOfMonth = forecastEndOfMonth;
+        _spentMtdLive = spentMtd;
+        _aiAlertMessage = alertMessage;
+        _alerts = alertsRaw;
+        _loadingAI = false;
+      });
+    } on DioException catch (e) {
+      debugPrint(
+        'predict/v2 FAILED: status=${e.response?.statusCode}, body=${e.response?.data}',
+      );
+
+      _safeSetState(() {
+        final status = e.response?.statusCode;
+        _aiError = status == 401
+            ? "Phiên đăng nhập đã hết hạn"
+            : "API lỗi ${status ?? ''}".trim();
+        _alerts = [];
+        _aiAlertMessage = null;
+        _loadingAI = false;
+      });
+    } catch (e) {
+      debugPrint('fetchPrediction FAILED: $e');
+      _safeSetState(() {
+        _aiError = "Không đọc được dữ liệu dự báo";
+        _loadingAI = false;
+      });
+    }
   }
-}
-
 
   // ================= CHI & DỰ BÁO THÁNG TRƯỚC =================
   Future<void> _computePrevMonthSpent() async {
@@ -124,8 +202,6 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
       });
     } catch (_) {}
   }
-
-  
 
   // ================= BUILD =================
   @override
@@ -245,63 +321,307 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
   }
 
   // ================== CARD DỰ BÁO ==================
-  Widget _buildPredictionCard(NumberFormat nf,
-      {required double totalAssigned,
-      required double totalSpent,
-      double? prevSpent}) {
+  Widget _buildPredictionCard(
+    NumberFormat nf, {
+    required double totalAssigned,
+    required double totalSpent,
+    double? prevSpent,
+  }) {
     if (_loadingAI) {
       return const Padding(
-        padding: EdgeInsets.all(12),
+        padding: EdgeInsets.all(16),
         child: Center(child: CircularProgressIndicator()),
       );
     }
 
     if (_aiError != null) {
-      return Text(_aiError!, style: const TextStyle(color: Colors.red));
+      return Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.red.withOpacity(.08),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Text(
+          _aiError!,
+          style: const TextStyle(
+            color: Colors.red,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      );
     }
 
-    final predicted = _predictedExpense ?? 0;
-    final baseline = _prevMonthPredicted ?? predicted;
-    final maxBase =
-        [baseline, totalSpent, totalAssigned].reduce((a, b) => a > b ? a : b);
+    final locale = Localizations.localeOf(context).toLanguageTag();
+    final currentLabel = DateFormat('MM/yyyy', locale).format(_ym);
+    final nextLabel = DateFormat(
+      'MM/yyyy',
+      locale,
+    ).format(DateTime(_ym.year, _ym.month + 1));
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (_predictedExpense != null)
-          Text("Chi tiêu dự báo tháng sau: đ ${nf.format(predicted.round())}",
-              style:
-                  const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
-        const SizedBox(height: 12),
-        _ForecastCompareBar(
-          maxValue: maxBase == 0 ? 1 : maxBase,
-          topValue: baseline,
-          topLabel: 'Dự báo tháng trước',
-          bottomValue: totalSpent,
-          bottomLabel: 'Đã chi (MTD)',
-          budget: totalAssigned,
-        ),
-        const SizedBox(height: 10),
-        if (_alerts.isEmpty)
-          const Text("Không có cảnh báo.",
-              style: TextStyle(color: Colors.black54))
-        else
-          Column(children: _alerts.map((a) => _AlertTile(data: a)).toList()),
-      ],
+    final predictedNextMonth = _predictedExpense ?? 0.0;
+    final forecastEndOfMonth = _forecastEndOfMonth ?? 0.0;
+    final spentMtdLive = _spentMtdLive ?? 0.0;
+
+    final maxValue = [
+      predictedNextMonth,
+      forecastEndOfMonth,
+      spentMtdLive,
+      prevSpent ?? 0.0,
+    ].reduce((a, b) => a > b ? a : b);
+
+    final safeMax = maxValue <= 0 ? 1.0 : maxValue;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(.05),
+            blurRadius: 16,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  'Dự báo & Cảnh báo',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF1F2937),
+                  ),
+                ),
+              ),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF3F4F6),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  'Tháng $currentLabel',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF4B5563),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          _SimpleProgressRow(
+            label: 'Dự báo $nextLabel',
+            value: predictedNextMonth,
+            displayValue: 'đ ${nf.format(predictedNextMonth.round())}',
+            progress: predictedNextMonth / safeMax,
+            color: const Color(0xFF4F46E5),
+          ),
+          const SizedBox(height: 14),
+          _SimpleProgressRow(
+            label: 'Dự báo cuối $currentLabel',
+            value: forecastEndOfMonth,
+            displayValue: 'đ ${nf.format(forecastEndOfMonth.round())}',
+            progress: forecastEndOfMonth / safeMax,
+            color: const Color(0xFFF59E0B),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            'Đã chi MTD: đ ${nf.format(spentMtdLive.round())}',
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF6B7280),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: _aiAlertMessage == null
+                  ? const Color(0xFFECFDF5)
+                  : const Color(0xFFFEF2F2),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text(
+              _aiAlertMessage ?? 'Không có cảnh báo',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: _aiAlertMessage == null
+                    ? const Color(0xFF047857)
+                    : const Color(0xFFB91C1C),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
   Future<DateTime?> _pickMonth(BuildContext context,
       {required DateTime initial}) async {
-    final picked = await showDatePicker(
+    final picked = await showMonthPicker(
       context: context,
       initialDate: initial,
       firstDate: DateTime(2020, 1),
       lastDate: DateTime(2035, 12),
-      helpText: AppLocalizations.of(context)!.selectMonth,
+      headerTitle: const Text(
+        'Chọn tháng',
+        style: TextStyle(
+          fontSize: 14,
+          fontWeight: FontWeight.w600,
+          color: Color(0xFFE5E7EB),
+        ),
+      ),
+      monthPickerDialogSettings: const MonthPickerDialogSettings(
+        dialogSettings: PickerDialogSettings(
+          locale: Locale('vi'),
+          dialogRoundedCornersRadius: 24,
+          dialogBackgroundColor: Colors.white,
+          insetPadding: EdgeInsets.symmetric(horizontal: 20),
+        ),
+        headerSettings: PickerHeaderSettings(
+          headerBackgroundColor: Color(0xFF0F766E),
+          headerCurrentPageTextStyle: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+            color: Color(0xFFCCFBF1),
+          ),
+          headerSelectedIntervalTextStyle: TextStyle(
+            fontSize: 32,
+            fontWeight: FontWeight.w700,
+            color: Colors.white,
+          ),
+          headerIconsColor: Colors.white,
+          previousIcon: Icons.chevron_left_rounded,
+          nextIcon: Icons.chevron_right_rounded,
+        ),
+        dateButtonsSettings: PickerDateButtonsSettings(
+          buttonBorder: RoundedRectangleBorder(
+            borderRadius: BorderRadius.all(Radius.circular(18)),
+          ),
+          selectedMonthBackgroundColor: Color(0xFF0F766E),
+          selectedMonthTextColor: Colors.white,
+          unselectedMonthsTextColor: Color(0xFF374151),
+          currentMonthTextColor: Color(0xFF0F766E),
+          monthTextStyle: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.w700,
+          ),
+          yearTextStyle: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        actionBarSettings: PickerActionBarSettings(
+          actionBarPadding: EdgeInsets.fromLTRB(16, 0, 16, 16),
+          cancelWidget: Text(
+            'Huỷ',
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF6B7280),
+            ),
+          ),
+          confirmWidget: Text(
+            'OK',
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF0F766E),
+            ),
+          ),
+        ),
+      ),
     );
+
     if (picked == null) return null;
     return DateTime(picked.year, picked.month);
+  }
+}
+
+class _SimpleProgressRow extends StatelessWidget {
+  const _SimpleProgressRow({
+    required this.label,
+    required this.value,
+    required this.displayValue,
+    required this.progress,
+    required this.color,
+  });
+
+  final String label;
+  final double value;
+  final String displayValue;
+  final double progress;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final percent = (progress.clamp(0.0, 1.0) * 100).round();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF374151),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              displayValue,
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w800,
+                color: Color(0xFF111827),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(999),
+                child: LinearProgressIndicator(
+                  value: progress.clamp(0.0, 1.0),
+                  minHeight: 10,
+                  backgroundColor: const Color(0xFFE5E7EB),
+                  valueColor: AlwaysStoppedAnimation<Color>(color),
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Text(
+              '$percent%',
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF6B7280),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
   }
 }
 

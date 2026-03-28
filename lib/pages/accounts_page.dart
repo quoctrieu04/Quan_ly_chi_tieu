@@ -1,4 +1,5 @@
 import 'package:chitieu/api/investment/investment_provider.dart';
+import 'package:chitieu/financial_transaction/financial_transaction_provider.dart';
 import 'package:chitieu/utils/safe_ui.dart';
 import 'package:chitieu/widgets/create_investment_form.dart';
 import 'package:chitieu/widgets/create_saving_form.dart';
@@ -209,6 +210,7 @@ class _AccountsPageState extends State<AccountsPage> {
     final incomeProv = context.read<IncomeProvider>();
     final savingProv = context.read<SavingProvider>();
     final investmentProv = context.read<InvestmentProvider>();
+    final ftProv = context.read<FinancialTransactionProvider>();
 
     /// ⚠️ SỬA LẠI ĐÚNG — TRUYỀN YEAR + MONTH
     await savingProv.fetch(year: year, month: month);
@@ -221,6 +223,7 @@ class _AccountsPageState extends State<AccountsPage> {
       budgetsProv.loadForMonth(year: year, month: month),
       incomeProv.fetch(year: year, month: month),
       investmentProv.fetch(),
+      ftProv.fetchByMonth(year: year, month: month),
     ]);
   }
 
@@ -296,16 +299,15 @@ class _AccountsPageState extends State<AccountsPage> {
     final moneySettings = context.watch<MoneySettingsProvider>().settings;
     String fmt(num v) => MoneyFormatter(moneySettings).format(v);
 
-    final inProv = context.watch<InInvoiceProvider>();
-    final outProv = context.watch<OutInvoiceProvider>();
+    final ftProv = context.watch<FinancialTransactionProvider>();
     final budgetsProv = context.watch<BudgetsProvider>();
 
-    final num totalSpent =
-        budgetsProv.items.fold<num>(0, (s, b) => s + b.spent);
+    final num totalIncome = ftProv.totalIncome;
+    final num totalSpent = ftProv.totalExpense;
     final num combinedRemaining = totalBalance - totalSpent;
 
     final bool overSpent =
-        !(walletProv.loading || budgetsProv.loading) && combinedRemaining < 0;
+        !(walletProv.loading || ftProv.loading) && combinedRemaining < 0;
     final num deficit = (combinedRemaining < 0) ? -combinedRemaining : 0;
 
     final now = DateTime.now();
@@ -391,7 +393,7 @@ class _AccountsPageState extends State<AccountsPage> {
                 totalText: _hideBalance
                     ? '•••'
                     : fmt(totalBalance), // Dùng totalBalance cho tổng tiền
-                loading: walletProv.loading || budgetsProv.loading,
+                loading: walletProv.loading || ftProv.loading,
                 paymentText: _hideBalance ? '•••' : fmt(totalSpent),
                 trackingText: _hideBalance
                     ? '•••'
@@ -501,8 +503,8 @@ class _AccountsPageState extends State<AccountsPage> {
 
 // ===== TỔNG THU / TỔNG CHI =====
               MonthSummaryCard(
-                totalIncome: inProv.totalAmount,
-                totalExpense: outProv.totalAmount,
+                totalIncome: totalIncome,
+                totalExpense: totalSpent,
                 hideBalance: _hideBalance,
               ),
 

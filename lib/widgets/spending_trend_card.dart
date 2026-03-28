@@ -13,10 +13,17 @@ class SpendingTrendCard extends StatelessWidget {
 
   num _changePercent() {
     if (data.length < 2) return 0;
-    final prev = data[data.length - 2].expense;
-    final curr = data.last.expense;
-    if (prev == 0) return 0;
-    return ((curr - prev) / prev) * 100;
+
+    final prev = data[data.length - 2].expense.toDouble().abs();
+    final curr = data.last.expense.toDouble().abs();
+
+    if (prev == 0 && curr == 0) return 0;
+
+    final base = prev > curr ? prev : curr;
+    if (base == 0) return 0;
+
+    final percent = ((curr - prev) / base) * 100;
+    return percent.clamp(-100.0, 100.0);
   }
 
   @override
@@ -81,7 +88,7 @@ class SpendingTrendCard extends StatelessWidget {
                           width: 14,
                           height: incomeH,
                           decoration: BoxDecoration(
-                            color: const Color(0xFF9B8CFF), // Thu
+                            color: const Color(0xFF9B8CFF),
                             borderRadius: BorderRadius.circular(6),
                           ),
                         ),
@@ -89,7 +96,7 @@ class SpendingTrendCard extends StatelessWidget {
                           width: 14,
                           height: expenseH,
                           decoration: BoxDecoration(
-                            color: const Color(0xFF6FE3A1), // Chi
+                            color: const Color(0xFF6FE3A1),
                             borderRadius: BorderRadius.circular(6),
                           ),
                         ),
@@ -126,10 +133,13 @@ class _Legend extends StatelessWidget {
     return Row(
       children: [
         Container(
-            width: 10,
-            height: 10,
-            decoration: BoxDecoration(
-                color: color, borderRadius: BorderRadius.circular(4))),
+          width: 10,
+          height: 10,
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(4),
+          ),
+        ),
         const SizedBox(width: 4),
         Text(label),
       ],

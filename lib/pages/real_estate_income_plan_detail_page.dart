@@ -172,7 +172,8 @@ class _RealEstateIncomePlanDetailPageState
       );
     }
 
-    final isDue = _isDue(plan.nextDueDate);
+    final isDue = plan.canCollectToday;
+    final isCollectedThisPeriod = plan.isCurrentPeriodCollected;
 
     return Scaffold(
       appBar: AppBar(
@@ -224,21 +225,37 @@ class _RealEstateIncomePlanDetailPageState
             Row(
               children: [
                 Icon(
-                  isDue ? Icons.check_circle : Icons.schedule,
-                  color: isDue ? Colors.green : Colors.orange,
+                  isCollectedThisPeriod
+                      ? Icons.check_circle
+                      : isDue
+                          ? Icons.schedule
+                          : Icons.hourglass_bottom,
+                  color: isCollectedThisPeriod
+                      ? Colors.blue
+                      : isDue
+                          ? Colors.green
+                          : Colors.orange,
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  isDue ? 'Đã đến hạn thu tiền' : 'Chưa đến hạn thu',
+                  isCollectedThisPeriod
+                      ? 'Kỳ này đã thu rồi'
+                      : isDue
+                          ? 'Đã đến hạn thu tiền'
+                          : 'Chưa đến hạn thu',
                   style: TextStyle(
-                    color: isDue ? Colors.green : Colors.orange,
+                    color: isCollectedThisPeriod
+                        ? Colors.blue
+                        : isDue
+                            ? Colors.green
+                            : Colors.orange,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
               ],
             ),
             const Spacer(),
-            if (isDue)
+            if (plan.canCollectToday)
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
@@ -251,13 +268,25 @@ class _RealEstateIncomePlanDetailPageState
                       : () async {
                           final bankProv = context.read<BankAccountProvider>();
 
-                          await incomeProv.collect();
-                          await bankProv.fetchAccounts();
+                          try {
+                            await incomeProv.collect();
+                            await bankProv.fetchAccounts();
 
-                          if (mounted) {
+                            if (!mounted) return;
+
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
                                 content: Text('Đã thu tiền thành công'),
+                              ),
+                            );
+                          } catch (e) {
+                            if (!mounted) return;
+
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(e
+                                    .toString()
+                                    .replaceFirst('Exception: ', '')),
                               ),
                             );
                           }

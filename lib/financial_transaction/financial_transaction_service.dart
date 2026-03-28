@@ -11,15 +11,15 @@ class FinancialTransactionService {
     required int year,
     required int month,
     int? day,
-    String category = 'investment',
+    String? category,
     int limit = 200,
   }) async {
     final params = <String, dynamic>{
       'year': year,
       'month': month,
-      'category': category,
       'limit': limit,
       if (day != null) 'day': day,
+      if (category != null && category.trim().isNotEmpty) 'category': category,
     };
 
     final res = await dio.get(

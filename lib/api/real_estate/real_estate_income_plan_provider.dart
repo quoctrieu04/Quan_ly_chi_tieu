@@ -12,8 +12,8 @@ class RealEstateIncomePlanProvider extends ChangeNotifier {
 
   RealEstateIncomePlan? plan;
 
-  bool loading = false;      // load / create / update / delete
-  bool collecting = false;  // riêng cho thu tiền
+  bool loading = false;
+  bool collecting = false;
 
   // ==========================
   // LOAD PLAN
@@ -22,57 +22,64 @@ class RealEstateIncomePlanProvider extends ChangeNotifier {
     loading = true;
     notifyListeners();
 
-    plan = await _service.fetchIncomePlan(realEstateId);
-
-    loading = false;
-    notifyListeners();
+    try {
+      plan = await _service.fetchIncomePlan(realEstateId);
+    } finally {
+      loading = false;
+      notifyListeners();
+    }
   }
 
   // ==========================
   // CREATE PLAN
   // ==========================
   Future<void> createPlan({
-  required int realEstateId,
-  required double monthlyAmount,
-  required DateTime startDate,
-  required int bankAccountId, // 🔥 THÊM
-}) async {
-  loading = true;
-  notifyListeners();
+    required int realEstateId,
+    required double monthlyAmount,
+    required DateTime startDate,
+    required int bankAccountId,
+  }) async {
+    loading = true;
+    notifyListeners();
 
-  await _service.createIncomePlan(
-    realEstateId: realEstateId,
-    monthlyAmount: monthlyAmount,
-    startDate: startDate,
-    bankAccountId: bankAccountId, // 🔥 TRUYỀN XUỐNG
-  );
+    try {
+      await _service.createIncomePlan(
+        realEstateId: realEstateId,
+        monthlyAmount: monthlyAmount,
+        startDate: startDate,
+        bankAccountId: bankAccountId,
+      );
 
-  plan = await _service.fetchIncomePlan(realEstateId);
-
-  loading = false;
-  notifyListeners();
-}
-
+      plan = await _service.fetchIncomePlan(realEstateId);
+    } finally {
+      loading = false;
+      notifyListeners();
+    }
+  }
 
   // ==========================
   // COLLECT (THU TIỀN)
   // ==========================
   Future<void> collect() async {
-    if (plan == null || collecting) return;
+  if (plan == null || collecting) return;
 
-    collecting = true;
-    notifyListeners();
+  final currentPlan = plan!;
 
+  collecting = true;
+  notifyListeners();
+
+  try {
     await _service.collectIncomePlan(
-      incomePlanId: plan!.id,
+      incomePlanId: currentPlan.id,
     );
 
-    // 🔥 bắt buộc reload lại plan từ backend
-    plan = await _service.fetchIncomePlan(plan!.realEstateId);
-
+    plan = await _service.fetchIncomePlan(currentPlan.realEstateId);
+    debugPrint("✅ PLAN AFTER COLLECT FETCH: ${plan?.nextDueDate}");
+  } finally {
     collecting = false;
     notifyListeners();
   }
+}
 
   // ==========================
   // UPDATE PLAN
@@ -86,16 +93,18 @@ class RealEstateIncomePlanProvider extends ChangeNotifier {
     loading = true;
     notifyListeners();
 
-    await _service.updateIncomePlan(
-      incomePlanId: plan!.id,
-      monthlyAmount: monthlyAmount,
-      nextDueDate: nextDueDate,
-    );
+    try {
+      await _service.updateIncomePlan(
+        incomePlanId: plan!.id,
+        monthlyAmount: monthlyAmount,
+        nextDueDate: nextDueDate,
+      );
 
-    plan = await _service.fetchIncomePlan(plan!.realEstateId);
-
-    loading = false;
-    notifyListeners();
+      plan = await _service.fetchIncomePlan(plan!.realEstateId);
+    } finally {
+      loading = false;
+      notifyListeners();
+    }
   }
 
   // ==========================
@@ -107,13 +116,15 @@ class RealEstateIncomePlanProvider extends ChangeNotifier {
     loading = true;
     notifyListeners();
 
-    await _service.deleteIncomePlan(
-      incomePlanId: plan!.id,
-    );
+    try {
+      await _service.deleteIncomePlan(
+        incomePlanId: plan!.id,
+      );
 
-    plan = null;
-
-    loading = false;
-    notifyListeners();
+      plan = null;
+    } finally {
+      loading = false;
+      notifyListeners();
+    }
   }
 }

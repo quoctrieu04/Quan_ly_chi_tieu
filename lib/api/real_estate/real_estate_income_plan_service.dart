@@ -11,66 +11,69 @@ class RealEstateIncomePlanService {
   // FETCH INCOME PLAN
   // =========================
   Future<RealEstateIncomePlan?> fetchIncomePlan(int realEstateId) async {
-    try {
-      final res = await dio.get(
-        "real-estates/$realEstateId/income-plan",
-      );
+  try {
+    final res = await dio.get(
+      "real-estates/$realEstateId/income-plan",
+    );
 
-      if (res.data['data'] == null) return null;
-      return RealEstateIncomePlan.fromJson(res.data['data']);
-    } catch (e) {
-      debugPrint("❌ FETCH INCOME PLAN ERROR: $e");
-      rethrow;
-    }
+    debugPrint("📥 FETCH INCOME PLAN RESPONSE: ${res.data}");
+
+    if (res.data['data'] == null) return null;
+    return RealEstateIncomePlan.fromJson(res.data['data']);
+  } catch (e) {
+    debugPrint("❌ FETCH INCOME PLAN ERROR: $e");
+    rethrow;
   }
+}
 
   // =========================
   // CREATE INCOME PLAN
   // =========================
   Future<void> createIncomePlan({
-  required int realEstateId,
-  required double monthlyAmount,
-  required DateTime startDate,
-  required int bankAccountId, // 🔥 THÊM
-}) async {
-  debugPrint(
-    "🔥 CREATE INCOME PLAN → real-estates/$realEstateId/income-plan",
-  );
-
-  try {
-    await dio.post(
-      "real-estates/$realEstateId/income-plan",
-      data: {
-        'monthly_amount': monthlyAmount,
-        'start_date': startDate.toIso8601String().substring(0, 10),
-        'bank_account_id': bankAccountId, // 🔥 GỬI LÊN BACKEND
-      },
+    required int realEstateId,
+    required double monthlyAmount,
+    required DateTime startDate,
+    required int bankAccountId, // 🔥 THÊM
+  }) async {
+    debugPrint(
+      "🔥 CREATE INCOME PLAN → real-estates/$realEstateId/income-plan",
     );
-  } on DioException catch (e) {
-    final msg =
-        e.response?.data['message'] ?? 'Không thể tạo khoản thu';
-    throw Exception(msg);
-  }
-}
 
+    try {
+      await dio.post(
+        "real-estates/$realEstateId/income-plan",
+        data: {
+          'monthly_amount': monthlyAmount,
+          'start_date': startDate.toIso8601String().substring(0, 10),
+          'bank_account_id': bankAccountId, // 🔥 GỬI LÊN BACKEND
+        },
+      );
+    } on DioException catch (e) {
+      final msg = e.response?.data['message'] ?? 'Không thể tạo khoản thu';
+      throw Exception(msg);
+    }
+  }
 
   // =========================
   // COLLECT INCOME PLAN
   // =========================
   Future<void> collectIncomePlan({
-    required int incomePlanId,
-  }) async {
-    try {
-      await dio.post(
-        "real-estate-income-plans/$incomePlanId/collect",
-      );
-    } on DioException catch (e) {
-      final msg =
-          e.response?.data['message'] ?? 'Không thể thu tiền';
-      throw Exception(msg);
-    }
-  }
+  required int incomePlanId,
+}) async {
+  try {
+    final res = await dio.post(
+      "real-estate-income-plans/$incomePlanId/collect",
+    );
 
+    debugPrint("✅ COLLECT RAW RESPONSE: ${res.data}");
+  } on DioException catch (e) {
+    debugPrint("❌ COLLECT DIO ERROR: ${e.response?.data}");
+    final msg = e.response?.data is Map<String, dynamic>
+        ? (e.response?.data['message'] ?? 'Không thể thu tiền')
+        : 'Không thể thu tiền';
+    throw Exception(msg);
+  }
+}
   // =========================
   // UPDATE INCOME PLAN (SỬA)
   // =========================
@@ -84,13 +87,11 @@ class RealEstateIncomePlanService {
         "real-estate-income-plans/$incomePlanId",
         data: {
           'monthly_amount': monthlyAmount,
-          'next_due_date':
-              nextDueDate.toIso8601String().substring(0, 10),
+          'next_due_date': nextDueDate.toIso8601String().substring(0, 10),
         },
       );
     } on DioException catch (e) {
-      final msg =
-          e.response?.data['message'] ?? 'Không thể cập nhật khoản thu';
+      final msg = e.response?.data['message'] ?? 'Không thể cập nhật khoản thu';
       throw Exception(msg);
     }
   }
@@ -106,8 +107,7 @@ class RealEstateIncomePlanService {
         "real-estate-income-plans/$incomePlanId",
       );
     } on DioException catch (e) {
-      final msg =
-          e.response?.data['message'] ?? 'Không thể xóa khoản thu';
+      final msg = e.response?.data['message'] ?? 'Không thể xóa khoản thu';
       throw Exception(msg);
     }
   }

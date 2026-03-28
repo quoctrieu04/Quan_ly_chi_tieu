@@ -14,7 +14,7 @@ class FinancialTransactionProvider extends ChangeNotifier {
     required int year,
     required int month,
     int? day,
-    String category = 'investment',
+    String? category,
   }) async {
     loading = true;
     notifyListeners();
@@ -31,6 +31,16 @@ class FinancialTransactionProvider extends ChangeNotifier {
       notifyListeners();
     }
   }
+
+  num get totalIncome => items.fold<num>(
+        0,
+        (sum, tx) => sum + (tx.direction == 'in' ? tx.amount : 0),
+      );
+
+  num get totalExpense => items.fold<num>(
+        0,
+        (sum, tx) => sum + (tx.direction == 'out' ? tx.amount : 0),
+      );
 
   void clear() {
     items = [];

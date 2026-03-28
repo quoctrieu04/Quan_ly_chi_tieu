@@ -7,7 +7,8 @@ class TransactionItem {
   final num amount;
   final num prebalance;
   final int operation; // 1: thu, -1: chi
-  final DateTime createdAt;
+  final DateTime occurredAt; // ✅ ngày giao dịch thật
+  final DateTime createdAt;  // ✅ ngày tạo record
 
   const TransactionItem({
     required this.id,
@@ -18,6 +19,7 @@ class TransactionItem {
     required this.amount,
     required this.prebalance,
     required this.operation,
+    required this.occurredAt,
     required this.createdAt,
   });
 
@@ -26,6 +28,18 @@ class TransactionItem {
       if (v is num) return v;
       return num.tryParse(v.toString()) ?? 0;
     }
+
+    final occurredAtRaw = j['occurred_at'];
+    final createdAtRaw = j['created_at'];
+
+    final occurredAt =
+        DateTime.tryParse((occurredAtRaw ?? '').toString()) ??
+        DateTime.tryParse((createdAtRaw ?? '').toString()) ??
+        DateTime.now();
+
+    final createdAt =
+        DateTime.tryParse((createdAtRaw ?? '').toString()) ??
+        occurredAt;
 
     return TransactionItem(
       id: j['id'] ?? 0,
@@ -36,7 +50,8 @@ class TransactionItem {
       amount: _n(j['amount']),
       prebalance: _n(j['prebalance']),
       operation: _n(j['operation']).toInt(),
-      createdAt: DateTime.tryParse(j['created_at'] ?? '') ?? DateTime.now(),
+      occurredAt: occurredAt,
+      createdAt: createdAt,
     );
   }
 
@@ -49,6 +64,7 @@ class TransactionItem {
         'amount': amount,
         'prebalance': prebalance,
         'operation': operation,
+        'occurred_at': occurredAt.toIso8601String(),
         'created_at': createdAt.toIso8601String(),
       };
 }

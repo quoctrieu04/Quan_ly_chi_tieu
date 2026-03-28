@@ -43,11 +43,20 @@ class RealEstateIncomePlan {
   }
 
   /// tiện cho UI
-  bool get canCollectToday {
-    final today = DateTime.now();
-    return isActive &&
-        !today.isBefore(
-          DateTime(nextDueDate.year, nextDueDate.month, nextDueDate.day),
-        );
-  }
+  
+  bool get isCurrentPeriodCollected {
+  if (lastCollectedAt == null) return false;
+
+  return lastCollectedAt!.year == nextDueDate.year &&
+      lastCollectedAt!.month == nextDueDate.month;
+}
+
+bool get canCollectToday {
+  final today = DateTime.now();
+  final due = DateTime(nextDueDate.year, nextDueDate.month, nextDueDate.day);
+
+  return isActive &&
+      !isCurrentPeriodCollected &&
+      !today.isBefore(due);
+}
 }
