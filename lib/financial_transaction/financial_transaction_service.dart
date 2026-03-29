@@ -61,4 +61,46 @@ class FinancialTransactionService {
     }
     return null;
   }
+    Future<Map<String, dynamic>> testCreateForecastSnapshot({
+    required int sourceYear,
+    required int sourceMonth,
+    bool force = false,
+  }) async {
+    final res = await dio.get(
+      '/forecast-snapshot/test-create',
+      queryParameters: {
+        'source_year': sourceYear,
+        'source_month': sourceMonth,
+        'force': force,
+      },
+      options: Options(
+        headers: {
+          'Accept': 'application/json',
+        },
+      ),
+    );
+
+    final code = res.statusCode ?? 0;
+    if (code >= 400) {
+      throw DioException(
+        requestOptions: res.requestOptions,
+        response: res,
+        message: 'Create forecast snapshot failed ($code)',
+        type: DioExceptionType.badResponse,
+      );
+    }
+
+    final decoded = _normalizeJson(res.data);
+
+    if (decoded is Map) {
+      return Map<String, dynamic>.from(decoded);
+    }
+
+    throw DioException(
+      requestOptions: res.requestOptions,
+      response: res,
+      message: 'Snapshot response is not a valid JSON object',
+      type: DioExceptionType.badResponse,
+    );
+  }
 }

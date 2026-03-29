@@ -4,8 +4,6 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:fl_chart/fl_chart.dart';
 
-import 'package:shared_preferences/shared_preferences.dart';
-
 import 'package:chitieu/l10n/app_localizations.dart';
 import 'package:chitieu/api/category/category_provider.dart';
 import 'package:chitieu/api/category/category_model.dart';
@@ -14,13 +12,9 @@ import 'package:chitieu/core/budget/budget_model.dart';
 import 'package:chitieu/api/bankaccount/bank_account_provider.dart';
 import 'package:month_picker_dialog/month_picker_dialog.dart';
 
-// ================= CONFIG =================
-
-/// ===============================================================
-///  ANALYTICS (CÓ LƯU DỰ BÁO THÁNG TRƯỚC)
-/// ===============================================================
 class AnalyticsPage extends StatefulWidget {
   const AnalyticsPage({super.key});
+
   @override
   State<AnalyticsPage> createState() => _AnalyticsPageState();
 }
@@ -28,15 +22,16 @@ class AnalyticsPage extends StatefulWidget {
 class _AnalyticsPageState extends State<AnalyticsPage> {
   DateTime _ym = DateTime(DateTime.now().year, DateTime.now().month);
 
-  bool _loadingAI = false;
-  double? _predictedExpense; // dự báo tháng hiện tại
-  double? _prevMonthSpent; // chi tiêu tháng trước
-  double? _prevMonthPredicted; // 🔹 dự báo tháng trước
-  double? _forecastEndOfMonth;
-  double? _spentMtdLive;
-  String? _aiAlertMessage;
-  List<dynamic> _alerts = [];
+  double? _currentMonthPrediction;
+  double? _snapshotPrediction;
+  double? _nextMonthPrediction;
+  double? _warningLimit;
+  double? _spentMtd;
+  int _progressPercent = 0;
+  String? _predictionStatus;
+  String? _statusMessage;
   String? _aiError;
+  bool _loadingAI = false;
 
   void _safeSetState(VoidCallback fn) {
     if (!mounted) return;
@@ -49,17 +44,20 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final b = context.read<BudgetsProvider>();
       final c = context.read<CategoryProvider>();
+
       final futures = <Future<void>>[
         b.loadForMonth(year: _ym.year, month: _ym.month),
       ];
-      if (!c.loading && c.items.isEmpty) futures.add(c.refresh());
+
+      if (!c.loading && c.items.isEmpty) {
+        futures.add(c.refresh());
+      }
+
       await Future.wait(futures);
-      await _computePrevMonthSpent();
       await _fetchPrediction();
     });
   }
 
-  // ================= FETCH DỰ BÁO =================
   Future<void> _fetchPrediction() async {
     try {
       _safeSetState(() {
@@ -69,141 +67,61 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
 
       final dio = context.read<Dio>();
 
-      final v2Res = await dio.get(
-        'predict/v2',
+      final res = await dio.get(
+        'predict/status',
         queryParameters: {
           'year': _ym.year,
           'month': _ym.month,
         },
       );
 
-      final v2Root = (v2Res.data is Map<String, dynamic>)
-          ? v2Res.data as Map<String, dynamic>
+      final root = (res.data is Map<String, dynamic>)
+          ? res.data as Map<String, dynamic>
           : <String, dynamic>{};
 
-      final v2Data = (v2Root['data'] is Map<String, dynamic>)
-          ? v2Root['data'] as Map<String, dynamic>
-          : v2Root;
+      final data = (root['data'] is Map<String, dynamic>)
+          ? root['data'] as Map<String, dynamic>
+          : root;
 
-      final num? v2PredictedNextMonthNum =
-          v2Data['predicted_next_month'] as num?;
-      final num? forecastEndOfMonthNum =
-          v2Data['forecast_end_of_month'] as num?;
-      final num? spentMtdNum = v2Data['spent_mtd'] as num?;
-      final List<dynamic> alertsRaw = (v2Data['alerts'] as List?) ?? const [];
-
-      double predictedNextMonth = v2PredictedNextMonthNum?.toDouble() ?? 0.0;
-
-      final forecastEndOfMonth = forecastEndOfMonthNum?.toDouble() ?? 0.0;
-      final spentMtd = spentMtdNum?.toDouble() ?? 0.0;
-
-      try {
-        final monthlyRes = await dio.get(
-          'predict',
-          queryParameters: {
-            'year': _ym.year,
-            'month': _ym.month,
-          },
-        );
-
-        final monthlyRoot = (monthlyRes.data is Map<String, dynamic>)
-            ? monthlyRes.data as Map<String, dynamic>
-            : <String, dynamic>{};
-
-        final num? mlPredictedNextMonthNum =
-            monthlyRoot['predicted_next_month_expense'] as num?;
-
-        if (mlPredictedNextMonthNum != null) {
-          predictedNextMonth = mlPredictedNextMonthNum.toDouble();
-        }
-
-        debugPrint('predict OK => $predictedNextMonth');
-      } on DioException catch (e) {
-        debugPrint(
-          'predict FAILED: status=${e.response?.statusCode}, body=${e.response?.data}',
-        );
-      } catch (e) {
-        debugPrint('predict FAILED (unknown): $e');
+      double toDouble(dynamic v) {
+        if (v is num) return v.toDouble();
+        if (v is String) return double.tryParse(v) ?? 0.0;
+        return 0.0;
       }
-
-      String? alertMessage;
-      if (alertsRaw.isNotEmpty && alertsRaw.first is Map) {
-        final first = Map<String, dynamic>.from(alertsRaw.first as Map);
-        alertMessage =
-            (first['message'] ?? first['title'] ?? '').toString().trim();
-        if (alertMessage.isEmpty) {
-          alertMessage = null;
-        }
-      }
-
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setDouble(
-        'prediction_${_ym.year}_${_ym.month}',
-        predictedNextMonth,
-      );
 
       _safeSetState(() {
-        _predictedExpense = predictedNextMonth;
-        _forecastEndOfMonth = forecastEndOfMonth;
-        _spentMtdLive = spentMtd;
-        _aiAlertMessage = alertMessage;
-        _alerts = alertsRaw;
+        _currentMonthPrediction = toDouble(data['current_month_prediction']);
+        _snapshotPrediction = toDouble(data['snapshot_prediction']);
+        _nextMonthPrediction = toDouble(data['next_month_prediction']);
+        _warningLimit = toDouble(data['warning_limit']);
+        _spentMtd = toDouble(data['spent_mtd']);
+        _progressPercent = (data['progress_percent'] as num?)?.round() ?? 0;
+        _predictionStatus = (data['status'] ?? 'ok').toString();
+        _statusMessage = (data['message'] ?? 'Không có cảnh báo').toString();
         _loadingAI = false;
       });
     } on DioException catch (e) {
       debugPrint(
-        'predict/v2 FAILED: status=${e.response?.statusCode}, body=${e.response?.data}',
+        'predict/status FAILED: status=${e.response?.statusCode}, body=${e.response?.data}',
       );
 
       _safeSetState(() {
         final status = e.response?.statusCode;
         _aiError = status == 401
-            ? "Phiên đăng nhập đã hết hạn"
-            : "API lỗi ${status ?? ''}".trim();
-        _alerts = [];
-        _aiAlertMessage = null;
+            ? 'Phiên đăng nhập đã hết hạn'
+            : 'API lỗi ${status ?? ''}'.trim();
         _loadingAI = false;
       });
     } catch (e) {
       debugPrint('fetchPrediction FAILED: $e');
+
       _safeSetState(() {
-        _aiError = "Không đọc được dữ liệu dự báo";
+        _aiError = 'Không đọc được dữ liệu dự báo';
         _loadingAI = false;
       });
     }
   }
 
-  // ================= CHI & DỰ BÁO THÁNG TRƯỚC =================
-  Future<void> _computePrevMonthSpent() async {
-    try {
-      final b = context.read<BudgetsProvider>();
-      final curY = _ym.year;
-      final curM = _ym.month;
-      final prev = DateTime(_ym.year, _ym.month - 1, 1);
-
-      await b.loadForMonth(year: prev.year, month: prev.month);
-      num spent = 0;
-      for (final it in b.items) {
-        try {
-          final s = (it as dynamic).spent;
-          if (s is num) spent += s;
-        } catch (_) {}
-      }
-
-      // 🔹 lấy dự báo tháng trước
-      final prefs = await SharedPreferences.getInstance();
-      final prevPredKey = 'prediction_${prev.year}_${prev.month}';
-      final prevPredicted = prefs.getDouble(prevPredKey);
-
-      await b.loadForMonth(year: curY, month: curM);
-      _safeSetState(() {
-        _prevMonthSpent = spent.toDouble();
-        _prevMonthPredicted = prevPredicted;
-      });
-    } catch (_) {}
-  }
-
-  // ================= BUILD =================
   @override
   Widget build(BuildContext context) {
     final t = AppLocalizations.of(context)!;
@@ -245,12 +163,15 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
         foregroundColor: Colors.black87,
         title: Column(
           children: [
-            Text(t.analyticsTitle,
-                style:
-                    const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+            Text(
+              t.analyticsTitle,
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+            ),
             const SizedBox(height: 2),
-            Text(monthLabel,
-                style: const TextStyle(fontSize: 13, color: Colors.black54)),
+            Text(
+              monthLabel,
+              style: const TextStyle(fontSize: 13, color: Colors.black54),
+            ),
           ],
         ),
         actions: [
@@ -262,9 +183,10 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
               if (picked != null) {
                 setState(() => _ym = picked);
                 await budgetsProv.loadForMonth(
-                    year: _ym.year, month: _ym.month);
-                await _computePrevMonthSpent();
-                _fetchPrediction();
+                  year: _ym.year,
+                  month: _ym.month,
+                );
+                await _fetchPrediction();
               }
             },
           ),
@@ -276,7 +198,6 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
             budgetsProv.loadForMonth(year: _ym.year, month: _ym.month),
             if (!catsProv.loading) catsProv.refresh(),
           ]);
-          await _computePrevMonthSpent();
           await _fetchPrediction();
         },
         child: ListView(
@@ -284,10 +205,7 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
           children: [
             _SectionCard(
               title: "Dự báo & Cảnh báo",
-              child: _buildPredictionCard(nf,
-                  totalAssigned: totalAssigned.toDouble(),
-                  totalSpent: totalSpent.toDouble(),
-                  prevSpent: _prevMonthSpent),
+              child: _buildPredictionCard(nf),
             ),
             const SizedBox(height: 16),
             _SectionCard(
@@ -302,7 +220,10 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
               child: totalBudgetAmount <= 0
                   ? const _Empty(text: 'Chưa có dữ liệu tháng này')
                   : _TopCategoriesList(
-                      items: items, categories: categories, number: nf),
+                      items: items,
+                      categories: categories,
+                      number: nf,
+                    ),
             ),
             const SizedBox(height: 16),
             _SectionCard(
@@ -320,13 +241,7 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
     );
   }
 
-  // ================== CARD DỰ BÁO ==================
-  Widget _buildPredictionCard(
-    NumberFormat nf, {
-    required double totalAssigned,
-    required double totalSpent,
-    double? prevSpent,
-  }) {
+  Widget _buildPredictionCard(NumberFormat nf) {
     if (_loadingAI) {
       return const Padding(
         padding: EdgeInsets.all(16),
@@ -353,33 +268,67 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
 
     final locale = Localizations.localeOf(context).toLanguageTag();
     final currentLabel = DateFormat('MM/yyyy', locale).format(_ym);
-    final nextLabel = DateFormat(
-      'MM/yyyy',
-      locale,
-    ).format(DateTime(_ym.year, _ym.month + 1));
+    final nextLabel =
+        DateFormat('MM/yyyy', locale).format(DateTime(_ym.year, _ym.month + 1));
 
-    final predictedNextMonth = _predictedExpense ?? 0.0;
-    final forecastEndOfMonth = _forecastEndOfMonth ?? 0.0;
-    final spentMtdLive = _spentMtdLive ?? 0.0;
+    final currentMonthPrediction = (_currentMonthPrediction ?? 0).toDouble();
+    final snapshotPrediction = (_snapshotPrediction ?? 0).toDouble();
+    final nextMonthPrediction = (_nextMonthPrediction ?? 0).toDouble();
+    final warningLimit = (_warningLimit ?? 0).toDouble();
+    final spentMtd = (_spentMtd ?? 0).toDouble();
 
-    final maxValue = [
-      predictedNextMonth,
-      forecastEndOfMonth,
-      spentMtdLive,
-      prevSpent ?? 0.0,
-    ].reduce((a, b) => a > b ? a : b);
+    final mainPrediction = currentMonthPrediction > 0
+        ? currentMonthPrediction
+        : snapshotPrediction;
 
-    final safeMax = maxValue <= 0 ? 1.0 : maxValue;
+    final progress = (_progressPercent.clamp(0, 100)) / 100.0;
+    final percentLabel =
+        mainPrediction > 0 ? '${_progressPercent.clamp(0, 100)}%' : '--';
+
+    late Color barColor;
+    late Color badgeBg;
+    late Color badgeText;
+
+    switch (_predictionStatus) {
+      case 'over':
+      case 'over_limit':
+        barColor = const Color(0xFFEF4444);
+        badgeBg = const Color(0xFFFDECEC);
+        badgeText = const Color(0xFFD93025);
+        break;
+      case 'near_limit':
+      case 'warning':
+        barColor = const Color(0xFFF59E0B);
+        badgeBg = const Color(0xFFFFF7ED);
+        badgeText = const Color(0xFFB45309);
+        break;
+      case 'watch':
+        barColor = const Color(0xFF2563EB);
+        badgeBg = const Color(0xFFEFF6FF);
+        badgeText = const Color(0xFF1D4ED8);
+        break;
+      case 'no_prediction':
+      case 'no_data':
+        barColor = const Color(0xFF9CA3AF);
+        badgeBg = const Color(0xFFF3F4F6);
+        badgeText = const Color(0xFF4B5563);
+        break;
+      default:
+        barColor = const Color(0xFF16A34A);
+        badgeBg = const Color(0xFFECFDF5);
+        badgeText = const Color(0xFF047857);
+        break;
+    }
 
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(22),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(.05),
-            blurRadius: 16,
+            color: Colors.black.withOpacity(.04),
+            blurRadius: 14,
             offset: const Offset(0, 6),
           ),
         ],
@@ -401,7 +350,7 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
               ),
               Container(
                 padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
                 decoration: BoxDecoration(
                   color: const Color(0xFFF3F4F6),
                   borderRadius: BorderRadius.circular(999),
@@ -411,55 +360,110 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
                   style: const TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w700,
-                    color: Color(0xFF4B5563),
+                    color: Color(0xFF6B7280),
                   ),
                 ),
               ),
             ],
           ),
           const SizedBox(height: 18),
-          _SimpleProgressRow(
-            label: 'Dự báo $nextLabel',
-            value: predictedNextMonth,
-            displayValue: 'đ ${nf.format(predictedNextMonth.round())}',
-            progress: predictedNextMonth / safeMax,
-            color: const Color(0xFF4F46E5),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Expanded(
+                child: Text(
+                  'Dự báo $nextLabel',
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF374151),
+                  ),
+                ),
+              ),
+              Text(
+                'đ ${nf.format(nextMonthPrediction.round())}',
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                  color: Color(0xFF111827),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 14),
-          _SimpleProgressRow(
-            label: 'Dự báo cuối $currentLabel',
-            value: forecastEndOfMonth,
-            displayValue: 'đ ${nf.format(forecastEndOfMonth.round())}',
-            progress: forecastEndOfMonth / safeMax,
-            color: const Color(0xFFF59E0B),
+          const Divider(height: 1, thickness: 1, color: Color(0xFFE5E7EB)),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Cảnh báo $currentLabel',
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF374151),
+                  ),
+                ),
+              ),
+              Text(
+                warningLimit > 0
+                    ? 'Mốc: đ ${nf.format(warningLimit.round())}'
+                    : 'Mốc: --',
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF6B7280),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 10),
-          Text(
-            'Đã chi MTD: đ ${nf.format(spentMtdLive.round())}',
-            style: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: Color(0xFF6B7280),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(999),
+            child: LinearProgressIndicator(
+              value: progress,
+              minHeight: 14,
+              backgroundColor: const Color(0xFFF3F4F6),
+              valueColor: AlwaysStoppedAnimation<Color>(barColor),
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Đã chi hiện tại: đ ${nf.format(spentMtd.round())}',
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF6B7280),
+                  ),
+                ),
+              ),
+              Text(
+                percentLabel,
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w900,
+                  color: barColor,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             decoration: BoxDecoration(
-              color: _aiAlertMessage == null
-                  ? const Color(0xFFECFDF5)
-                  : const Color(0xFFFEF2F2),
-              borderRadius: BorderRadius.circular(12),
+              color: badgeBg,
+              borderRadius: BorderRadius.circular(14),
             ),
             child: Text(
-              _aiAlertMessage ?? 'Không có cảnh báo',
+              _statusMessage ?? 'Không có cảnh báo',
               style: TextStyle(
-                fontSize: 13,
+                fontSize: 14,
                 fontWeight: FontWeight.w700,
-                color: _aiAlertMessage == null
-                    ? const Color(0xFF047857)
-                    : const Color(0xFFB91C1C),
+                color: badgeText,
               ),
             ),
           ),
@@ -468,8 +472,10 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
     );
   }
 
-  Future<DateTime?> _pickMonth(BuildContext context,
-      {required DateTime initial}) async {
+  Future<DateTime?> _pickMonth(
+    BuildContext context, {
+    required DateTime initial,
+  }) async {
     final picked = await showMonthPicker(
       context: context,
       initialDate: initial,
@@ -550,100 +556,26 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
   }
 }
 
-class _SimpleProgressRow extends StatelessWidget {
-  const _SimpleProgressRow({
-    required this.label,
-    required this.value,
-    required this.displayValue,
-    required this.progress,
-    required this.color,
+class _SectionCard extends StatefulWidget {
+  const _SectionCard({
+    required this.title,
+    required this.child,
+    this.collapsible = true,
+    this.initiallyExpanded = true,
   });
 
-  final String label;
-  final double value;
-  final String displayValue;
-  final double progress;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    final percent = (progress.clamp(0.0, 1.0) * 100).round();
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                label,
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                  color: Color(0xFF374151),
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Text(
-              displayValue,
-              style: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w800,
-                color: Color(0xFF111827),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            Expanded(
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(999),
-                child: LinearProgressIndicator(
-                  value: progress.clamp(0.0, 1.0),
-                  minHeight: 10,
-                  backgroundColor: const Color(0xFFE5E7EB),
-                  valueColor: AlwaysStoppedAnimation<Color>(color),
-                ),
-              ),
-            ),
-            const SizedBox(width: 10),
-            Text(
-              '$percent%',
-              style: const TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-                color: Color(0xFF6B7280),
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-}
-
-/* ============================================================
-   CÁC WIDGET PHỤ (giữ nguyên logic gốc)
-   ============================================================ */
-class _SectionCard extends StatefulWidget {
-  const _SectionCard(
-      {required this.title,
-      required this.child,
-      this.collapsible = true,
-      this.initiallyExpanded = true});
   final String title;
   final Widget child;
   final bool collapsible;
   final bool initiallyExpanded;
+
   @override
   State<_SectionCard> createState() => _SectionCardState();
 }
 
 class _SectionCardState extends State<_SectionCard> {
   late bool _expanded;
+
   @override
   void initState() {
     super.initState();
@@ -665,7 +597,7 @@ class _SectionCardState extends State<_SectionCard> {
             color: Colors.black.withOpacity(.04),
             blurRadius: 12,
             offset: const Offset(0, 6),
-          )
+          ),
         ],
       ),
       child: Column(
@@ -683,21 +615,29 @@ class _SectionCardState extends State<_SectionCard> {
                     width: 6,
                     height: 18,
                     decoration: BoxDecoration(
-                        color: Colors.indigo,
-                        borderRadius: BorderRadius.circular(12)),
+                      color: Colors.indigo,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
                   const SizedBox(width: 8),
                   Expanded(
-                    child: Text(widget.title,
-                        style: const TextStyle(
-                            fontSize: 16, fontWeight: FontWeight.w800)),
+                    child: Text(
+                      widget.title,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
                   ),
                   if (widget.collapsible)
                     AnimatedRotation(
                       duration: const Duration(milliseconds: 250),
                       turns: _expanded ? 0.0 : 0.5,
-                      child: const Icon(Icons.keyboard_arrow_up_rounded,
-                          size: 22, color: Colors.black54),
+                      child: const Icon(
+                        Icons.keyboard_arrow_up_rounded,
+                        size: 22,
+                        color: Colors.black54,
+                      ),
                     ),
                 ],
               ),
@@ -722,181 +662,24 @@ class _SectionCardState extends State<_SectionCard> {
 
 class _Empty extends StatelessWidget {
   const _Empty({required this.text});
+
   final String text;
-  @override
-  Widget build(BuildContext context) => Padding(
-      padding: const EdgeInsets.all(24), child: Center(child: Text(text)));
-}
-
-/// Thanh so sánh dự báo vs chi
-class _ForecastCompareBar extends StatelessWidget {
-  const _ForecastCompareBar({
-    required this.maxValue,
-    required this.topValue,
-    required this.topLabel,
-    required this.bottomValue,
-    required this.bottomLabel,
-    required this.budget,
-  });
-  final double maxValue;
-  final double topValue;
-  final String topLabel;
-  final double bottomValue;
-  final String bottomLabel;
-  final double budget;
 
   @override
   Widget build(BuildContext context) {
-    final nf = NumberFormat.decimalPattern(
-        Localizations.localeOf(context).toLanguageTag());
-
-    Widget buildBar(double value, String label, Color color) {
-      final p = (value / (maxValue == 0 ? 1 : maxValue)).clamp(0.0, 1.0);
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(label, style: const TextStyle(fontWeight: FontWeight.w700)),
-              Text('đ ${nf.format(value.round())}',
-                  style: const TextStyle(fontWeight: FontWeight.w700)),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Stack(
-            children: [
-              Container(
-                height: 12,
-                decoration: BoxDecoration(
-                  color: Colors.black12.withOpacity(.06),
-                  borderRadius: BorderRadius.circular(999),
-                ),
-              ),
-              LayoutBuilder(
-                builder: (context, c) {
-                  final p =
-                      (value / (maxValue == 0 ? 1 : maxValue)).clamp(0.0, 1.0);
-                  final markX =
-                      (budget / (maxValue == 0 ? 1 : maxValue)).clamp(0.0, 1.0);
-                  return Stack(
-                    children: [
-                      AnimatedContainer(
-                        duration: const Duration(milliseconds: 600),
-                        curve: Curves.easeOutCubic,
-                        width: c.maxWidth * p,
-                        height: 12,
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(999),
-                          gradient: LinearGradient(
-                              colors: [color.withOpacity(.85), color]),
-                        ),
-                      ),
-                      if (budget > 0)
-                        Positioned(
-                          left: c.maxWidth * markX - 1,
-                          top: 0,
-                          bottom: 0,
-                          child: Container(width: 2, color: Colors.black26),
-                        ),
-                    ],
-                  );
-                },
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-        ],
-      );
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        buildBar(topValue, topLabel, Colors.indigo),
-        buildBar(bottomValue, bottomLabel, Colors.orange),
-        if (budget > 0)
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: const [
-              Icon(Icons.stacked_line_chart, size: 14, color: Colors.black45),
-              SizedBox(width: 4),
-              Text('Vạch ngân sách',
-                  style: TextStyle(fontSize: 12, color: Colors.black54)),
-            ],
-          ),
-      ],
+    return Padding(
+      padding: const EdgeInsets.all(24),
+      child: Center(child: Text(text)),
     );
   }
 }
 
-class _AlertTile extends StatelessWidget {
-  const _AlertTile({required this.data});
-  final Map<String, dynamic> data;
-  @override
-  Widget build(BuildContext context) {
-    final msg = (data['message'] ?? '').toString();
-    final rawLevel = (data['level'] ?? 'info').toString().toLowerCase();
-    final normalized = switch (rawLevel) {
-      'critical' || 'danger' => 'danger',
-      'warning' || 'warn' => 'warn',
-      _ => 'info',
-    };
-
-    final (color, icon) = switch (normalized) {
-      'danger' => (Colors.red, Icons.error_outline),
-      'warn' => (Colors.orange, Icons.warning_amber_rounded),
-      _ => (Colors.blue, Icons.info_outline),
-    };
-
-    String? timeStr;
-    final createdAt = data['created_at']?.toString();
-    if (createdAt != null && createdAt.isNotEmpty) {
-      try {
-        final dt = DateTime.parse(createdAt).toLocal();
-        final loc = Localizations.localeOf(context).toLanguageTag();
-        timeStr = DateFormat.yMd(loc).add_Hm().format(dt);
-      } catch (_) {}
-    }
-
-    return Container(
-      margin: const EdgeInsets.only(top: 8),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: color.withOpacity(.06),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withOpacity(.18), width: .8),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, size: 20, color: color),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(msg.isEmpty ? 'Có cảnh báo mới.' : msg,
-                    style:
-                        TextStyle(color: color, fontWeight: FontWeight.w800)),
-                if (timeStr != null) ...[
-                  const SizedBox(height: 2),
-                  Text(timeStr,
-                      style: TextStyle(
-                          color: color.withOpacity(.9), fontSize: 11)),
-                ],
-              ],
-            ),
-          )
-        ],
-      ),
-    );
-  }
-}
-
-/// ==================== BIỂU ĐỒ & TỔNG KẾT ====================
 class _BudgetPieChart extends StatelessWidget {
-  const _BudgetPieChart({required this.items, required this.categories});
+  const _BudgetPieChart({
+    required this.items,
+    required this.categories,
+  });
+
   final List<BudgetItem> items;
   final Map<int, Category> categories;
 
@@ -904,50 +687,64 @@ class _BudgetPieChart extends StatelessWidget {
   Widget build(BuildContext context) {
     final data = items.where((e) => e.amount > 0).toList()
       ..sort((a, b) => b.amount.compareTo(a.amount));
+
     final total = data.fold<num>(0, (a, b) => a + b.amount);
+
     final sections = data
-        .map((e) => PieChartSectionData(
-              value: e.amount.toDouble(),
-              title: '${((e.amount / total) * 100).toStringAsFixed(0)}%',
-              radius: 70,
-              titleStyle: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700),
-            ))
+        .map(
+          (e) => PieChartSectionData(
+            value: e.amount.toDouble(),
+            title: '${((e.amount / total) * 100).toStringAsFixed(0)}%',
+            radius: 70,
+            titleStyle: const TextStyle(
+              color: Colors.white,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        )
         .toList();
 
-    return Column(children: [
-      SizedBox(
-        height: 220,
-        child: PieChart(PieChartData(
-          sections: sections,
-          sectionsSpace: 2,
-          centerSpaceRadius: 44,
-          centerSpaceColor: Colors.white,
-        )),
-      ),
-      const SizedBox(height: 12),
-      Wrap(
-        spacing: 10,
-        runSpacing: 6,
-        children: data.take(8).map((e) {
-          final name = categories[e.categoryId]?.name ?? '#${e.categoryId}';
-          final pct = total == 0 ? 0 : (e.amount / total) * 100;
-          return Chip(
-            label: Text('$name (${pct.toStringAsFixed(0)}%)'),
-            visualDensity: VisualDensity.compact,
-            backgroundColor: Colors.indigo.withOpacity(.06),
-          );
-        }).toList(),
-      ),
-    ]);
+    return Column(
+      children: [
+        SizedBox(
+          height: 220,
+          child: PieChart(
+            PieChartData(
+              sections: sections,
+              sectionsSpace: 2,
+              centerSpaceRadius: 44,
+              centerSpaceColor: Colors.white,
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 10,
+          runSpacing: 6,
+          children: data.take(8).map((e) {
+            final name = categories[e.categoryId]?.name ?? '#${e.categoryId}';
+            final pct = total == 0 ? 0 : (e.amount / total) * 100;
+
+            return Chip(
+              label: Text('$name (${pct.toStringAsFixed(0)}%)'),
+              visualDensity: VisualDensity.compact,
+              backgroundColor: Colors.indigo.withOpacity(.06),
+            );
+          }).toList(),
+        ),
+      ],
+    );
   }
 }
 
 class _TopCategoriesList extends StatelessWidget {
-  const _TopCategoriesList(
-      {required this.items, required this.categories, required this.number});
+  const _TopCategoriesList({
+    required this.items,
+    required this.categories,
+    required this.number,
+  });
+
   final List<BudgetItem> items;
   final Map<int, Category> categories;
   final NumberFormat number;
@@ -956,26 +753,30 @@ class _TopCategoriesList extends StatelessWidget {
   Widget build(BuildContext context) {
     final data = items.where((e) => e.amount > 0).toList()
       ..sort((a, b) => b.amount.compareTo(a.amount));
+
     return Column(
       children: data
-          .map((it) => ListTile(
-                dense: true,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 8),
-                leading: CircleAvatar(
-                  backgroundColor: Colors.indigo.withOpacity(.08),
-                  child: Text(
-                    (categories[it.categoryId]?.name ?? '#')[0].toUpperCase(),
-                    style: const TextStyle(fontWeight: FontWeight.w800),
-                  ),
+          .map(
+            (it) => ListTile(
+              dense: true,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+              leading: CircleAvatar(
+                backgroundColor: Colors.indigo.withOpacity(.08),
+                child: Text(
+                  (categories[it.categoryId]?.name ?? '#')[0].toUpperCase(),
+                  style: const TextStyle(fontWeight: FontWeight.w800),
                 ),
-                title: Text(
-                  categories[it.categoryId]?.name ??
-                      'Danh mục ${it.categoryId}',
-                  style: const TextStyle(fontWeight: FontWeight.w700),
-                ),
-                trailing: Text('đ ${number.format(it.amount)}',
-                    style: const TextStyle(fontWeight: FontWeight.w800)),
-              ))
+              ),
+              title: Text(
+                categories[it.categoryId]?.name ?? 'Danh mục ${it.categoryId}',
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
+              trailing: Text(
+                'đ ${number.format(it.amount)}',
+                style: const TextStyle(fontWeight: FontWeight.w800),
+              ),
+            ),
+          )
           .toList(),
     );
   }
@@ -988,6 +789,7 @@ class _SummaryBox extends StatelessWidget {
     required this.unallocated,
     required this.combinedRemaining,
   });
+
   final num totalAssigned;
   final num totalSpent;
   final num unallocated;
@@ -1000,36 +802,39 @@ class _SummaryBox extends StatelessWidget {
     final isOver = combinedRemaining < 0;
     final color = isOver ? Colors.red : Colors.green;
 
-    return Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-      Expanded(
-        child: _SummaryTile(
-          label: "Đã phân bổ",
-          value: 'đ ${nf.format(totalAssigned)}',
-          icon: Icons.pie_chart_rounded,
-          color: Colors.indigo,
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Expanded(
+          child: _SummaryTile(
+            label: "Đã phân bổ",
+            value: 'đ ${nf.format(totalAssigned)}',
+            icon: Icons.pie_chart_rounded,
+            color: Colors.indigo,
+          ),
         ),
-      ),
-      const SizedBox(width: 8),
-      Expanded(
-        child: _SummaryTile(
-          label: "Đã tiêu",
-          value: 'đ ${nf.format(totalSpent)}',
-          icon: Icons.payments_rounded,
-          color: Colors.orange,
+        const SizedBox(width: 8),
+        Expanded(
+          child: _SummaryTile(
+            label: "Đã tiêu",
+            value: 'đ ${nf.format(totalSpent)}',
+            icon: Icons.payments_rounded,
+            color: Colors.orange,
+          ),
         ),
-      ),
-      const SizedBox(width: 8),
-      Expanded(
-        child: _SummaryTile(
-          label: isOver ? "Vượt" : "Còn dư",
-          value: 'đ ${nf.format(combinedRemaining.abs())}',
-          icon: isOver
-              ? Icons.report_gmailerrorred_rounded
-              : Icons.savings_rounded,
-          color: color,
+        const SizedBox(width: 8),
+        Expanded(
+          child: _SummaryTile(
+            label: isOver ? "Vượt" : "Còn dư",
+            value: 'đ ${nf.format(combinedRemaining.abs())}',
+            icon: isOver
+                ? Icons.report_gmailerrorred_rounded
+                : Icons.savings_rounded,
+            color: color,
+          ),
         ),
-      ),
-    ]);
+      ],
+    );
   }
 }
 
@@ -1040,33 +845,42 @@ class _SummaryTile extends StatelessWidget {
     required this.icon,
     required this.color,
   });
+
   final String label;
   final String value;
   final IconData icon;
   final Color color;
 
   @override
-  Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
-        decoration: BoxDecoration(
-          color: color.withOpacity(.08),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Icon(icon, color: color, size: 22),
-            const SizedBox(height: 6),
-            Text(label,
-                style: const TextStyle(fontSize: 12, color: Colors.black54),
-                textAlign: TextAlign.center),
-            const SizedBox(height: 2),
-            Text(value,
-                style:
-                    const TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
-                textAlign: TextAlign.center),
-          ],
-        ),
-      );
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
+      decoration: BoxDecoration(
+        color: color.withOpacity(.08),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Icon(icon, color: color, size: 22),
+          const SizedBox(height: 6),
+          Text(
+            label,
+            style: const TextStyle(fontSize: 12, color: Colors.black54),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 2),
+          Text(
+            value,
+            style: const TextStyle(
+              fontWeight: FontWeight.w800,
+              fontSize: 14,
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
 }
