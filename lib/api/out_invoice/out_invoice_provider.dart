@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'out_invoice_model.dart';
 import 'out_invoice_service.dart';
@@ -30,7 +32,6 @@ class OutInvoiceProvider with ChangeNotifier {
     if (budgets != null) _budgets = budgets;
   }
 
-  /// 📆 Lấy danh sách phiếu chi theo tháng/năm/ngày
   Future<void> fetch({int? year, int? month, int? day}) async {
     _loading = true;
     notifyListeners();
@@ -39,17 +40,21 @@ class OutInvoiceProvider with ChangeNotifier {
       final y = year ?? DateTime.now().year;
       final m = month ?? DateTime.now().month;
 
-      // 🟢 Gọi API (trả về {data: [...], total, message, ...})
       final res = await api.fetchByMonth(year: y, month: m, day: day);
 
-      // 📦 Debug log để xem thực tế API trả về
       debugPrint('📦 OutInvoiceProvider response: $res');
 
       if (res is Map && res['data'] is List) {
         final list = res['data'] as List<dynamic>;
-        _items = list.map((e) => OutInvoice.fromJson(e)).toList();
+        _items = list
+            .whereType<Map>()
+            .map((e) => OutInvoice.fromJson(Map<String, dynamic>.from(e)))
+            .toList();
       } else if (res is List) {
-        _items = res.map((e) => OutInvoice.fromJson(e)).toList();
+        _items = res
+            .whereType<Map>()
+            .map((e) => OutInvoice.fromJson(Map<String, dynamic>.from(e)))
+            .toList();
       } else {
         _items = [];
       }
@@ -64,26 +69,34 @@ class OutInvoiceProvider with ChangeNotifier {
     }
   }
 
-  /// ➕ Tạo phiếu chi mới (có ngày phát sinh occurred_at)
-  Future<bool> create(BuildContext context, OutInvoice invoice) async {
+  Future<bool> create(
+    BuildContext context,
+    OutInvoice invoice, {
+    File? photoFile,
+  }) async {
     try {
       final selectedYear = _budgets?.currentYear ?? DateTime.now().year;
       final selectedMonth = _budgets?.currentMonth ?? DateTime.now().month;
 
-      final payload = {
+      final payload = <String, dynamic>{
         ...invoice.toJson(),
         'month': selectedMonth,
         'year': selectedYear,
         if (invoice.occurredAt != null)
-          'occurred_at': invoice.occurredAt!.toIso8601String(), // 🟢 gửi ngày thực tế
+          'occurred_at': invoice.occurredAt!.toIso8601String(),
       };
 
-      await api.create(payload);
+      await api.create(
+        payload,
+        photoFile: photoFile,
+      );
 
-      // 🔁 Sau khi thêm mới: refresh danh sách
       await fetch(year: selectedYear, month: selectedMonth);
       await _bankAccounts?.fetchAccounts();
-      await _budgets?.loadForMonth(year: selectedYear, month: selectedMonth);
+      await _budgets?.loadForMonth(
+        year: selectedYear,
+        month: selectedMonth,
+      );
 
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -102,21 +115,25 @@ class OutInvoiceProvider with ChangeNotifier {
     }
   }
 
-  /// ➕ Tạo nhanh (không cần context)
-  Future<void> createDirect(Map<String, dynamic> data) async {
+  Future<void> createDirect(
+    Map<String, dynamic> data, {
+    File? photoFile,
+  }) async {
     final selectedYear = _budgets?.currentYear ?? DateTime.now().year;
     final selectedMonth = _budgets?.currentMonth ?? DateTime.now().month;
 
-    await api.create({
-      ...data,
-      'month': selectedMonth,
-      'year': selectedYear,
-    });
+    await api.create(
+      {
+        ...data,
+        'month': selectedMonth,
+        'year': selectedYear,
+      },
+      photoFile: photoFile,
+    );
 
     await fetch(year: selectedYear, month: selectedMonth);
     notifyListeners();
   }
-  num get totalAmount =>
-    items.fold<num>(0, (sum, e) => sum + (e.amount ?? 0));
 
+  num get totalAmount => items.fold<num>(0, (sum, e) => sum + e.amount);
 }

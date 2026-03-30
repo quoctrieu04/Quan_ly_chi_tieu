@@ -1,9 +1,13 @@
+import 'dart:io';
+
 import 'package:chitieu/api/transaction/transaction_provider.dart';
 import 'package:chitieu/core/voice/voice_synonym_store.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:diacritic/diacritic.dart';
+import 'package:image_picker/image_picker.dart';
+
 import 'package:chitieu/l10n/app_localizations.dart';
 import 'package:chitieu/core/date/year_month_provider.dart';
 
@@ -15,6 +19,8 @@ import 'package:chitieu/core/money/widgets/money_text.dart';
 import 'package:chitieu/api/bankaccount/bank_account_provider.dart';
 import 'package:chitieu/api/income/income_provider.dart';
 import 'package:chitieu/api/income/income_model.dart';
+import 'package:chitieu/api/out_invoice/out_invoice_provider.dart';
+import 'package:chitieu/api/out_invoice/out_invoice_model.dart';
 
 // VOICE
 import 'package:chitieu/api/ai/stt_service.dart';
@@ -43,6 +49,7 @@ class _NotePageState extends State<NotePage> {
   final TextEditingController _noteCtl = TextEditingController();
 
   final NumberFormat _vi = NumberFormat.decimalPattern('vi_VN');
+
   String _formatVn(String raw) {
     if (raw.isEmpty) return '0';
     final n = int.tryParse(raw) ?? 0;
@@ -51,13 +58,17 @@ class _NotePageState extends State<NotePage> {
 
   bool _forceCancel = false;
 
+  // PHOTO
+  final ImagePicker _picker = ImagePicker();
+  XFile? _pickedPhoto;
+
   // ================= VOICE =================
   late final SttService _stt;
   late final VoiceIntentParser _parser;
   late final TtsService _tts;
   bool _listening = false;
   String _voiceText = '';
-  String? _originalVoiceInput; // ← THÊM DÒNG NÀY
+  String? _originalVoiceInput;
 
   @override
   void initState() {
@@ -88,32 +99,38 @@ class _NotePageState extends State<NotePage> {
     super.dispose();
   }
 
-  void _cancelAll() async {
-    // Nếu đang nghe thì dừng
+  Future<void> _cancelAll() async {
     await _stt.stop();
 
     setState(() {
       _forceCancel = true;
-
-      // trạng thái voice
       _listening = false;
       _voiceText = '';
-
-      // dữ liệu giao dịch
       amount = '';
       selectedCategory = null;
       selectedWallet = null;
       selectedIncome = null;
       _noteText = '';
+      _pickedPhoto = null;
     });
 
     await _tts.say('Đã hủy giao dịch.');
-    void _cancelAll() async {
-      await _stt.stop();
-      setState(() {/* reset như trên */});
-      await _tts.say('Đã hủy giao dịch.');
 
-      if (mounted) Navigator.pop(context); // đóng NotePage
+    if (mounted) {
+      Navigator.pop(context);
+    }
+  }
+
+  Future<void> _pickExpensePhoto() async {
+    if (type != FlowType.out) return;
+
+    final file = await _picker.pickImage(
+      source: ImageSource.camera,
+      imageQuality: 80,
+    );
+
+    if (file != null && mounted) {
+      setState(() => _pickedPhoto = file);
     }
   }
 
@@ -135,7 +152,6 @@ class _NotePageState extends State<NotePage> {
 
     await _tts.say('Tôi đang nghe bạn nói...');
 
-    // 🎤 Bắt đầu nghe
     final outcome = await _stt.listenOnceEx(
       onPartial: (text) => setState(() => _voiceText = text),
     );
@@ -146,9 +162,10 @@ class _NotePageState extends State<NotePage> {
       _listening = false;
       _originalVoiceInput = text;
     });
+
     if (_forceCancel) {
-      _forceCancel = false; // reset
-      return; // ← KHÔNG NÓI "mình không nghe rõ"
+      _forceCancel = false;
+      return;
     }
 
     if (text.isEmpty) {
@@ -159,16 +176,13 @@ class _NotePageState extends State<NotePage> {
     final intent = await _parser.parse(text);
     debugPrint('🎯 Voice intent: $intent');
 
-    // 🎯 Cập nhật UI
     setState(() {
       if (intent.amount != null) amount = intent.amount.toString();
-      _noteText = intent.note ?? ''; // ← SỬA: Bỏ if, luôn gán
+      _noteText = intent.note ?? '';
       if (intent.type == VoiceIntentType.spend) type = FlowType.out;
       if (intent.type == VoiceIntentType.income) type = FlowType.in_;
     });
 
-    // ============================================
-    // ✅ Ưu tiên ví được nói hoặc ví có số dư cao nhất
     final wals = context.read<BankAccountProvider>().items;
     if (wals.isNotEmpty) {
       dynamic found;
@@ -182,7 +196,9 @@ class _NotePageState extends State<NotePage> {
           });
           debugPrint('🎯 Ví được nói: ${found.name ?? found.title}');
           await voiceStore.learnFromUtterance(
-              intent.walletName!, 'wallet:${found.name ?? found.title}');
+            intent.walletName!,
+            'wallet:${found.name ?? found.title}',
+          );
         } catch (_) {
           found = null;
         }
@@ -195,8 +211,6 @@ class _NotePageState extends State<NotePage> {
       debugPrint('💰 Ví được chọn: ${found.name ?? found.title}');
     }
 
-    // ============================================
-    // ✅ Nếu là tiền ra -> nhận diện danh mục thông minh
     if (type == FlowType.out && intent.categoryName != null) {
       final cats = context.read<CategoryProvider>().items;
       if (cats.isNotEmpty) {
@@ -204,7 +218,6 @@ class _NotePageState extends State<NotePage> {
         final input = removeDiacritics(intent.categoryName!.toLowerCase());
 
         try {
-          // 🔹 So khớp chính xác theo tên danh mục
           found = cats.firstWhere(
             (c) {
               final name = removeDiacritics(c.name.toLowerCase());
@@ -223,13 +236,12 @@ class _NotePageState extends State<NotePage> {
         } else {
           debugPrint('⚠️ Không tìm thấy danh mục "${intent.categoryName}".');
           await _tts.say(
-              'Không tìm thấy danh mục ${intent.categoryName}. Bạn có thể chọn thủ công nhé.');
+            'Không tìm thấy danh mục ${intent.categoryName}. Bạn có thể chọn thủ công nhé.',
+          );
         }
       }
     }
 
-    // ============================================
-    // ✅ Nếu là TIỀN VÀO → hỏi chọn nguồn thu nếu chưa có
     if (type == FlowType.in_ && selectedIncome == null) {
       await _tts.say('Bạn muốn ghi vào nguồn thu nào?');
       final incProv = context.read<IncomeProvider>();
@@ -257,8 +269,6 @@ class _NotePageState extends State<NotePage> {
       }
     }
 
-    // ============================================
-    // 💬 Nếu là tiền ra mà chưa có danh mục -> hỏi người dùng
     final amt = intent.amount ?? 0;
     if (type == FlowType.out && selectedCategory == null && amt > 0) {
       await _tts.say('Bạn muốn lưu giao dịch này vào danh mục nào?');
@@ -275,11 +285,10 @@ class _NotePageState extends State<NotePage> {
         );
         setState(() => selectedCategory = found);
 
-        // 🔹 Học cả từ câu nói ban đầu và câu xác nhận
         await voiceStore.learnFromUtterance(nextText, found.name);
         await voiceStore.learnFromUtterance(nextText, found.name);
 
-        print('🧠 Đã học: "${intent.note}" và "${nextText}" → "${found.name}"');
+        debugPrint('🧠 Đã học: "${intent.note}" và "${nextText}" → "${found.name}"');
         voiceStore.debugPrintAll();
 
         await _tts.say('Đã chọn danh mục ${found.name}');
@@ -289,8 +298,6 @@ class _NotePageState extends State<NotePage> {
       }
     }
 
-    // ============================================
-    // 💾 Hỏi xác nhận trước khi lưu
     final isChangeCommand = _voiceText.contains('chuyển') ||
         _voiceText.contains('đổi') ||
         _voiceText.contains('sang');
@@ -301,9 +308,9 @@ class _NotePageState extends State<NotePage> {
         ((type == FlowType.out && selectedCategory != null) ||
             (type == FlowType.in_ && selectedIncome != null))) {
       await _tts.say(
-          'Bạn đã ${type == FlowType.out ? "chi" : "thu"} ${_vi.format(amt)} cho ${intent.note ?? "giao dịch"}. Nói "đổi ví" hoặc "lưu lại".');
+        'Bạn đã ${type == FlowType.out ? "chi" : "thu"} ${_vi.format(amt)} cho ${intent.note ?? "giao dịch"}. Nói "đổi ví" hoặc "lưu lại".',
+      );
 
-// 🔥 cần delay 400–500ms để Android nhả audio
       await Future.delayed(const Duration(milliseconds: 450));
 
       final nextOutcome = await _stt.listenOnceEx(
@@ -319,7 +326,9 @@ class _NotePageState extends State<NotePage> {
           if (nextText.contains(name) || nextText.contains(title)) {
             setState(() => selectedWallet = w);
             await voiceStore.learnFromUtterance(
-                w.name ?? w.title ?? '', 'wallet:${w.name ?? w.title}');
+              w.name ?? w.title ?? '',
+              'wallet:${w.name ?? w.title}',
+            );
             await _tts.say('Đã chuyển sang ví ${w.name ?? w.title}');
             break;
           }
@@ -338,8 +347,6 @@ class _NotePageState extends State<NotePage> {
       await _tts.say('Bạn có muốn kiểm tra lại trước khi lưu không?');
     }
 
-    // ============================================
-    // ✅ Tổng hợp phản hồi cuối
     await _tts.say(
       'Giao dịch: ${intent.note ?? "—"}, ${_vi.format(intent.amount ?? 0)} đồng${intent.walletName != null ? " từ ví ${intent.walletName}" : ""}.',
     );
@@ -360,87 +367,126 @@ class _NotePageState extends State<NotePage> {
   }
 
   Future<void> _submit() async {
-    final isOut = type == FlowType.out;
-    final amt = int.tryParse(amount) ?? 0;
-    final selectedWalletId = (selectedWallet as dynamic)?.id ?? 0;
-    final categoryId = selectedCategory?.id ?? 0;
-    final incomeId = selectedIncome?.id ?? 0;
+  final isOut = type == FlowType.out;
+  final amt = int.tryParse(amount) ?? 0;
+  final selectedWalletId = (selectedWallet as dynamic)?.id ?? 0;
+  final categoryId = selectedCategory?.id ?? 0;
+  final incomeId = selectedIncome?.id ?? 0;
 
-    if (amt <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Vui lòng nhập số tiền > 0.')),
+  if (amt <= 0) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Vui lòng nhập số tiền > 0.')),
+    );
+    await _tts.say('Bạn muốn ghi số tiền bao nhiêu?');
+    return;
+  }
+
+  if (isOut && selectedWalletId == 0) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Vui lòng chọn tài khoản chi.')),
+    );
+    await _tts.say('Bạn chưa chọn tài khoản chi.');
+    return;
+  }
+
+  if (isOut && categoryId == 0) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Vui lòng chọn danh mục.')),
+    );
+    await _tts.say('Bạn chưa chọn danh mục.');
+    return;
+  }
+
+  if (!isOut && (selectedWalletId == 0 || incomeId == 0)) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Vui lòng chọn nguồn thu và ví.')),
+    );
+    await _tts.say('Bạn chưa chọn nguồn thu hoặc ví nạp tiền.');
+    return;
+  }
+
+  final trimmedNote = _noteText.trim();
+  final safeNote = trimmedNote.isEmpty
+      ? null
+      : (trimmedNote.length <= 300
+          ? trimmedNote
+          : trimmedNote.substring(0, 300));
+
+  try {
+    if (isOut) {
+      final outProv = context.read<OutInvoiceProvider>();
+
+      final invoice = OutInvoice(
+        id: 0,
+        userId: 0,
+        bankId: selectedWalletId, // quan trọng
+        outcatId: categoryId,
+        amount: amt,
+        docType: 'OUT',
+        content: safeNote,
+        month: _selectedDate.month,
+        year: _selectedDate.year,
+        occurredAt: _selectedDate,
       );
-      await _tts.say('Bạn muốn ghi số tiền bao nhiêu?');
-      return;
-    }
 
-    if (isOut && categoryId == 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Vui lòng chọn danh mục.')),
+      final ok = await outProv.create(
+        context,
+        invoice,
+        photoFile: _pickedPhoto != null ? File(_pickedPhoto!.path) : null,
       );
-      await _tts.say('Bạn chưa chọn danh mục.');
-      return;
-    }
 
-    if (!isOut && (selectedWalletId == 0 || incomeId == 0)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Vui lòng chọn nguồn thu và ví.')),
-      );
-      await _tts.say('Bạn chưa chọn nguồn thu hoặc ví nạp tiền.');
-      return;
-    }
-
-    final trimmedNote = _noteText.trim();
-    final safeNote = trimmedNote.isEmpty
-        ? null
-        : (trimmedNote.length <= 300
-            ? trimmedNote
-            : trimmedNote.substring(0, 300));
-
-    try {
+      if (!ok) return;
+    } else {
       final tx = context.read<TransactionProvider>();
 
       await tx.create(
-        isIncome: !isOut,
+        isIncome: true,
         bankId: selectedWalletId,
-        categoryId: isOut ? categoryId : incomeId,
+        categoryId: incomeId,
         amount: amt,
         content: safeNote,
         month: _selectedDate.month,
         year: _selectedDate.year,
         occurredAt: _selectedDate.toIso8601String(),
       );
-
-      final ym = context.read<YearMonthProvider>().ym;
-
-      await Future.wait([
-        context
-            .read<BankAccountProvider>()
-            .fetch(year: ym.year, month: ym.month),
-        context.read<IncomeProvider>().fetchAll(),
-        context
-            .read<BudgetsProvider>()
-            .loadForMonth(year: ym.year, month: ym.month),
-      ]);
-
-      if (mounted) {
-        Navigator.pop(context, true);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              isOut
-                  ? '✅ Đã ghi giao dịch chi thành công'
-                  : '✅ Đã ghi giao dịch thu thành công',
-            ),
-          ),
-        );
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('❌ Lỗi lưu giao dịch: $e')),
-      );
     }
+
+    final ym = context.read<YearMonthProvider>().ym;
+
+    await Future.wait([
+      context.read<BankAccountProvider>().fetch(
+            year: ym.year,
+            month: ym.month,
+          ),
+      context.read<IncomeProvider>().fetchAll(),
+      context.read<BudgetsProvider>().loadForMonth(
+            year: ym.year,
+            month: ym.month,
+          ),
+    ]);
+
+    if (!mounted) return;
+
+    Navigator.pop(context, true);
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          isOut
+              ? '✅ Đã ghi giao dịch chi thành công'
+              : '✅ Đã ghi giao dịch thu thành công',
+        ),
+      ),
+    );
+  } catch (e) {
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('❌ Lỗi lưu giao dịch: $e')),
+    );
   }
+}
+
   // ================= Pickers =================
 
   Future<void> _openIncomePicker() async {
@@ -469,17 +515,22 @@ class _NotePageState extends State<NotePage> {
                 ),
               ),
               const SizedBox(height: 12),
-              const Text('Chọn nguồn thu',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+              const Text(
+                'Chọn nguồn thu',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+              ),
               const SizedBox(height: 8),
               for (final inc in incProv.items)
                 Card(
                   shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                   child: ListTile(
                     leading: const CircleAvatar(child: Icon(Icons.savings)),
-                    title: Text(inc.title,
-                        style: const TextStyle(fontWeight: FontWeight.w700)),
+                    title: Text(
+                      inc.title,
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
                     subtitle: Text('Số tiền: ${_vi.format(inc.balance)}'),
                     trailing: (inc.id == selectedIncome?.id)
                         ? const Icon(Icons.check, color: Colors.green)
@@ -493,7 +544,9 @@ class _NotePageState extends State<NotePage> {
       ),
     );
 
-    if (picked != null && mounted) setState(() => selectedIncome = picked);
+    if (picked != null && mounted) {
+      setState(() => selectedIncome = picked);
+    }
   }
 
   Future<void> _openWalletPicker() async {
@@ -514,7 +567,9 @@ class _NotePageState extends State<NotePage> {
       ),
     );
 
-    if (picked != null && mounted) setState(() => selectedWallet = picked);
+    if (picked != null && mounted) {
+      setState(() => selectedWallet = picked);
+    }
   }
 
   Future<void> _openCategoryPicker() async {
@@ -529,19 +584,19 @@ class _NotePageState extends State<NotePage> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
       builder: (_) => _CategoryPickerSheet(
-          items: catProv.items, selectedId: selectedCategory?.id),
+        items: catProv.items,
+        selectedId: selectedCategory?.id,
+      ),
     );
 
     if (picked != null && mounted) {
       setState(() => selectedCategory = picked);
 
-      // 🧠 Học khi người dùng chọn thủ công danh mục
-      final textToLearn = _originalVoiceInput?.trim() ??
-          _noteText.trim(); // ← SỬA: Ưu tiên câu gốc
+      final textToLearn = _originalVoiceInput?.trim() ?? _noteText.trim();
 
       if (textToLearn.isNotEmpty) {
         final store = VoiceSynonymStore();
-        await store.load(); // ← THÊM: Load dữ liệu cũ
+        await store.load();
         await store.learnFromUtterance(textToLearn, picked.name);
         debugPrint('🧠 Đã học: "$textToLearn" → "${picked.name}"');
       }
@@ -556,7 +611,9 @@ class _NotePageState extends State<NotePage> {
       lastDate: DateTime(2035),
       helpText: 'Chọn ngày',
     );
-    if (picked != null && mounted) setState(() => _selectedDate = picked);
+    if (picked != null && mounted) {
+      setState(() => _selectedDate = picked);
+    }
   }
 
   Future<void> _openNoteEditor() async {
@@ -591,8 +648,10 @@ class _NotePageState extends State<NotePage> {
                 ),
               ),
               const SizedBox(height: 12),
-              const Text('Ghi chú',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+              const Text(
+                'Ghi chú',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+              ),
               const SizedBox(height: 8),
               TextField(
                 controller: _noteCtl,
@@ -623,7 +682,67 @@ class _NotePageState extends State<NotePage> {
         );
       },
     );
-    if (result != null && mounted) setState(() => _noteText = result);
+    if (result != null && mounted) {
+      setState(() => _noteText = result);
+    }
+  }
+
+  Widget _buildExpensePhotoBox() {
+    if (type != FlowType.out) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      child: InkWell(
+        onTap: _pickExpensePhoto,
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(14),
+            boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 2)],
+          ),
+          child: _pickedPhoto == null
+              ? const Row(
+                  children: [
+                    Icon(Icons.camera_alt_rounded, color: Colors.brown),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Chụp ảnh món đồ / hóa đơn',
+                        style: TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                  ],
+                )
+              : Row(
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: Image.file(
+                        File(_pickedPhoto!.path),
+                        width: 52,
+                        height: 52,
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    const Expanded(
+                      child: Text(
+                        'Đã thêm ảnh khoản chi',
+                        style: TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: () => setState(() => _pickedPhoto = null),
+                      icon: const Icon(Icons.delete_outline_rounded),
+                    ),
+                  ],
+                ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -638,7 +757,6 @@ class _NotePageState extends State<NotePage> {
       body: SafeArea(
         child: Column(
           children: [
-            // ===== HEADER =====
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
               child: Row(
@@ -656,6 +774,9 @@ class _NotePageState extends State<NotePage> {
                         selectedWallet = null;
                         selectedCategory = null;
                         selectedIncome = null;
+                        if (type != FlowType.out) {
+                          _pickedPhoto = null;
+                        }
                       }),
                       borderColor: borderGrey,
                       selectedColor: const Color(0xFFF7CF54),
@@ -665,7 +786,6 @@ class _NotePageState extends State<NotePage> {
               ),
             ),
 
-            // ===== MAIN CONTENT =====
             Expanded(
               child: SingleChildScrollView(
                 physics: const BouncingScrollPhysics(),
@@ -673,6 +793,8 @@ class _NotePageState extends State<NotePage> {
                   children: [
                     const SizedBox(height: 28),
                     _amountText(context: context, type: type, amount: amount),
+                    const SizedBox(height: 12),
+                    _buildExpensePhotoBox(),
                     const SizedBox(height: 8),
 
                     InkWell(
@@ -680,22 +802,28 @@ class _NotePageState extends State<NotePage> {
                       borderRadius: BorderRadius.circular(8),
                       child: Padding(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 16, vertical: 8),
+                          horizontal: 16,
+                          vertical: 8,
+                        ),
                         child: Container(
                           width: double.infinity,
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 12),
+                            horizontal: 12,
+                            vertical: 12,
+                          ),
                           decoration: BoxDecoration(
                             color: Colors.white,
                             borderRadius: BorderRadius.circular(14),
                             boxShadow: const [
-                              BoxShadow(color: Colors.black12, blurRadius: 2)
+                              BoxShadow(color: Colors.black12, blurRadius: 2),
                             ],
                           ),
                           child: Row(
                             children: [
-                              const Icon(Icons.notes_rounded,
-                                  color: Colors.brown),
+                              const Icon(
+                                Icons.notes_rounded,
+                                color: Colors.brown,
+                              ),
                               const SizedBox(width: 8),
                               Expanded(
                                 child: Text(
@@ -718,8 +846,6 @@ class _NotePageState extends State<NotePage> {
                       ),
                     ),
 
-                    // ✅ Thêm phần hiển thị voice trạng thái
-                    // ===== Voice caption =====
                     if (_listening || _voiceText.isNotEmpty)
                       Padding(
                         padding: const EdgeInsets.symmetric(vertical: 8),
@@ -729,12 +855,7 @@ class _NotePageState extends State<NotePage> {
                               text: _voiceText,
                               listening: _listening,
                             ),
-
                             const SizedBox(height: 8),
-
-                            // ==========================
-                            // 🔴 NÚT HỦY GIAO DỊCH
-                            // ==========================
                             TextButton.icon(
                               onPressed: _cancelAll,
                               icon: const Icon(
@@ -759,7 +880,6 @@ class _NotePageState extends State<NotePage> {
               ),
             ),
 
-            // ===== TOOL CHIPS =====
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               color: Colors.white,
@@ -815,12 +935,11 @@ class _NotePageState extends State<NotePage> {
               ),
             ),
 
-            // ===== KEYPAD =====
             _KeypadBar(
               onTap: _onKey,
               onBack: _onBackspace,
               onConfirm: _submit,
-              onVoice: _toggleListening, // ✅ thêm xử lý voice
+              onVoice: _toggleListening,
             ),
           ],
         ),
@@ -838,6 +957,7 @@ class _NotePageState extends State<NotePage> {
     final text = amount.isEmpty
         ? 'đ0'
         : (isOut ? '-đ$formattedCore' : '+đ$formattedCore');
+
     return Text(
       text,
       style: Theme.of(context).textTheme.displaySmall?.copyWith(
@@ -863,10 +983,9 @@ class _NotePageState extends State<NotePage> {
   }
 }
 
-/* ================= Voice Caption widget ================= */
-
 class _VoiceCaption extends StatelessWidget {
   const _VoiceCaption({required this.text, required this.listening});
+
   final String text;
   final bool listening;
 
@@ -901,7 +1020,9 @@ class _VoiceCaption extends StatelessWidget {
                   maxLines: 3,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                      fontSize: 14, fontWeight: FontWeight.w600),
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
             ],
@@ -911,9 +1032,6 @@ class _VoiceCaption extends StatelessWidget {
     );
   }
 }
-
-/* ================= Segmented ================= */
-// (giữ nguyên như bạn đã có; code không đổi)
 
 class _FlowSegmented extends StatelessWidget {
   const _FlowSegmented({
@@ -936,7 +1054,7 @@ class _FlowSegmented extends StatelessWidget {
       fontWeight: FontWeight.w700,
       color: Colors.black87,
     );
-    final normalText = const TextStyle(
+    const normalText = TextStyle(
       fontWeight: FontWeight.w600,
       color: Colors.black87,
     );
@@ -1004,7 +1122,11 @@ class _SegmentTile extends StatelessWidget {
     return AnimatedContainer(
       duration: const Duration(milliseconds: 140),
       margin: EdgeInsets.only(
-          left: left ? 4 : 2, right: right ? 4 : 2, top: 4, bottom: 4),
+        left: left ? 4 : 2,
+        right: right ? 4 : 2,
+        top: 4,
+        bottom: 4,
+      ),
       decoration: BoxDecoration(
         color: selected ? selectedColor : Colors.transparent,
         borderRadius: BorderRadius.horizontal(
@@ -1014,9 +1136,10 @@ class _SegmentTile extends StatelessWidget {
         boxShadow: selected
             ? const [
                 BoxShadow(
-                    color: Color(0x22A58B00),
-                    offset: Offset(0, 2),
-                    blurRadius: 4)
+                  color: Color(0x22A58B00),
+                  offset: Offset(0, 2),
+                  blurRadius: 4,
+                ),
               ]
             : null,
       ),
@@ -1041,10 +1164,9 @@ class _SegmentTile extends StatelessWidget {
   }
 }
 
-/* ================= Tool chip / Keypad / Pickers ================= */
-// (giữ nguyên phần còn lại như bạn đã có; mình không đổi logic UI cũ)
 class _ToolChip extends StatelessWidget {
   const _ToolChip({required this.icon, required this.label, this.onTap});
+
   final IconData icon;
   final String label;
   final VoidCallback? onTap;
@@ -1070,14 +1192,11 @@ class _ToolChip extends StatelessWidget {
                 Icon(icon, size: 18, color: Colors.brown.shade600),
                 const SizedBox(width: 6),
                 Expanded(
-                  // 👈 thêm Expanded
                   child: Text(
                     label,
-                    maxLines: 1, // 👈 không cho vượt 1 dòng
-                    overflow: TextOverflow.ellipsis, // 👈 tự động rút gọn
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w700,
-                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontWeight: FontWeight.w700),
                   ),
                 ),
               ],
@@ -1117,7 +1236,6 @@ class _KeypadBar extends StatelessWidget {
         height: 260,
         child: Row(
           children: [
-            // lưới phím
             Expanded(
               flex: 3,
               child: GridView.count(
@@ -1130,25 +1248,31 @@ class _KeypadBar extends StatelessWidget {
                   for (final n in ['1', '2', '3', '4', '5', '6', '7', '8', '9'])
                     _PadKey(label: n, onTap: () => onTap(n)),
                   _PadKey(
-                      icon: Icons.mic_none_rounded,
-                      onTap: onVoice ?? () {},
-                      bg: Colors.white),
+                    icon: Icons.mic_none_rounded,
+                    onTap: onVoice ?? () {},
+                    bg: Colors.white,
+                  ),
                   _PadKey(label: '0', onTap: () => onTap('0')),
                   _PadKey(
-                      icon: Icons.backspace_outlined, onTap: onBack, bg: grey),
+                    icon: Icons.backspace_outlined,
+                    onTap: onBack,
+                    bg: grey,
+                  ),
                 ],
               ),
             ),
             const SizedBox(width: 10),
-            // nút xác nhận cao
             Expanded(
               child: Column(
                 children: [
                   Expanded(
                     child: _PadKey(
                       bg: green,
-                      child: const Icon(Icons.check_rounded,
-                          color: Colors.white, size: 36),
+                      child: const Icon(
+                        Icons.check_rounded,
+                        color: Colors.white,
+                        size: 36,
+                      ),
                       onTap: onConfirm,
                     ),
                   ),
@@ -1182,9 +1306,13 @@ class _PadKey extends StatelessWidget {
     final content = child ??
         (icon != null
             ? Icon(icon, color: Colors.black87)
-            : Text(label!,
+            : Text(
+                label!,
                 style: const TextStyle(
-                    fontSize: 22, fontWeight: FontWeight.w600)));
+                  fontSize: 22,
+                  fontWeight: FontWeight.w600,
+                ),
+              ));
 
     return Material(
       color: bg,
@@ -1222,30 +1350,38 @@ class _WalletPickerSheet extends StatelessWidget {
                 height: 4,
                 width: 40,
                 decoration: BoxDecoration(
-                    color: Colors.black12,
-                    borderRadius: BorderRadius.circular(2)),
+                  color: Colors.black12,
+                  borderRadius: BorderRadius.circular(2),
+                ),
               ),
               const SizedBox(height: 12),
-              const Text('Chọn ví / Nạp tiền',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+              const Text(
+                'Chọn ví / Nạp tiền',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+              ),
               const SizedBox(height: 8),
               for (final w in items)
                 Card(
                   elevation: .4,
                   shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                   child: ListTile(
                     leading: const CircleAvatar(
-                        child: Icon(Icons.account_balance_wallet_rounded)),
+                      child: Icon(Icons.account_balance_wallet_rounded),
+                    ),
                     title: Text(
                       (w as dynamic).name ?? (w as dynamic).title ?? '—',
                       style: const TextStyle(fontWeight: FontWeight.w700),
                     ),
-                    subtitle: Row(children: [
-                      const Text('Số dư: '),
-                      MoneyText(
-                          (w as dynamic).balance ?? (w as dynamic).amount ?? 0),
-                    ]),
+                    subtitle: Row(
+                      children: [
+                        const Text('Số dư: '),
+                        MoneyText(
+                          (w as dynamic).balance ?? (w as dynamic).amount ?? 0,
+                        ),
+                      ],
+                    ),
                     trailing: Wrap(
                       spacing: 8,
                       children: [
@@ -1255,11 +1391,13 @@ class _WalletPickerSheet extends StatelessWidget {
                           onPressed: () => onTopUp(w),
                         ),
                         if ((w as dynamic).id == selectedId)
-                          const Icon(Icons.check_rounded,
-                              color: Color(0xFF2DBE60)),
+                          const Icon(
+                            Icons.check_rounded,
+                            color: Color(0xFF2DBE60),
+                          ),
                       ],
                     ),
-                    onTap: () => Navigator.pop(context, w), // chọn ví
+                    onTap: () => Navigator.pop(context, w),
                   ),
                 ),
             ],
@@ -1272,6 +1410,7 @@ class _WalletPickerSheet extends StatelessWidget {
 
 class _CategoryPickerSheet extends StatelessWidget {
   const _CategoryPickerSheet({required this.items, required this.selectedId});
+
   final List<Category> items;
   final int? selectedId;
 
@@ -1284,28 +1423,32 @@ class _CategoryPickerSheet extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-                height: 4,
-                width: 40,
-                decoration: BoxDecoration(
-                    color: Colors.black12,
-                    borderRadius: BorderRadius.circular(2))),
+              height: 4,
+              width: 40,
+              decoration: BoxDecoration(
+                color: Colors.black12,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
             const SizedBox(height: 12),
-            const Text('Chọn danh mục',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+            const Text(
+              'Chọn danh mục',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+            ),
             const SizedBox(height: 8),
             GridView.builder(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               itemCount: items.length,
               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 3,
-                  childAspectRatio: 1.15,
-                  mainAxisSpacing: 8,
-                  crossAxisSpacing: 8),
+                crossAxisCount: 3,
+                childAspectRatio: 1.15,
+                mainAxisSpacing: 8,
+                crossAxisSpacing: 8,
+              ),
               itemBuilder: (_, i) {
                 final c = items[i];
                 final selected = c.id == selectedId;
-
                 final first =
                     (c.name.isNotEmpty ? c.name[0] : '•').toUpperCase();
 
@@ -1322,9 +1465,10 @@ class _CategoryPickerSheet extends StatelessWidget {
                         CircleAvatar(
                           radius: 18,
                           backgroundColor: Colors.green.withOpacity(.1),
-                          child: Text(first,
-                              style:
-                                  const TextStyle(fontWeight: FontWeight.w800)),
+                          child: Text(
+                            first,
+                            style: const TextStyle(fontWeight: FontWeight.w800),
+                          ),
                         ),
                         const SizedBox(height: 6),
                         Text(
