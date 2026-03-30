@@ -122,17 +122,19 @@ class _NotePageState extends State<NotePage> {
   }
 
   Future<void> _pickExpensePhoto() async {
-    if (type != FlowType.out) return;
+  if (type != FlowType.out) return;
 
-    final file = await _picker.pickImage(
-      source: ImageSource.camera,
-      imageQuality: 80,
-    );
+  final file = await _picker.pickImage(
+    source: ImageSource.camera,
+    imageQuality: 60,
+    maxWidth: 1280,
+    maxHeight: 1280,
+  );
 
-    if (file != null && mounted) {
-      setState(() => _pickedPhoto = file);
-    }
+  if (file != null && mounted) {
+    setState(() => _pickedPhoto = file);
   }
+}
 
   /* ================= VOICE HANDLER ================= */
   Future<void> _toggleListening() async {

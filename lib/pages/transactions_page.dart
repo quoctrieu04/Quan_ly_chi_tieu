@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 import 'package:chitieu/api/out_invoice/out_invoice_provider.dart';
 import 'package:chitieu/api/in_invoice/in_invoice_provider.dart';
@@ -56,16 +57,23 @@ class _TransactionsPageState extends State<TransactionsPage> {
   Future<void> _fetchCurrentTab() async {
     if (_tab == HistoryTab.transaction) {
       await Future.wait([
-        context.read<OutInvoiceProvider>().fetch(year: _year, month: _month, day: _day),
-        context.read<InInvoiceProvider>().fetch(year: _year, month: _month, day: _day),
+        context.read<OutInvoiceProvider>().fetch(
+              year: _year,
+              month: _month,
+              day: _day,
+            ),
+        context.read<InInvoiceProvider>().fetch(
+              year: _year,
+              month: _month,
+              day: _day,
+            ),
       ]);
     } else {
-      // ✅ Tab Đầu tư: đọc lịch sử chung
       await context.read<FinancialTransactionProvider>().fetchByMonth(
             year: _year,
             month: _month,
             day: _day,
-            category: 'investment', // backend phải map investment => real_estate + investment_bank
+            category: 'investment',
           );
     }
   }
@@ -91,17 +99,22 @@ class _TransactionsPageState extends State<TransactionsPage> {
 
   @override
   Widget build(BuildContext context) {
-    final MoneySettings settings = context.watch<MoneySettingsProvider>().settings;
+    final MoneySettings settings =
+        context.watch<MoneySettingsProvider>().settings;
 
     final localeTag = Localizations.localeOf(context).toLanguageTag();
-    final monthLabel = DateFormat.yMMMM(localeTag).format(DateTime(_year, _month));
+    final monthLabel =
+        DateFormat.yMMMM(localeTag).format(DateTime(_year, _month));
     final dayLabel = (_day != null)
-        ? DateFormat('dd MMMM yyyy', localeTag).format(DateTime(_year, _month, _day!))
+        ? DateFormat('dd MMMM yyyy', localeTag)
+            .format(DateTime(_year, _month, _day!))
         : null;
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(_day == null ? 'Lịch sử • $monthLabel' : 'Lịch sử • $dayLabel'),
+        title: Text(
+          _day == null ? 'Lịch sử • $monthLabel' : 'Lịch sử • $dayLabel',
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.calendar_month_rounded),
@@ -147,7 +160,8 @@ class _TransactionsPageState extends State<TransactionsPage> {
         onTap: () {
           if (_tab == tab) return;
           setState(() => _tab = tab);
-          WidgetsBinding.instance.addPostFrameCallback((_) => _fetchCurrentTab());
+          WidgetsBinding.instance
+              .addPostFrameCallback((_) => _fetchCurrentTab());
         },
         borderRadius: BorderRadius.circular(12),
         child: Container(
@@ -160,15 +174,14 @@ class _TransactionsPageState extends State<TransactionsPage> {
           child: Center(
             child: Text(
               label,
-              style: const TextStyle(fontWeight: FontWeight.w700, color: color),
+              style:
+                  const TextStyle(fontWeight: FontWeight.w700, color: color),
             ),
           ),
         ),
       ),
     );
   }
-
-  // ================= GIAO DỊCH THƯỜNG =================
 
   Widget _buildTransactionList(MoneySettings settings) {
     final outProv = context.watch<OutInvoiceProvider>();
@@ -179,20 +192,26 @@ class _TransactionsPageState extends State<TransactionsPage> {
     }
 
     final rows = [
-      ...outProv.items.map((e) => _TxnRow(
-            amount: e.amount,
-            type: 'out',
-            date: e.occurredAt ?? e.createdAt ?? DateTime.now(),
-            label: e.categoryName ?? 'Chi',
-            content: e.content,
-          )),
-      ...inProv.items.map((e) => _TxnRow(
-            amount: e.amount,
-            type: 'in',
-            date: e.occurredAt ?? e.createdAt ?? DateTime.now(),
-            label: e.categoryName ?? 'Thu',
-            content: e.content,
-          )),
+      ...outProv.items.map(
+        (e) => _TxnRow(
+          amount: e.amount,
+          type: 'out',
+          date: e.occurredAt ?? e.createdAt ?? DateTime.now(),
+          label: e.categoryName ?? 'Chi',
+          content: e.content,
+          photoUrl: e.photoUrl,
+          photoPath: e.photoPath,
+        ),
+      ),
+      ...inProv.items.map(
+        (e) => _TxnRow(
+          amount: e.amount,
+          type: 'in',
+          date: e.occurredAt ?? e.createdAt ?? DateTime.now(),
+          label: e.categoryName ?? 'Thu',
+          content: e.content,
+        ),
+      ),
     ]..sort((a, b) => b.date.compareTo(a.date));
 
     if (rows.isEmpty) return const Center(child: Text('Chưa có dữ liệu'));
@@ -209,7 +228,15 @@ class _TransactionsPageState extends State<TransactionsPage> {
     final color = isOut ? const Color(0xFFD64545) : const Color(0xFF1F9D4C);
     final sign = isOut ? '-' : '+';
 
+    final hasPhoto = (tx.photoUrl != null && tx.photoUrl!.trim().isNotEmpty);
+    final amountText = '$sign${MoneyFormatter(settings).format(tx.amount)}';
+
+    final noteText = (tx.content != null && tx.content!.trim().isNotEmpty)
+        ? tx.content!.trim()
+        : DateFormat('dd/MM/yyyy HH:mm').format(tx.date);
+
     return ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       leading: CircleAvatar(
         backgroundColor: color.withOpacity(.15),
         child: Icon(
@@ -217,26 +244,97 @@ class _TransactionsPageState extends State<TransactionsPage> {
           color: color,
         ),
       ),
-      title: Text(tx.label, style: const TextStyle(fontWeight: FontWeight.w700)),
-      subtitle: Text(
-        tx.content ?? DateFormat('dd/MM/yyyy HH:mm').format(tx.date),
+      title: Text(
+        tx.label,
+        style: const TextStyle(fontWeight: FontWeight.w700),
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
       ),
-      trailing: Text(
-        '$sign${MoneyFormatter(settings).format(tx.amount)}',
-        style: TextStyle(fontWeight: FontWeight.w800, color: color),
+      subtitle: Padding(
+        padding: const EdgeInsets.only(top: 2),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              amountText,
+              style: TextStyle(
+                fontWeight: FontWeight.w800,
+                color: color,
+                fontSize: 15,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              noteText,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: Colors.black54,
+                fontSize: 13,
+              ),
+            ),
+          ],
+        ),
       ),
+      trailing: hasPhoto
+          ? ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: CachedNetworkImage(
+                imageUrl: tx.photoUrl!,
+                width: 54,
+                height: 54,
+                fit: BoxFit.cover,
+                memCacheWidth: 160,
+                maxWidthDiskCache: 320,
+                fadeInDuration: Duration.zero,
+                placeholder: (_, __) => Container(
+                  width: 54,
+                  height: 54,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade200,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                errorWidget: (_, error, __) {
+                  debugPrint('IMAGE LOAD ERROR: $error');
+                  debugPrint('IMAGE URL: ${tx.photoUrl}');
+                  return Container(
+                    width: 54,
+                    height: 54,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade200,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(Icons.image_not_supported_outlined),
+                  );
+                },
+              ),
+            )
+          : SizedBox(
+              width: 68,
+              child: Text(
+                DateFormat('dd/MM').format(tx.date),
+                textAlign: TextAlign.right,
+                style: const TextStyle(
+                  color: Colors.black45,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
     );
   }
-
-  // ================= ĐẦU TƯ (LỊCH SỬ CHUNG) =================
 
   Widget _buildInvestmentList(MoneySettings settings) {
     final prov = context.watch<FinancialTransactionProvider>();
 
-    if (prov.loading) return const Center(child: CircularProgressIndicator());
-    if (prov.items.isEmpty) return const Center(child: Text('Chưa có lịch sử đầu tư'));
+    if (prov.loading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (prov.items.isEmpty) {
+      return const Center(child: Text('Chưa có lịch sử đầu tư'));
+    }
 
     return ListView.builder(
       physics: const AlwaysScrollableScrollPhysics(),
@@ -250,9 +348,10 @@ class _TransactionsPageState extends State<TransactionsPage> {
     final color = isOut ? const Color(0xFFD64545) : const Color(0xFF1F9D4C);
     final sign = isOut ? '-' : '+';
 
-    final subtitle = (tx.description != null && tx.description!.trim().isNotEmpty)
-        ? tx.description!
-        : DateFormat('dd/MM/yyyy HH:mm').format(tx.occurredAt);
+    final subtitle =
+        (tx.description != null && tx.description!.trim().isNotEmpty)
+            ? tx.description!
+            : DateFormat('dd/MM/yyyy HH:mm').format(tx.occurredAt);
 
     return ListTile(
       leading: CircleAvatar(
@@ -285,6 +384,8 @@ class _TxnRow {
   final DateTime date;
   final String label;
   final String? content;
+  final String? photoUrl;
+  final String? photoPath;
 
   _TxnRow({
     required this.amount,
@@ -292,5 +393,7 @@ class _TxnRow {
     required this.date,
     required this.label,
     this.content,
+    this.photoUrl,
+    this.photoPath,
   });
 }
