@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'models/monthly_cashflow.dart';
 
+const _kMint = Color(0xFF2EC4B6);
+const _kWarning = Color(0xFFF59E0B);
+const _kDanger  = Color(0xFFEF4444);
+
 class SpendingTrendCard extends StatelessWidget {
   final List<MonthlyCashFlow> data;
   const SpendingTrendCard({super.key, required this.data});
@@ -13,112 +17,151 @@ class SpendingTrendCard extends StatelessWidget {
 
   num _changePercent() {
     if (data.length < 2) return 0;
-
     final prev = data[data.length - 2].expense.toDouble().abs();
     final curr = data.last.expense.toDouble().abs();
-
     if (prev == 0 && curr == 0) return 0;
-
     final base = prev > curr ? prev : curr;
     if (base == 0) return 0;
-
     final percent = ((curr - prev) / base) * 100;
     return percent.clamp(-100.0, 100.0);
   }
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cs = Theme.of(context).colorScheme;
     final maxVal = _maxValue();
     final percent = _changePercent();
     final isDown = percent < 0;
 
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: const [
-          BoxShadow(color: Colors.black12, blurRadius: 6),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Text(
-                'Biến động thu/chi',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+    final incomeColor = _kMint;
+    final expenseColor = _kWarning; // Orange for variation, or cs.error
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Header Row
+        Row(
+          children: [
+            Text(
+              'Biến động thu/chi',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+                color: isDark ? Colors.white : const Color(0xFF1A2332),
+                letterSpacing: -0.3,
               ),
-              const Spacer(),
-              Icon(
-                isDown ? Icons.arrow_downward : Icons.arrow_upward,
-                color: isDown ? Colors.green : Colors.red,
-                size: 18,
+            ),
+            const Spacer(),
+            // Change percent badge
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: (isDown ? _kMint : _kDanger).withOpacity(isDark ? .15 : .08),
+                borderRadius: BorderRadius.circular(20),
               ),
-              Text(
-                '${percent.abs().toStringAsFixed(0)}%',
-                style: TextStyle(
-                  fontWeight: FontWeight.w900,
-                  color: isDown ? Colors.green : Colors.red,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    isDown ? Icons.trending_down_rounded : Icons.trending_up_rounded,
+                    color: isDown ? _kMint : _kDanger,
+                    size: 14,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    '${percent.abs().toStringAsFixed(0)}%',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 12.5,
+                      color: isDown ? _kMint : _kDanger,
+                      letterSpacing: -0.2,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 18),
+        // Chart Area
+        SizedBox(
+          height: 120,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: data.asMap().entries.map((entry) {
+              final m = entry.value;
+              final isLast = entry.key == data.length - 1;
+
+              final double incomeH = maxVal == 0 ? 0 : ((m.income / maxVal) * 90).toDouble();
+              final double expenseH = maxVal == 0 ? 0 : ((m.expense / maxVal) * 90).toDouble();
+
+              return TweenAnimationBuilder<double>(
+                duration: Duration(milliseconds: 500 + (entry.key * 80)),
+                tween: Tween(begin: 0, end: 1),
+                curve: Curves.easeOutCubic,
+                builder: (_, v, child) => Opacity(
+                  opacity: v,
+                  child: Transform.translate(
+                    offset: Offset(0, 12 * (1 - v)),
+                    child: child,
+                  ),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          SizedBox(
-            height: 120,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: data.map((m) {
-                final double incomeH =
-                    maxVal == 0 ? 0 : ((m.income / maxVal) * 100).toDouble();
-
-                final double expenseH =
-                    maxVal == 0 ? 0 : ((m.expense / maxVal) * 100).toDouble();
-
-                return Column(
+                child: Column(
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
-                    Stack(
-                      alignment: Alignment.bottomCenter,
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
+                        // Income bar
                         Container(
-                          width: 14,
-                          height: incomeH,
+                          width: 10,
+                          height: incomeH.clamp(4, 90),
                           decoration: BoxDecoration(
-                            color: const Color(0xFF9B8CFF),
-                            borderRadius: BorderRadius.circular(6),
+                            color: isLast ? incomeColor : incomeColor.withOpacity(isDark ? .3 : .2),
+                            borderRadius: BorderRadius.circular(50),
                           ),
                         ),
+                        const SizedBox(width: 4),
+                        // Expense bar
                         Container(
-                          width: 14,
-                          height: expenseH,
+                          width: 10,
+                          height: expenseH.clamp(4, 90),
                           decoration: BoxDecoration(
-                            color: const Color(0xFF6FE3A1),
-                            borderRadius: BorderRadius.circular(6),
+                            color: isLast ? expenseColor : expenseColor.withOpacity(isDark ? .3 : .2),
+                            borderRadius: BorderRadius.circular(50),
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 6),
-                    Text('T${m.month}', style: const TextStyle(fontSize: 12)),
+                    const SizedBox(height: 8),
+                    Text(
+                      'T${m.month}',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: isLast ? FontWeight.w700 : FontWeight.w500,
+                        color: isLast ? cs.onSurface : cs.onSurface.withOpacity(.4),
+                      ),
+                    ),
                   ],
-                );
-              }).toList(),
-            ),
+                ),
+              );
+            }).toList(),
           ),
-          const SizedBox(height: 8),
-          const Row(
-            children: [
-              _Legend(color: Color(0xFF9B8CFF), label: 'Thu'),
-              SizedBox(width: 12),
-              _Legend(color: Color(0xFF6FE3A1), label: 'Chi'),
-            ],
-          ),
-        ],
-      ),
+        ),
+        const SizedBox(height: 12),
+        // Legend
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            _Legend(color: incomeColor, label: 'Thu nhập'),
+            const SizedBox(width: 16),
+            _Legend(color: expenseColor, label: 'Chi tiêu'),
+          ],
+        ),
+      ],
     );
   }
 }
@@ -133,15 +176,19 @@ class _Legend extends StatelessWidget {
     return Row(
       children: [
         Container(
-          width: 10,
-          height: 10,
+          width: 8, height: 8,
           decoration: BoxDecoration(
-            color: color,
-            borderRadius: BorderRadius.circular(4),
+            color: color, shape: BoxShape.circle,
           ),
         ),
-        const SizedBox(width: 4),
-        Text(label),
+        const SizedBox(width: 6),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 12, fontWeight: FontWeight.w500,
+            color: Theme.of(context).colorScheme.onSurface.withOpacity(.5),
+          ),
+        ),
       ],
     );
   }

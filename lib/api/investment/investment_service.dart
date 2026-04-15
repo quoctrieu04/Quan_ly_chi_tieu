@@ -42,7 +42,7 @@ class InvestmentService {
     } on DioException catch (e) {
       if (e.response != null) {
         final msg = e.response?.data['message'] ?? 'Lỗi không xác định';
-        throw Exception(msg); // 🔥 NÉM LỖI LÊN UI
+        throw Exception(msg);
       }
       throw Exception('Không kết nối được server');
     }
@@ -72,18 +72,32 @@ class InvestmentService {
   }
 
   // =========================
-  // ✅ WITHDRAW BANK (FIX CUỐI)
+  // WITHDRAW TYPE MAPPER
+  // =========================
+  String _withdrawTypeValue(WithdrawType type) {
+    switch (type) {
+      case WithdrawType.interest:
+        return 'interest';
+      case WithdrawType.all:
+        return 'all';
+      case WithdrawType.interestAndRenew:
+        return 'interest_and_renew';
+    }
+  }
+
+  // =========================
+  // WITHDRAW BANK
   // =========================
   Future<bool> withdrawBank({
     required int investmentId,
     required int receiveAccountId,
     required WithdrawType withdrawType,
-    double? amount, // ✅ THÊM DÒNG NÀY
+    double? amount,
   }) async {
     try {
       final Map<String, dynamic> data = {
         'receive_account_id': receiveAccountId,
-        'withdraw_type': withdrawType.name,
+        'withdraw_type': _withdrawTypeValue(withdrawType),
       };
 
       if (amount != null) {
@@ -98,10 +112,16 @@ class InvestmentService {
       debugPrint('✅ WITHDRAW STATUS: ${res.statusCode}');
       debugPrint('✅ WITHDRAW RESPONSE: ${res.data}');
 
-      return res.statusCode == 200;
+      return res.statusCode == 200 || res.statusCode == 201;
     } on DioException catch (e) {
       debugPrint('❌ WITHDRAW ERROR: ${e.response?.data}');
-      return false;
+
+      if (e.response != null) {
+        final msg = e.response?.data['message'] ?? 'Rút tiền thất bại';
+        throw Exception(msg);
+      }
+
+      throw Exception('Không kết nối được server');
     }
   }
 
@@ -151,7 +171,7 @@ class InvestmentService {
   }
 
   // =========================
-  // 🔁 RENEW BANK INVESTMENT
+  // RENEW BANK INVESTMENT
   // =========================
   Future<bool> renewBankInvestment(int investmentId) async {
     try {
@@ -171,8 +191,8 @@ class InvestmentService {
   }
 
   // =========================
-// 🔒 CLOSE INVESTMENT (ĐÓNG KHOẢN CŨ)
-// =========================
+  // CLOSE INVESTMENT
+  // =========================
   Future<void> closeInvestment(int investmentId) async {
     try {
       await dio.post("investments/$investmentId/close");

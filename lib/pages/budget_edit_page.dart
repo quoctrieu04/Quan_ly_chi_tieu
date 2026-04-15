@@ -11,7 +11,7 @@ import 'package:chitieu/core/budget/budgets_provider.dart';
 class BudgetEditPage extends StatefulWidget {
   /// null = tạo mới, khác null = sửa
   final Category? category;
-  final String type; // “out” = chi, “in” = thu
+  final String type; // "out" = chi, "in" = thu
 
   const BudgetEditPage({super.key, this.category, required this.type});
 
@@ -19,11 +19,15 @@ class BudgetEditPage extends StatefulWidget {
   State<BudgetEditPage> createState() => _BudgetEditPageState();
 }
 
-class _BudgetEditPageState extends State<BudgetEditPage> {
+class _BudgetEditPageState extends State<BudgetEditPage>
+    with SingleTickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
   final _controller = TextEditingController();
   final _nameFocus = FocusNode();
   bool _saving = false;
+  late AnimationController _animCtrl;
+  late Animation<double> _fadeAnim;
+  late Animation<Offset> _slideAnim;
 
   @override
   void initState() {
@@ -31,6 +35,17 @@ class _BudgetEditPageState extends State<BudgetEditPage> {
     if (widget.category != null) {
       _controller.text = widget.category!.name;
     }
+    _animCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 600),
+    );
+    _fadeAnim = CurvedAnimation(parent: _animCtrl, curve: Curves.easeOutCubic);
+    _slideAnim = Tween<Offset>(
+      begin: const Offset(0, 0.08),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(parent: _animCtrl, curve: Curves.easeOutCubic));
+
+    _animCtrl.forward();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _nameFocus.requestFocus();
     });
@@ -38,6 +53,7 @@ class _BudgetEditPageState extends State<BudgetEditPage> {
 
   @override
   void dispose() {
+    _animCtrl.dispose();
     _controller.dispose();
     _nameFocus.dispose();
     super.dispose();
@@ -79,7 +95,8 @@ class _BudgetEditPageState extends State<BudgetEditPage> {
         );
       } else {
         // === CẬP NHẬT ===
-        await catProv.update(id: widget.category!.id, name: name, type: widget.type);
+        await catProv.update(
+            id: widget.category!.id, name: name, type: widget.type);
       }
 
       if (mounted) Navigator.pop(context, true);
@@ -108,19 +125,54 @@ class _BudgetEditPageState extends State<BudgetEditPage> {
     if (widget.category == null) return;
     final cat = widget.category!;
     final t = AppLocalizations.of(context)!;
+    final cs = Theme.of(context).colorScheme;
 
     final ok = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
-        title: Text(t.confirmTitle),
-        content: Text(t.confirmDeleteMessage(cat.name)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: cs.error.withOpacity(.08),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(Icons.delete_outline_rounded,
+                  color: cs.error, size: 20),
+            ),
+            const SizedBox(width: 12),
+            Text(t.confirmTitle,
+                style: const TextStyle(fontWeight: FontWeight.w700)),
+          ],
+        ),
+        content: Text(
+          t.confirmDeleteMessage(cat.name),
+          style: TextStyle(
+            color: cs.onSurface.withOpacity(.7),
+            fontSize: 14,
+            height: 1.5,
+          ),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
+            ),
             child: Text(t.cancel),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
+            style: FilledButton.styleFrom(
+              backgroundColor: cs.error,
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
+            ),
             child: Text(t.deleteCta),
           ),
         ],
@@ -144,82 +196,429 @@ class _BudgetEditPageState extends State<BudgetEditPage> {
     }
   }
 
+  // ── Icon map ──
+  IconData _iconForType() {
+    if (widget.category != null) {
+      final n = widget.category!.name.toLowerCase();
+      if (n.contains('ăn') || n.contains('uống') || n.contains('food'))
+        return Icons.restaurant_rounded;
+      if (n.contains('di chuyển') ||
+          n.contains('xăng') ||
+          n.contains('transport')) return Icons.directions_car_rounded;
+      if (n.contains('giải trí') || n.contains('entertainment'))
+        return Icons.sports_esports_rounded;
+      if (n.contains('mua sắm') || n.contains('shopping'))
+        return Icons.shopping_bag_rounded;
+      if (n.contains('sức khỏe') || n.contains('health'))
+        return Icons.favorite_rounded;
+      if (n.contains('giáo dục') ||
+          n.contains('học') ||
+          n.contains('education')) return Icons.school_rounded;
+      if (n.contains('tiết kiệm') || n.contains('saving'))
+        return Icons.savings_rounded;
+      if (n.contains('nhà') || n.contains('thuê') || n.contains('rent'))
+        return Icons.home_rounded;
+    }
+    return Icons.add_circle_outline_rounded;
+  }
+
   @override
   Widget build(BuildContext context) {
     final t = AppLocalizations.of(context)!;
     final isEdit = widget.category != null;
+    final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bgColor = isDark ? cs.surface : const Color(0xFFFAFBFE);
 
     return Scaffold(
+      backgroundColor: bgColor,
       appBar: AppBar(
-        title: Text(isEdit ? t.editCategoryTitle : t.createCategoryTitleForm),
+        backgroundColor: isDark ? cs.surfaceContainerHigh : Colors.white,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          icon: Icon(Icons.arrow_back_ios_new_rounded,
+              size: 20, color: cs.onSurface),
+          onPressed: () => Navigator.pop(context),
+        ),
+        centerTitle: true,
+        title: Text(
+          isEdit ? t.editCategoryTitle : t.createCategoryTitleForm,
+          style: TextStyle(
+            fontSize: 17,
+            fontWeight: FontWeight.w700,
+            color: cs.onSurface,
+          ),
+        ),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(1),
+          child: Container(
+            height: 1,
+            color: isDark
+                ? cs.outlineVariant.withOpacity(.1)
+                : const Color(0xFFEEEFF3),
+          ),
+        ),
         actions: [
           if (isEdit)
-            IconButton(
-              icon: const Icon(Icons.delete_outline),
-              tooltip: t.deleteCta,
-              onPressed: _saving ? null : _confirmAndDelete,
+            Padding(
+              padding: const EdgeInsets.only(right: 4),
+              child: IconButton(
+                icon: Icon(Icons.delete_outline_rounded,
+                    color: cs.error.withOpacity(.7), size: 22),
+                tooltip: t.deleteCta,
+                onPressed: _saving ? null : _confirmAndDelete,
+                style: IconButton.styleFrom(
+                  backgroundColor: cs.error.withOpacity(.06),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+                constraints:
+                    const BoxConstraints(minWidth: 38, minHeight: 38),
+              ),
             ),
-          IconButton(
-            onPressed: _saving ? null : _save,
-            icon: const Icon(Icons.check),
-            tooltip: t.saveCta,
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: Container(
+              decoration: BoxDecoration(
+                color: cs.primary.withOpacity(.08),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: IconButton(
+                icon: _saving
+                    ? SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: cs.primary,
+                        ),
+                      )
+                    : Icon(Icons.check_rounded, color: cs.primary, size: 22),
+                tooltip: t.saveCta,
+                onPressed: _saving ? null : _save,
+                constraints:
+                    const BoxConstraints(minWidth: 38, minHeight: 38),
+              ),
+            ),
           ),
         ],
       ),
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Form(
-            key: _formKey,
-            autovalidateMode: AutovalidateMode.onUserInteraction,
-            child: Column(
-              children: [
-                TextFormField(
-                  controller: _controller,
-                  focusNode: _nameFocus,
-                  textInputAction: TextInputAction.done,
-                  onFieldSubmitted: (_) => _save(),
-                  decoration: InputDecoration(
-                    labelText: t.categoryNameLabel,
-                    hintText: t.categoryNameHint,
-                    filled: true,
-                    border: const OutlineInputBorder(),
-                    counterText: '',
-                  ),
-                  maxLength: 50,
-                  enabled: !_saving,
-                  validator: (value) {
-                    final name = (value ?? '').trim();
-                    if (name.isEmpty) return t.categoryNameRequired;
-                    return null;
-                  },
+        child: FadeTransition(
+          opacity: _fadeAnim,
+          child: SlideTransition(
+            position: _slideAnim,
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(20, 28, 20, 40),
+              child: Form(
+                key: _formKey,
+                autovalidateMode: AutovalidateMode.onUserInteraction,
+                child: Column(
+                  children: [
+                    // ── Hero Icon ──
+                    _buildHeroIcon(cs, isDark, isEdit),
+                    const SizedBox(height: 28),
+
+                    // ── Name field ──
+                    _buildNameField(cs, isDark, t),
+                    const SizedBox(height: 24),
+
+                    // ── Type indicator ──
+                    if (widget.type.isNotEmpty) ...[
+                      _buildTypeIndicator(cs, isDark),
+                      const SizedBox(height: 28),
+                    ],
+
+                    // ── Save button ──
+                    _buildSaveButton(cs, t, isEdit),
+                  ],
                 ),
-                const SizedBox(height: 20),
-                SizedBox(
-                  width: double.infinity,
-                  height: 48,
-                  child: ElevatedButton(
-                    onPressed: _saving ? null : _save,
-                    child: AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 200),
-                      transitionBuilder: (child, anim) =>
-                          FadeTransition(opacity: anim, child: child),
-                      child: _saving
-                          ? const SizedBox(
-                              key: ValueKey('spinner'),
-                              width: 22,
-                              height: 22,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : Text(
-                              isEdit ? t.updateCta : t.saveCta,
-                              key: const ValueKey('label'),
-                            ),
-                    ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeroIcon(ColorScheme cs, bool isDark, bool isEdit) {
+    return TweenAnimationBuilder<double>(
+      duration: const Duration(milliseconds: 800),
+      tween: Tween(begin: 0, end: 1),
+      curve: Curves.elasticOut,
+      builder: (_, v, child) => Transform.scale(
+        scale: 0.5 + (0.5 * v),
+        child: Opacity(opacity: v.clamp(0, 1), child: child),
+      ),
+      child: Container(
+        width: 88,
+        height: 88,
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              cs.primary.withOpacity(.12),
+              cs.primary.withOpacity(.04),
+            ],
+          ),
+          shape: BoxShape.circle,
+          border: Border.all(
+            color: cs.primary.withOpacity(.15),
+            width: 2,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: cs.primary.withOpacity(.06),
+              blurRadius: 20,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: Icon(
+          _iconForType(),
+          size: 36,
+          color: cs.primary,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNameField(ColorScheme cs, bool isDark, AppLocalizations t) {
+    return Container(
+      decoration: BoxDecoration(
+        color: isDark ? cs.surfaceContainerHigh : Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: isDark
+              ? cs.outlineVariant.withOpacity(.08)
+              : const Color(0xFFECEDF2),
+        ),
+        boxShadow: [
+          if (!isDark)
+            BoxShadow(
+              color: Colors.black.withOpacity(.02),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+        ],
+      ),
+      child: TextFormField(
+        controller: _controller,
+        focusNode: _nameFocus,
+        textInputAction: TextInputAction.done,
+        onFieldSubmitted: (_) => _save(),
+        style: TextStyle(
+          fontSize: 16,
+          fontWeight: FontWeight.w600,
+          color: cs.onSurface,
+        ),
+        decoration: InputDecoration(
+          labelText: t.categoryNameLabel,
+          hintText: t.categoryNameHint,
+          labelStyle: TextStyle(
+            color: cs.primary.withOpacity(.7),
+            fontWeight: FontWeight.w600,
+            fontSize: 14,
+          ),
+          hintStyle: TextStyle(
+            color: cs.onSurface.withOpacity(.3),
+            fontWeight: FontWeight.w400,
+            fontSize: 14,
+          ),
+          filled: true,
+          fillColor: Colors.transparent,
+          contentPadding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
+          prefixIcon: Padding(
+            padding: const EdgeInsets.only(left: 14, right: 10),
+            child:
+                Icon(Icons.label_outline_rounded, color: cs.primary, size: 22),
+          ),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(18),
+            borderSide: BorderSide.none,
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(18),
+            borderSide: BorderSide.none,
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(18),
+            borderSide: BorderSide(color: cs.primary, width: 2),
+          ),
+          errorBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(18),
+            borderSide: BorderSide(color: cs.error, width: 1.5),
+          ),
+          focusedErrorBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(18),
+            borderSide: BorderSide(color: cs.error, width: 2),
+          ),
+          counterText: '',
+        ),
+        maxLength: 50,
+        enabled: !_saving,
+        validator: (value) {
+          final name = (value ?? '').trim();
+          if (name.isEmpty) return t.categoryNameRequired;
+          return null;
+        },
+      ),
+    );
+  }
+
+  Widget _buildTypeIndicator(ColorScheme cs, bool isDark) {
+    final isIncome = widget.type == 'in';
+    final typeColor =
+        isIncome ? const Color(0xFF2E7D32) : cs.primary;
+    final typeLabel = isIncome ? 'Thu nhập' : 'Chi tiêu';
+    final typeIcon =
+        isIncome ? Icons.arrow_downward_rounded : Icons.arrow_upward_rounded;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+      decoration: BoxDecoration(
+        color: isDark ? cs.surfaceContainerHigh : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: typeColor.withOpacity(.12),
+        ),
+        boxShadow: [
+          if (!isDark)
+            BoxShadow(
+              color: Colors.black.withOpacity(.02),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: typeColor.withOpacity(.08),
+              borderRadius: BorderRadius.circular(11),
+            ),
+            child: Icon(typeIcon, color: typeColor, size: 20),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Loại danh mục',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    color: cs.onSurface.withOpacity(.45),
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  typeLabel,
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: cs.onSurface,
                   ),
                 ),
               ],
             ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: typeColor.withOpacity(.08),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Text(
+              isIncome ? 'IN' : 'OUT',
+              style: TextStyle(
+                color: typeColor,
+                fontWeight: FontWeight.w800,
+                fontSize: 11,
+                letterSpacing: 0.5,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSaveButton(ColorScheme cs, AppLocalizations t, bool isEdit) {
+    return SizedBox(
+      width: double.infinity,
+      height: 54,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          gradient: _saving
+              ? null
+              : LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    cs.primary,
+                    Color.lerp(cs.primary, cs.tertiary, .3)!,
+                  ],
+                ),
+          boxShadow: _saving
+              ? []
+              : [
+                  BoxShadow(
+                    color: cs.primary.withOpacity(.2),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+        ),
+        child: ElevatedButton.icon(
+          onPressed: _saving ? null : _save,
+          icon: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 200),
+            transitionBuilder: (child, anim) =>
+                FadeTransition(opacity: anim, child: child),
+            child: _saving
+                ? const SizedBox(
+                    key: ValueKey('spinner'),
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : Icon(
+                    isEdit ? Icons.save_rounded : Icons.add_rounded,
+                    key: const ValueKey('icon'),
+                    size: 20,
+                  ),
+          ),
+          label: Text(
+            isEdit ? t.updateCta : t.saveCta,
+            style: const TextStyle(
+              fontWeight: FontWeight.w700,
+              fontSize: 15,
+              letterSpacing: 0.3,
+            ),
+          ),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.transparent,
+            foregroundColor: Colors.white,
+            shadowColor: Colors.transparent,
+            disabledBackgroundColor: cs.primary.withOpacity(.3),
+            disabledForegroundColor: Colors.white.withOpacity(.7),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            elevation: 0,
           ),
         ),
       ),

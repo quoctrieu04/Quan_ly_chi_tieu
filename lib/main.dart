@@ -290,6 +290,15 @@ class MyApp extends StatelessWidget {
       navigatorKey: navigatorKey,
       debugShowCheckedModeBanner: false,
       title: 'Chi Tiêu',
+      builder: (context, child) {
+        return MediaQuery(
+          // Sử dụng copyWith(textScaler: ...) để bọc lại cỡ chữ toàn cục 
+          data: MediaQuery.of(context).copyWith(
+            textScaler: TextScaler.linear(settings.textScale),
+          ),
+          child: child!,
+        );
+      },
 
       // ✅ i18n CUSTOM
       localizationsDelegates: const [
@@ -350,104 +359,354 @@ class _HomeScaffoldState extends State<HomeScaffold> {
   void _onTabSelected(int index) => setState(() => _currentIndex = index);
 
   void _onFabPressed() {
-    Navigator.of(context)
-        .push(MaterialPageRoute(builder: (_) => const NotePage()));
+    showGeneralDialog(
+      context: context,
+      barrierColor: Colors.black.withOpacity(0.40),
+      barrierDismissible: true,
+      barrierLabel: 'Close',
+      transitionDuration: const Duration(milliseconds: 200),
+      pageBuilder: (ctx, anim1, anim2) {
+        return _ActionMenuOverlay(onClose: () => Navigator.pop(ctx));
+      },
+      transitionBuilder: (ctx, anim1, anim2, child) {
+        return FadeTransition(opacity: anim1, child: child);
+      },
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final t = AppLocalizations.of(context)!;
 
+    final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
-      extendBody: true,
-      body: SafeArea(
-        child: IndexedStack(
-          index: _currentIndex,
-          children: _pages,
+      body: IndexedStack(
+        index: _currentIndex,
+        children: _pages,
+      ),
+      bottomNavigationBar: _ModernBottomNav(
+        currentIndex: _currentIndex,
+        onTabSelected: _onTabSelected,
+        onFabPressed: _onFabPressed,
+        labels: [
+          t.tabBudgets,
+          t.tabAccounts,
+          t.tabAnalytics,
+          t.tabSettings,
+        ],
+        icons: const [
+          Icons.wallet_rounded,
+          Icons.account_balance_rounded,
+          Icons.insights_rounded,
+          Icons.settings_rounded,
+        ],
+        cs: cs,
+        isDark: isDark,
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════
+//  Bottom Nav — Mint/Teal
+// ═══════════════════════════════════════
+class _ModernBottomNav extends StatelessWidget {
+  static const _inactive  = Color(0xFF9CA3AF);
+
+  final int currentIndex;
+  final ValueChanged<int> onTabSelected;
+  final VoidCallback onFabPressed;
+  final List<String> labels;
+  final List<IconData> icons;
+  final ColorScheme cs;
+  final bool isDark;
+
+  const _ModernBottomNav({
+    required this.currentIndex,
+    required this.onTabSelected,
+    required this.onFabPressed,
+    required this.labels,
+    required this.icons,
+    required this.cs,
+    required this.isDark,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final _mint = cs.primary;
+    final _mintLight = Color.lerp(cs.primary, Colors.white, 0.3) ?? cs.primary;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1C2530) : Colors.white,
+        border: Border(
+          top: BorderSide(
+            color: isDark
+                ? const Color(0xFF2A3544)
+                : const Color(0xFFE8ECF0),
+            width: 1,
+          ),
+        ),
+        boxShadow: isDark
+            ? []
+            : [
+                BoxShadow(
+                  color: Colors.black.withOpacity(.06),
+                  blurRadius: 20,
+                  offset: const Offset(0, -4),
+                ),
+              ],
+      ),
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          child: Row(
+            children: [
+              _buildNavItem(0),
+              _buildNavItem(1),
+              // ── FAB: mint gradient ──
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: GestureDetector(
+                  onTap: onFabPressed,
+                  child: Container(
+                    width: 52,
+                    height: 52,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [_mint, _mintLight],
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: _mint.withOpacity(.35),
+                          blurRadius: 16,
+                          offset: const Offset(0, 5),
+                          spreadRadius: -2,
+                        ),
+                      ],
+                    ),
+                    child: const Icon(
+                      Icons.edit_note_rounded,
+                      color: Colors.white,
+                      size: 22,
+                    ),
+                  ),
+                ),
+              ),
+              _buildNavItem(2),
+              _buildNavItem(3),
+            ],
+          ),
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _onFabPressed,
-        elevation: 2,
-        shape: const CircleBorder(),
-        child: const Icon(Icons.assignment),
-      ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
-      bottomNavigationBar: BottomAppBar(
-        shape: const CircularNotchedRectangle(),
-        notchMargin: 8,
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: [
-            _NavItem(
-              icon: Icons.wallet_rounded,
-              label: t.tabBudgets,
-              selected: _currentIndex == 0,
-              onTap: () => _onTabSelected(0),
-            ),
-            _NavItem(
-              icon: Icons.account_balance_rounded,
-              label: t.tabAccounts,
-              selected: _currentIndex == 1,
-              onTap: () => _onTabSelected(1),
-            ),
-            const SizedBox(width: 48),
-            _NavItem(
-              icon: Icons.insights_rounded,
-              label: t.tabAnalytics,
-              selected: _currentIndex == 2,
-              onTap: () => _onTabSelected(2),
-            ),
-            _NavItem(
-              icon: Icons.settings_rounded,
-              label: t.tabSettings,
-              selected: _currentIndex == 3,
-              onTap: () => _onTabSelected(3),
-            ),
-          ],
+    );
+  }
+
+  Widget _buildNavItem(int index) {
+    final selected = currentIndex == index;
+    final _mint = cs.primary;
+    final color = selected ? _mint : (isDark ? Colors.white.withOpacity(.45) : _inactive);
+
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => onTabSelected(index),
+        behavior: HitTestBehavior.opaque,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOutCubic,
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 220),
+                curve: Curves.easeOutCubic,
+                padding: selected
+                    ? const EdgeInsets.symmetric(horizontal: 14, vertical: 5)
+                    : const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                decoration: BoxDecoration(
+                  color: selected
+                      ? _mint.withOpacity(isDark ? .15 : .10)
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Icon(icons[index], size: 21, color: color),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                labels[index],
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                  color: color,
+                  letterSpacing: -0.1,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 }
 
-class _NavItem extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  const _NavItem({
-    required this.icon,
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
+// ═══════════════════════════════════════
+//  Arc Menu Overlay
+// ═══════════════════════════════════════
+class _ActionMenuOverlay extends StatelessWidget {
+  final VoidCallback onClose;
+  const _ActionMenuOverlay({required this.onClose});
 
   @override
   Widget build(BuildContext context) {
-    final color = selected ? Colors.amber : Colors.black54;
-    return InkWell(
-      borderRadius: BorderRadius.circular(12),
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 24, color: color),
-            const SizedBox(height: 4),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: selected ? FontWeight.bold : FontWeight.w500,
-                color: color,
+    final bottomInset = MediaQuery.of(context).padding.bottom;
+    final w = MediaQuery.of(context).size.width;
+
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      body: Stack(
+        children: [
+          Positioned.fill(
+            child: GestureDetector(
+              onTap: onClose,
+              behavior: HitTestBehavior.opaque,
+              child: Container(color: Colors.transparent),
+            ),
+          ),
+          Positioned(
+            bottom: bottomInset + 8,
+            left: 0,
+            right: 0,
+            child: SizedBox(
+              height: 160,
+              width: w,
+              child: Stack(
+                alignment: Alignment.bottomCenter,
+                clipBehavior: Clip.none,
+                children: [
+                  // Nhập thường (Left)
+                  Positioned(
+                    left: w / 2 - 95,
+                    bottom: 25,
+                    child: _ActionBtn(
+                      icon: Icons.receipt_long_rounded,
+                      label: 'Nhập thường',
+                      onTap: () {
+                        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const NotePage()));
+                      },
+                    ),
+                  ),
+                  // Chụp ảnh (Center)
+                  Positioned(
+                    bottom: 75,
+                    child: _ActionBtn(
+                      icon: Icons.camera_alt_outlined,
+                      label: 'Chụp ảnh',
+                      onTap: () {
+                        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const NotePage()));
+                      },
+                    ),
+                  ),
+                  // Giọng nói (Right)
+                  Positioned(
+                    right: w / 2 - 95,
+                    bottom: 25,
+                    child: _ActionBtn(
+                      icon: Icons.mic_none_rounded,
+                      label: 'Giọng nói',
+                      onTap: () {
+                        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const NotePage()));
+                      },
+                    ),
+                  ),
+                  // Nút X (Close)
+                  Positioned(
+                    bottom: 0,
+                    child: GestureDetector(
+                      onTap: onClose,
+                      child: Container(
+                        width: 52,
+                        height: 52,
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF2A3544) : Colors.white,
+                          shape: BoxShape.circle,
+                          boxShadow: const [
+                            BoxShadow(
+                              color: Colors.black12,
+                              blurRadius: 10,
+                              offset: Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: Icon(Icons.close_rounded, color: Theme.of(context).colorScheme.primary, size: 26),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
-          ],
-        ),
+          )
+        ],
       ),
+    );
+  }
+}
+
+class _ActionBtn extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  const _ActionBtn({required this.icon, required this.label, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        GestureDetector(
+          onTap: onTap,
+          child: Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Theme.of(context).colorScheme.primary,
+                  Color.lerp(Theme.of(context).colorScheme.primary, Colors.white, 0.3) ?? Theme.of(context).colorScheme.primary
+                ],
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Theme.of(context).colorScheme.primary.withOpacity(0.35),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Icon(icon, color: Colors.white, size: 22),
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          label,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
     );
   }
 }

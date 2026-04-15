@@ -27,10 +27,10 @@ class SettingsProvider extends ChangeNotifier {
   // ================================
   // Màu chủ đạo (Seed Color)
   // ================================
-  MaterialColor _seed = Colors.amber; // mặc định: vàng
-  MaterialColor get seed => _seed;
+  Color _seed = const Color(0xFF2EC4B6); // Mint/Teal – AppColors.primary
+  Color get seed => _seed;
 
-  void setSeed(MaterialColor c) {
+  void setSeed(Color c) {
     _seed = c;
     notifyListeners();
   }

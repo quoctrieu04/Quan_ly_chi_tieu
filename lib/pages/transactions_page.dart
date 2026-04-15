@@ -99,6 +99,9 @@ class _TransactionsPageState extends State<TransactionsPage> {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bgColor = isDark ? cs.surface : const Color(0xFFFAFBFE);
     final MoneySettings settings =
         context.watch<MoneySettingsProvider>().settings;
 
@@ -111,26 +114,70 @@ class _TransactionsPageState extends State<TransactionsPage> {
         : null;
 
     return Scaffold(
+      backgroundColor: bgColor,
       appBar: AppBar(
+        backgroundColor:
+            isDark ? cs.surfaceContainerHigh : Colors.white,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          icon: Icon(Icons.arrow_back_ios_new_rounded,
+              size: 20, color: cs.onSurface),
+          onPressed: () => Navigator.pop(context),
+        ),
+        centerTitle: true,
         title: Text(
-          _day == null ? 'Lịch sử • $monthLabel' : 'Lịch sử • $dayLabel',
+          _day == null
+              ? 'Lịch sử • $monthLabel'
+              : 'Lịch sử • $dayLabel',
+          style: TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w700,
+            color: cs.onSurface,
+          ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(1),
+          child: Container(
+            height: 1,
+            color: isDark
+                ? cs.outlineVariant.withOpacity(.1)
+                : const Color(0xFFEEEFF3),
+          ),
         ),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.calendar_month_rounded),
-            onPressed: _pickMonthDay,
+          Padding(
+            padding: const EdgeInsets.only(right: 4),
+            child: IconButton(
+              icon: Icon(Icons.calendar_month_rounded,
+                  color: cs.primary, size: 22),
+              onPressed: _pickMonthDay,
+              tooltip: 'Chọn ngày',
+              style: IconButton.styleFrom(
+                backgroundColor: cs.primary.withOpacity(.06),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              constraints:
+                  const BoxConstraints(minWidth: 38, minHeight: 38),
+            ),
           ),
+          const SizedBox(width: 4),
         ],
       ),
       body: Column(
         children: [
-          _buildTabSwitcher(),
+          _buildTabSwitcher(cs, isDark),
           Expanded(
             child: RefreshIndicator(
+              color: cs.primary,
               onRefresh: _fetchCurrentTab,
               child: _tab == HistoryTab.transaction
-                  ? _buildTransactionList(settings)
-                  : _buildInvestmentList(settings),
+                  ? _buildTransactionList(settings, cs, isDark)
+                  : _buildInvestmentList(settings, cs, isDark),
             ),
           ),
         ],
@@ -138,57 +185,103 @@ class _TransactionsPageState extends State<TransactionsPage> {
     );
   }
 
-  Widget _buildTabSwitcher() {
+  // ═══════════════════════════
+  //  TAB SWITCHER
+  // ═══════════════════════════
+  Widget _buildTabSwitcher(ColorScheme cs, bool isDark) {
     return Padding(
-      padding: const EdgeInsets.all(12),
-      child: Row(
-        children: [
-          _tabBtn('Giao dịch', HistoryTab.transaction),
-          const SizedBox(width: 8),
-          _tabBtn('Đầu tư', HistoryTab.investment),
-        ],
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+      child: Container(
+        padding: const EdgeInsets.all(4),
+        decoration: BoxDecoration(
+          color: isDark
+              ? cs.surfaceContainerHigh
+              : Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: isDark
+                ? cs.outlineVariant.withOpacity(.08)
+                : const Color(0xFFECEDF2),
+          ),
+        ),
+        child: Row(
+          children: [
+            _tabBtn('Giao dịch', HistoryTab.transaction,
+                Icons.receipt_long_rounded, cs, isDark),
+            const SizedBox(width: 4),
+            _tabBtn('Đầu tư', HistoryTab.investment,
+                Icons.trending_up_rounded, cs, isDark),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _tabBtn(String label, HistoryTab tab) {
+  Widget _tabBtn(String label, HistoryTab tab, IconData icon,
+      ColorScheme cs, bool isDark) {
     final active = _tab == tab;
-    const color = Color(0xFF8B5E00);
 
     return Expanded(
-      child: InkWell(
+      child: GestureDetector(
         onTap: () {
           if (_tab == tab) return;
           setState(() => _tab = tab);
           WidgetsBinding.instance
               .addPostFrameCallback((_) => _fetchCurrentTab());
         },
-        borderRadius: BorderRadius.circular(12),
-        child: Container(
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
           padding: const EdgeInsets.symmetric(vertical: 10),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: color),
-            color: active ? color.withOpacity(.15) : null,
-          ),
-          child: Center(
-            child: Text(
-              label,
-              style:
-                  const TextStyle(fontWeight: FontWeight.w700, color: color),
+            borderRadius: BorderRadius.circular(11),
+            color: active
+                ? cs.primary.withOpacity(.1)
+                : Colors.transparent,
+            border: Border.all(
+              color: active
+                  ? cs.primary.withOpacity(.2)
+                  : Colors.transparent,
             ),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                icon,
+                size: 16,
+                color: active
+                    ? cs.primary
+                    : cs.onSurface.withOpacity(.35),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: TextStyle(
+                  fontWeight:
+                      active ? FontWeight.w700 : FontWeight.w500,
+                  fontSize: 13.5,
+                  color: active
+                      ? cs.primary
+                      : cs.onSurface.withOpacity(.45),
+                ),
+              ),
+            ],
           ),
         ),
       ),
     );
   }
 
-  Widget _buildTransactionList(MoneySettings settings) {
+  // ═══════════════════════════
+  //  TRANSACTION LIST
+  // ═══════════════════════════
+  Widget _buildTransactionList(
+      MoneySettings settings, ColorScheme cs, bool isDark) {
     final outProv = context.watch<OutInvoiceProvider>();
     final inProv = context.watch<InInvoiceProvider>();
 
     if (outProv.loading || inProv.loading) {
-      return const Center(child: CircularProgressIndicator());
+      return Center(child: CircularProgressIndicator(color: cs.primary));
     }
 
     final rows = [
@@ -214,138 +307,196 @@ class _TransactionsPageState extends State<TransactionsPage> {
       ),
     ]..sort((a, b) => b.date.compareTo(a.date));
 
-    if (rows.isEmpty) return const Center(child: Text('Chưa có dữ liệu'));
+    if (rows.isEmpty) return _emptyState('Chưa có giao dịch', cs);
 
     return ListView.builder(
       physics: const AlwaysScrollableScrollPhysics(),
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 40),
       itemCount: rows.length,
-      itemBuilder: (_, i) => _transactionTile(rows[i], settings),
+      itemBuilder: (_, i) =>
+          _transactionTile(rows[i], settings, cs, isDark, i),
     );
   }
 
-  Widget _transactionTile(_TxnRow tx, MoneySettings settings) {
+  Widget _transactionTile(_TxnRow tx, MoneySettings settings,
+      ColorScheme cs, bool isDark, int index) {
     final isOut = tx.type == 'out';
-    final color = isOut ? const Color(0xFFD64545) : const Color(0xFF1F9D4C);
+    final color = isOut ? cs.error : const Color(0xFF2E7D32);
     final sign = isOut ? '-' : '+';
 
-    final hasPhoto = (tx.photoUrl != null && tx.photoUrl!.trim().isNotEmpty);
-    final amountText = '$sign${MoneyFormatter(settings).format(tx.amount)}';
+    final hasPhoto =
+        (tx.photoUrl != null && tx.photoUrl!.trim().isNotEmpty);
+    final amountText =
+        '$sign${MoneyFormatter(settings).format(tx.amount)}';
 
-    final noteText = (tx.content != null && tx.content!.trim().isNotEmpty)
-        ? tx.content!.trim()
-        : DateFormat('dd/MM/yyyy HH:mm').format(tx.date);
+    final noteText =
+        (tx.content != null && tx.content!.trim().isNotEmpty)
+            ? tx.content!.trim()
+            : DateFormat('dd/MM/yyyy HH:mm').format(tx.date);
 
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-      leading: CircleAvatar(
-        backgroundColor: color.withOpacity(.15),
-        child: Icon(
-          isOut ? Icons.call_made_rounded : Icons.call_received_rounded,
-          color: color,
+    return TweenAnimationBuilder<double>(
+      duration: Duration(milliseconds: 350 + (index * 30)),
+      tween: Tween(begin: 0, end: 1),
+      curve: Curves.easeOutCubic,
+      builder: (_, v, child) => Opacity(
+        opacity: v,
+        child: Transform.translate(
+          offset: Offset(0, 8 * (1 - v)),
+          child: child,
         ),
       ),
-      title: Text(
-        tx.label,
-        style: const TextStyle(fontWeight: FontWeight.w700),
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-      ),
-      subtitle: Padding(
-        padding: const EdgeInsets.only(top: 2),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: isDark ? cs.surfaceContainerHigh : Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isDark
+                ? cs.outlineVariant.withOpacity(.08)
+                : const Color(0xFFECEDF2),
+          ),
+        ),
+        child: Row(
           children: [
-            Text(
-              amountText,
-              style: TextStyle(
-                fontWeight: FontWeight.w800,
+            // Icon
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: color.withOpacity(.08),
+                borderRadius: BorderRadius.circular(13),
+              ),
+              child: Icon(
+                isOut
+                    ? Icons.arrow_outward_rounded
+                    : Icons.arrow_downward_rounded,
                 color: color,
-                fontSize: 15,
+                size: 20,
               ),
             ),
-            const SizedBox(height: 2),
-            Text(
-              noteText,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: Colors.black54,
-                fontSize: 13,
-              ),
-            ),
-          ],
-        ),
-      ),
-      trailing: hasPhoto
-          ? ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: CachedNetworkImage(
-                imageUrl: tx.photoUrl!,
-                width: 54,
-                height: 54,
-                fit: BoxFit.cover,
-                memCacheWidth: 160,
-                maxWidthDiskCache: 320,
-                fadeInDuration: Duration.zero,
-                placeholder: (_, __) => Container(
-                  width: 54,
-                  height: 54,
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade200,
-                    borderRadius: BorderRadius.circular(12),
+            const SizedBox(width: 12),
+            // Info
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    tx.label,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 14.5,
+                      color: cs.onSurface,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                ),
-                errorWidget: (_, error, __) {
-                  debugPrint('IMAGE LOAD ERROR: $error');
-                  debugPrint('IMAGE URL: ${tx.photoUrl}');
-                  return Container(
-                    width: 54,
-                    height: 54,
+                  const SizedBox(height: 4),
+                  Text(
+                    amountText,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      color: color,
+                      fontSize: 14,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    noteText,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: cs.onSurface.withOpacity(.4),
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            // Photo or date
+            if (hasPhoto)
+              ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: CachedNetworkImage(
+                  imageUrl: tx.photoUrl!,
+                  width: 50,
+                  height: 50,
+                  fit: BoxFit.cover,
+                  memCacheWidth: 160,
+                  maxWidthDiskCache: 320,
+                  fadeInDuration: Duration.zero,
+                  placeholder: (_, __) => Container(
+                    width: 50,
+                    height: 50,
                     decoration: BoxDecoration(
-                      color: Colors.grey.shade200,
+                      color: isDark
+                          ? cs.surfaceContainerHighest
+                          : const Color(0xFFF0F1F5),
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: const Icon(Icons.image_not_supported_outlined),
-                  );
-                },
-              ),
-            )
-          : SizedBox(
-              width: 68,
-              child: Text(
+                  ),
+                  errorWidget: (_, error, __) {
+                    debugPrint('IMAGE LOAD ERROR: $error');
+                    return Container(
+                      width: 50,
+                      height: 50,
+                      decoration: BoxDecoration(
+                        color: isDark
+                            ? cs.surfaceContainerHighest
+                            : const Color(0xFFF0F1F5),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(
+                          Icons.image_not_supported_outlined,
+                          size: 18,
+                          color: cs.onSurface.withOpacity(.3)),
+                    );
+                  },
+                ),
+              )
+            else
+              Text(
                 DateFormat('dd/MM').format(tx.date),
-                textAlign: TextAlign.right,
-                style: const TextStyle(
-                  color: Colors.black45,
+                style: TextStyle(
+                  color: cs.onSurface.withOpacity(.35),
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
                 ),
               ),
-            ),
+          ],
+        ),
+      ),
     );
   }
 
-  Widget _buildInvestmentList(MoneySettings settings) {
+  // ═══════════════════════════
+  //  INVESTMENT LIST
+  // ═══════════════════════════
+  Widget _buildInvestmentList(
+      MoneySettings settings, ColorScheme cs, bool isDark) {
     final prov = context.watch<FinancialTransactionProvider>();
 
     if (prov.loading) {
-      return const Center(child: CircularProgressIndicator());
+      return Center(child: CircularProgressIndicator(color: cs.primary));
     }
     if (prov.items.isEmpty) {
-      return const Center(child: Text('Chưa có lịch sử đầu tư'));
+      return _emptyState('Chưa có lịch sử đầu tư', cs);
     }
 
     return ListView.builder(
       physics: const AlwaysScrollableScrollPhysics(),
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 40),
       itemCount: prov.items.length,
-      itemBuilder: (_, i) => _investmentTile(prov.items[i], settings),
+      itemBuilder: (_, i) =>
+          _investmentTile(prov.items[i], settings, cs, isDark, i),
     );
   }
 
-  Widget _investmentTile(FinancialTransaction tx, MoneySettings settings) {
+  Widget _investmentTile(FinancialTransaction tx, MoneySettings settings,
+      ColorScheme cs, bool isDark, int index) {
     final isOut = tx.direction == 'out';
-    final color = isOut ? const Color(0xFFD64545) : const Color(0xFF1F9D4C);
+    final color = isOut ? cs.error : const Color(0xFF2E7D32);
     final sign = isOut ? '-' : '+';
 
     final subtitle =
@@ -353,26 +504,123 @@ class _TransactionsPageState extends State<TransactionsPage> {
             ? tx.description!
             : DateFormat('dd/MM/yyyy HH:mm').format(tx.occurredAt);
 
-    return ListTile(
-      leading: CircleAvatar(
-        backgroundColor: color.withOpacity(.15),
-        child: Icon(
-          isOut ? Icons.call_made_rounded : Icons.call_received_rounded,
-          color: color,
+    return TweenAnimationBuilder<double>(
+      duration: Duration(milliseconds: 350 + (index * 30)),
+      tween: Tween(begin: 0, end: 1),
+      curve: Curves.easeOutCubic,
+      builder: (_, v, child) => Opacity(
+        opacity: v,
+        child: Transform.translate(
+          offset: Offset(0, 8 * (1 - v)),
+          child: child,
         ),
       ),
-      title: Text(
-        tx.title.isNotEmpty ? tx.title : 'Giao dịch',
-        style: const TextStyle(fontWeight: FontWeight.w700),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: isDark ? cs.surfaceContainerHigh : Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isDark
+                ? cs.outlineVariant.withOpacity(.08)
+                : const Color(0xFFECEDF2),
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: color.withOpacity(.08),
+                borderRadius: BorderRadius.circular(13),
+              ),
+              child: Icon(
+                isOut
+                    ? Icons.arrow_outward_rounded
+                    : Icons.arrow_downward_rounded,
+                color: color,
+                size: 20,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    tx.title.isNotEmpty ? tx.title : 'Giao dịch',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 14.5,
+                      color: cs.onSurface,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    subtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: cs.onSurface.withOpacity(.4),
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: color.withOpacity(.06),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                '$sign${MoneyFormatter(settings).format(tx.amount)}',
+                style: TextStyle(
+                  fontWeight: FontWeight.w800,
+                  color: color,
+                  fontSize: 13,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
-      subtitle: Text(
-        subtitle,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-      ),
-      trailing: Text(
-        '$sign${MoneyFormatter(settings).format(tx.amount)}',
-        style: TextStyle(fontWeight: FontWeight.w800, color: color),
+    );
+  }
+
+  // ═══════════════════════════
+  //  EMPTY STATE
+  // ═══════════════════════════
+  Widget _emptyState(String text, ColorScheme cs) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            width: 80,
+            height: 80,
+            decoration: BoxDecoration(
+              color: cs.primary.withOpacity(.06),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(Icons.receipt_long_outlined,
+                size: 36, color: cs.primary.withOpacity(.4)),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            text,
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+              color: cs.onSurface.withOpacity(.5),
+            ),
+          ),
+        ],
       ),
     );
   }

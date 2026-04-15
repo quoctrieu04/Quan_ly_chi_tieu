@@ -110,19 +110,28 @@ class _ProfilePageState extends State<ProfilePage> {
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cs = Theme.of(context).colorScheme;
 
     if (!auth.isAuthenticated) {
-      // Chưa đăng nhập → mời đăng nhập
       return Scaffold(
-        appBar: AppBar(title: const Text('Thông tin tài khoản')),
+        backgroundColor: isDark ? const Color(0xFF0F172A) : const Color(0xFFFAFBFE),
+        appBar: AppBar(
+          title: const Text('Thông tin tài khoản', style: TextStyle(fontWeight: FontWeight.w700)),
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+        ),
         body: Center(
-          child: ElevatedButton.icon(
-            onPressed: () => Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (_) => const LoginPage()),
-            ),
+          child: FilledButton.icon(
+            onPressed: () => Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const LoginPage())),
             icon: const Icon(Icons.login),
-            label: const Text('Đăng nhập để xem hồ sơ'),
+            label: const Text('Đăng nhập để xem hồ sơ', style: TextStyle(fontWeight: FontWeight.w700)),
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.primary,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            ),
           ),
         ),
       );
@@ -130,126 +139,176 @@ class _ProfilePageState extends State<ProfilePage> {
 
     final user = auth.user ?? {};
     final email = user['email'] ?? '';
-    final createdAt = user['created_at']?.toString() ?? '';
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Thông tin tài khoản')),
+      backgroundColor: isDark ? const Color(0xFF0F172A) : const Color(0xFFFAFBFE),
+      appBar: AppBar(
+        title: Text('Thông tin tài khoản', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18, color: isDark ? Colors.white : const Color(0xFF1E293B))),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        centerTitle: true,
+        iconTheme: IconThemeData(color: isDark ? Colors.white : const Color(0xFF1E293B)),
+      ),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(20),
         children: [
-          // Header avatar + tên
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              CircleAvatar(
-                radius: 28,
-                backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-                child: const Icon(Icons.person, size: 28),
+          // Header
+          Center(
+            child: Container(
+              padding: const EdgeInsets.all(4),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(color: Theme.of(context).colorScheme.primary.withOpacity(0.3), width: 3),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  'Hồ sơ của bạn',
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
+              child: CircleAvatar(
+                radius: 46,
+                backgroundColor: cs.primary,
+                child: const Icon(Icons.person_outline_rounded, size: 46, color: Colors.white),
               ),
-              IconButton(
-                onPressed: _openChangePasswordSheet,
-                tooltip: 'Đổi mật khẩu',
-                icon: const Icon(Icons.lock_reset_rounded),
-              ),
-            ],
+            ),
           ),
-
           const SizedBox(height: 16),
+          Text(
+            'Hồ sơ của bạn',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w800,
+              color: isDark ? Colors.white : const Color(0xFF1E293B),
+            ),
+          ),
+          const SizedBox(height: 32),
 
-          // Thẻ: tên (chỉnh sửa)
-          Card(
-            elevation: 0,
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Text('Tên hiển thị',
-                      style: Theme.of(context).textTheme.labelLarge),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: _nameCtrl,
-                    focusNode: _nameFocus,
-                    textInputAction: TextInputAction.done,
-                    onSubmitted: (_) => _saveName(),
-                    decoration: const InputDecoration(
-                      border: OutlineInputBorder(),
-                      hintText: 'Nhập tên của bạn',
-                      isDense: true,
-                    ),
+          // Name Edit Card
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF1E293B) : Colors.white,
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                if (!isDark)
+                  BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 16, offset: const Offset(0, 4)),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.person_pin_circle_rounded, size: 20, color: cs.primary),
+                    const SizedBox(width: 8),
+                    Text('Tên hiển thị', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: isDark ? Colors.white70 : const Color(0xFF64748B))),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _nameCtrl,
+                  focusNode: _nameFocus,
+                  textInputAction: TextInputAction.done,
+                  onSubmitted: (_) => _saveName(),
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: isDark ? Colors.white : const Color(0xFF334155)),
+                  decoration: InputDecoration(
+                    hintText: 'Nhập tên hiển thị...',
+                    hintStyle: TextStyle(color: isDark ? Colors.white30 : Colors.black26),
+                    filled: true,
+                    fillColor: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                   ),
-                  const SizedBox(height: 12),
-                  FilledButton.icon(
+                ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: FilledButton.icon(
                     onPressed: _savingName ? null : _saveName,
                     icon: _savingName
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2))
-                        : const Icon(Icons.save_rounded),
-                    label: const Text('Lưu'),
+                        ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                        : const Icon(Icons.check_circle_outline_rounded),
+                    label: const Text('Cập nhật tên', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: Theme.of(context).colorScheme.primary,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
                   ),
-                ],
-              ),
-            ),
-          ),
-
-          const SizedBox(height: 12),
-
-          // Thẻ: thông tin đọc-only
-          Card(
-            elevation: 0,
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Email', style: Theme.of(context).textTheme.labelLarge),
-                  const SizedBox(height: 6),
-                  SelectableText(email),
-                  const SizedBox(height: 14),
-                  Text('Ngày tạo',
-                      style: Theme.of(context).textTheme.labelLarge),
-                  const SizedBox(height: 6),
-                  Text(createdAt),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
 
           const SizedBox(height: 16),
 
-          // Nút đổi mật khẩu phụ (ngoài appbar)
-          OutlinedButton.icon(
-            onPressed: _openChangePasswordSheet,
-            icon: const Icon(Icons.password_rounded),
-            label: const Text('Đổi mật khẩu'),
+          // Email Info Card
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF1E293B) : Colors.white,
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                if (!isDark)
+                  BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 16, offset: const Offset(0, 4)),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.alternate_email_rounded, size: 20, color: cs.primary),
+                    const SizedBox(width: 8),
+                    Text('Email tài khoản', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: isDark ? Colors.white70 : const Color(0xFF64748B))),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  decoration: BoxDecoration(
+                    color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: SelectableText(
+                    email,
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: isDark ? Colors.white : const Color(0xFF334155)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 24),
+
+          // Buttons
+          SizedBox(
+            height: 52,
+            child: OutlinedButton.icon(
+              onPressed: _openChangePasswordSheet,
+              icon: const Icon(Icons.lock_reset_rounded),
+              label: const Text('Đổi mật khẩu', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Theme.of(context).colorScheme.primary,
+                side: BorderSide(color: cs.primary, width: 1.5),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              ),
+            ),
           ),
 
           const SizedBox(height: 12),
 
-          // Nút Đăng xuất
-          OutlinedButton.icon(
-            onPressed: _logout,
-            icon: const Icon(Icons.logout),
-            label: const Text('Đăng xuất'),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: Colors.red,
-              side: BorderSide(color: Theme.of(context).colorScheme.outline),
+          SizedBox(
+            height: 52,
+            child: OutlinedButton.icon(
+              onPressed: _logout,
+              icon: const Icon(Icons.logout_rounded),
+              label: const Text('Đăng xuất', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: cs.error,
+                side: BorderSide(color: cs.error.withOpacity(0.5), width: 1.5),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              ),
             ),
           ),
-
           const SizedBox(height: 32),
         ],
       ),

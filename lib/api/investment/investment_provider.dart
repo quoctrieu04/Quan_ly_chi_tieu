@@ -8,6 +8,7 @@ import '../bankaccount/bank_account_model.dart';
 enum WithdrawType {
   interest, // rút lãi
   all, // rút toàn bộ (vốn + lãi)
+  interestAndRenew, // rút lãi + gia hạn lại gốc
 }
 
 class InvestmentProvider extends ChangeNotifier {
@@ -89,7 +90,7 @@ class InvestmentProvider extends ChangeNotifier {
       await fetch();
       await fetchBankAccounts();
     } catch (e) {
-      rethrow; // 🔥 đẩy lỗi lên UI
+      rethrow;
     }
   }
 
@@ -120,7 +121,7 @@ class InvestmentProvider extends ChangeNotifier {
   }
 
   // =========================
-  // ✅ WITHDRAW (BANK) – FIXED
+  // WITHDRAW (BANK)
   // =========================
   Future<void> withdrawBank(
     int investmentId,
@@ -139,7 +140,7 @@ class InvestmentProvider extends ChangeNotifier {
       await fetch();
       await fetchBankAccounts();
     } catch (e) {
-      rethrow; // 🔥 đẩy lỗi lên UI
+      rethrow;
     }
   }
 
@@ -224,21 +225,15 @@ class InvestmentProvider extends ChangeNotifier {
   }
 
   // =========================
-  // 🔁 RENEW BANK INVESTMENT (GIA HẠN)
+  // RENEW BANK INVESTMENT
   // =========================
   Future<void> renewBankInvestment(int investmentId) async {
     try {
       await api.renewBankInvestment(investmentId);
-
-      // Sau khi gia hạn:
       await fetch();
       await fetchBankAccounts();
     } catch (e) {
-      rethrow; // đẩy lỗi lên UI
+      rethrow;
     }
   }
-
-  
-
- 
 }

@@ -31,7 +31,7 @@ class BudgetCategoryTile extends StatelessWidget {
         : (item.spent > 0 ? 1.0 : 0.0);
 
     final status = _statusFor(item.amount, item.spent);
-    final barColor = _colorFor(status);
+    final barColor = _colorFor(context, status);
     final warning = _warningText(status, amount: item.amount, spent: item.spent);
 
     return Card(
@@ -138,7 +138,7 @@ class BudgetCategoryTile extends StatelessWidget {
     return BudgetStatus.normal;
   }
 
-  Color _colorFor(BudgetStatus s) {
+  Color _colorFor(BuildContext context, BudgetStatus s) {
     switch (s) {
       case BudgetStatus.overspent:
         return Colors.redAccent;
@@ -147,7 +147,7 @@ class BudgetCategoryTile extends StatelessWidget {
       case BudgetStatus.warn1:
         return Colors.amber;
       case BudgetStatus.normal:
-        return Colors.green.shade400;
+        return Theme.of(context).colorScheme.primary;
     }
   }
 
@@ -184,7 +184,7 @@ class _WarningRichText extends StatelessWidget {
     if (status != BudgetStatus.overspent) {
       return Text(
         text,
-        style: TextStyle(color: _colorFor(status), fontWeight: FontWeight.w700, fontSize: 13),
+        style: TextStyle(color: _colorFor(context, status), fontWeight: FontWeight.w700, fontSize: 13),
       );
     }
     final missing = spent - amount;
@@ -211,7 +211,7 @@ class _WarningRichText extends StatelessWidget {
     );
   }
 
-  Color _colorFor(BudgetStatus s) {
+  Color _colorFor(BuildContext context, BudgetStatus s) {
     switch (s) {
       case BudgetStatus.overspent:
         return Colors.redAccent;
@@ -220,7 +220,7 @@ class _WarningRichText extends StatelessWidget {
       case BudgetStatus.warn1:
         return Colors.amber;
       case BudgetStatus.normal:
-        return Colors.green.shade400;
+        return Theme.of(context).colorScheme.primary;
     }
   }
 }

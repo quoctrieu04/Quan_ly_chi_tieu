@@ -29,7 +29,7 @@ class MonthSummaryCard extends StatelessWidget {
           child: _SummaryBox(
             title: 'Tổng thu',
             value: fmt(totalIncome),
-            color: const Color(0xFF4ADE80),
+            color: const Color(0xFF2EC4B6),
             icon: Icons.arrow_downward_rounded,
           ),
         ),
