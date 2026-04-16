@@ -20,6 +20,7 @@ import 'core/voice/voice_synonym_store.dart';
 // --- Auth ---
 import 'auth/auth_provider.dart';
 import 'auth/auth_service.dart';
+import 'auth/login.dart'; // Thêm trang đăng nhập
 
 // --- Settings ---
 import 'pages/setting/settings_provider.dart';
@@ -326,7 +327,7 @@ class MyApp extends StatelessWidget {
         ),
       ),
 
-      home: const HomeScaffold(),
+      home: const RootRouter(), // Sử dụng RootRouter thay vì vào thẳng HomeScaffold
       routes: {
         '/settings/money': (_) => const MoneySettingsPage(),
         '/transactions': (_) => const TransactionsPage(),
@@ -336,6 +337,52 @@ class MyApp extends StatelessWidget {
         '/income': (_) => const IncomeListPage(),
       },
     );
+  }
+}
+
+// ═══════════════════════════════════════
+//  Root Router — Điều hướng khởi động
+// ═══════════════════════════════════════
+class RootRouter extends StatefulWidget {
+  const RootRouter({super.key});
+
+  @override
+  State<RootRouter> createState() => _RootRouterState();
+}
+
+class _RootRouterState extends State<RootRouter> {
+  bool _isReady = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Khởi động AuthProvider để check token
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<AuthProvider>().bootstrap(onReady: () {
+        if (mounted) setState(() => _isReady = true);
+      });
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_isReady) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    // Lắng nghe trạng thái đăng nhập
+    final auth = context.watch<AuthProvider>();
+    
+    // Nếu chưa đăng nhập -> Ép vào trang Login 
+    // (Bảo vệ toàn bộ màn hình chính)
+    if (!auth.isAuthenticated) {
+      return const LoginPage();
+    }
+
+    // Đã đăng nhập -> Vào bình thường
+    return const HomeScaffold();
   }
 }
 

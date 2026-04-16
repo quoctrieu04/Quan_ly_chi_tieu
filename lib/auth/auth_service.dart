@@ -73,6 +73,23 @@ class AuthService {
     await _saveToken(token);
   }
 
+  /// 🌍 Đăng nhập bằng Google
+  Future<void> loginWithGoogle(String idToken) async {
+    final res = await _dio.post(
+      'auth/google',
+      data: {
+        'id_token': idToken,
+      },
+    );
+
+    final token = res.data['access_token'];
+    if (token == null || token.toString().isEmpty) {
+      throw Exception('Google Login failed: access_token missing');
+    }
+
+    await _saveToken(token);
+  }
+
   /// 👤 Lấy user hiện tại
   Future<Map<String, dynamic>> me() async {
     final res = await _dio.get('auth/user');

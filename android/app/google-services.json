@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "454558138228",
+    "project_id": "chitieu-5018c",
+    "storage_bucket": "chitieu-5018c.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:454558138228:android:91560fa3250fc163ae3621",
+        "android_client_info": {
+          "package_name": "com.itcctvsoft.chitieu"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "454558138228-s8l0e982fc7q2ev1j8q69ua3irvfqihl.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.itcctvsoft.chitieu",
+            "certificate_hash": "457e416407cc6a32c905c7f7fdfe90c90b8eeb12"
+          }
+        },
+        {
+          "client_id": "454558138228-4b5iqv5rshje2p1ihk53hatkv4772pi3.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD4Da7GH3He387ibcZ6VF1atD0Mm1EPuhw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "454558138228-4b5iqv5rshje2p1ihk53hatkv4772pi3.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

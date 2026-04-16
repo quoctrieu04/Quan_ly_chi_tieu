@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'auth_service.dart';
 
 class AuthProvider extends ChangeNotifier {
@@ -73,6 +74,46 @@ class AuthProvider extends ChangeNotifier {
     } catch (e) {
       if (kDebugMode) print('Login error: $e');
       error = 'Đăng nhập thất bại';
+      _user = null;
+      _accessToken = null;
+      await api.clearToken();
+      return false;
+    } finally {
+      loading = false;
+      notifyListeners();
+    }
+  }
+
+  // ================== GOOGLE LOGIN ==================
+  Future<bool> loginWithGoogle() async {
+    loading = true;
+    error = null;
+    notifyListeners();
+
+    try {
+      await GoogleSignIn.instance.initialize();
+      // Bản 7.x đổi signIn() thành authenticate() và trả về exception nếu hủy
+      final googleUser = await GoogleSignIn.instance.authenticate();
+
+      final googleAuth = await googleUser.authentication;
+      final idToken = googleAuth.idToken;
+
+      if (idToken == null) {
+        error = 'Không thể lấy token xác thực từ Google';
+        return false;
+      }
+
+      // 1️⃣ Gửi Google Token lên Server để lấy Access Token của app
+      await api.loginWithGoogle(idToken);
+
+      // 2️⃣ Lấy token + user (sau khi backend đã xác thực và cấp token)
+      _accessToken = await api.getAccessToken();
+      _user = await api.me();
+
+      return true;
+    } catch (e) {
+      if (kDebugMode) print('Google Login error: $e');
+      error = 'Đăng nhập Google thất bại';
       _user = null;
       _accessToken = null;
       await api.clearToken();
