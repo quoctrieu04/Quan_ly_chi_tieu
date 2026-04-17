@@ -658,7 +658,7 @@ class _ActionMenuOverlay extends StatelessWidget {
                       icon: Icons.camera_alt_outlined,
                       label: 'Chụp ảnh',
                       onTap: () {
-                        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const NotePage(autoStartCamera: true)));
+                        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const NotePage(autoCamera: true)));
                       },
                     ),
                   ),
@@ -670,7 +670,7 @@ class _ActionMenuOverlay extends StatelessWidget {
                       icon: Icons.mic_none_rounded,
                       label: 'Giọng nói',
                       onTap: () {
-                        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const NotePage(autoStartVoice: true)));
+                        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const NotePage(autoVoice: true)));
                       },
                     ),
                   ),

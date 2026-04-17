@@ -143,9 +143,8 @@ class _NotePageState extends State<NotePage> {
 
     final file = await _picker.pickImage(
       source: ImageSource.camera,
-      imageQuality: 60,
-      maxWidth: 1280,
-      maxHeight: 1280,
+      // Removed native compression arguments to prevent Out of Memory (OOM) 
+      // crashes on low-end devices during Activity Lifecycle.
     );
 
     if (file != null && mounted) {
@@ -676,15 +675,17 @@ class _NotePageState extends State<NotePage> {
   // ====== UI HELPERS ======
 
   Widget _buildQuickActions() {
+    if (widget.autoVoice) return const SizedBox.shrink();
+
     final cs = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    const mint = Color(0xFF2EC4B6);
+    
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          if (type == FlowType.out) ...[
+          if (type == FlowType.out && widget.autoCamera) 
             _quickBtn(
               icon: _pickedPhoto != null
                   ? Icons.check_circle_rounded
@@ -695,27 +696,17 @@ class _NotePageState extends State<NotePage> {
               cs: cs,
               isDark: isDark,
             ),
-            const SizedBox(width: 24),
-          ],
-          _quickBtn(
-            icon: _noteText.isNotEmpty
-                ? Icons.check_circle_rounded
-                : Icons.edit_note_rounded,
-            label: _noteText.isNotEmpty ? 'Đã ghi chú' : 'Ghi chú',
-            active: _noteText.isNotEmpty,
-            onTap: _openNoteEditor,
-            cs: cs,
-            isDark: isDark,
-          ),
-          const SizedBox(width: 24),
-          _quickBtn(
-            icon: _listening ? Icons.mic_rounded : Icons.mic_none_rounded,
-            label: _listening ? 'Đang nghe' : 'Giọng nói',
-            active: _listening || _voiceText.isNotEmpty,
-            onTap: _toggleListening,
-            cs: cs,
-            isDark: isDark,
-          ),
+          if (!widget.autoCamera && !widget.autoVoice)
+            _quickBtn(
+              icon: _noteText.isNotEmpty
+                  ? Icons.check_circle_rounded
+                  : Icons.edit_note_rounded,
+              label: _noteText.isNotEmpty ? 'Đã ghi chú' : 'Ghi chú',
+              active: _noteText.isNotEmpty,
+              onTap: _openNoteEditor,
+              cs: cs,
+              isDark: isDark,
+            ),
         ],
       ),
     );
@@ -940,6 +931,8 @@ class _NotePageState extends State<NotePage> {
                             File(_pickedPhoto!.path),
                             height: 120,
                             width: 120,
+                            cacheHeight: 240,
+                            cacheWidth: 240,
                             fit: BoxFit.cover,
                           ),
                         ),
@@ -976,6 +969,9 @@ class _NotePageState extends State<NotePage> {
                       ),
                       const SizedBox(height: 12),
                     ],
+                    const SizedBox(height: 16),
+                    _buildQuickActions(),
+                    const SizedBox(height: 16),
                   ],
                 ),
               ),
