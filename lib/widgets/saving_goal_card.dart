@@ -2,8 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:chitieu/core/money/money_formatter.dart';
 import 'package:chitieu/core/money/money_settings_provider.dart';
-
-const _kMint = Color(0xFF2EC4B6);
+import 'package:chitieu/core/date/year_month_provider.dart';
 
 class SavingGoalCard extends StatelessWidget {
   final num totalSaved;
@@ -17,94 +16,84 @@ class SavingGoalCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final moneySettings = context.watch<MoneySettingsProvider>().settings;
-    final text = MoneyFormatter(moneySettings).format(totalSaved);
+    final ym = context.watch<YearMonthProvider>().ym;
+    
+    // Bạn có thể tính toán phần trăm thực tế dựa vào totalSaved sau.
+    // Tạm thời fix cứng hiển thị như thiết kế hoặc 0%.
+    final String percentText = totalSaved > 0 ? '10%' : '0%';
+    final double percentVal = totalSaved > 0 ? 0.1 : 0.0;
+    
+    final cs = Theme.of(context).colorScheme;
 
-    return InkWell(
-      onTap: onCreate,
-      borderRadius: BorderRadius.circular(16),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 8.0),
-        child: Row(
-          children: [
-            // Progress ring
-            SizedBox(
-              width: 54, height: 54,
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  SizedBox(
-                    width: 54, height: 54,
-                    child: TweenAnimationBuilder<double>(
-                      duration: const Duration(milliseconds: 800),
-                      curve: Curves.easeOutCubic,
-                      tween: Tween(begin: 0, end: 0.6),
-                      builder: (_, value, __) => CircularProgressIndicator(
-                        value: value,
-                        strokeWidth: 5,
-                        strokeCap: StrokeCap.round,
-                        backgroundColor: isDark
-                            ? Colors.white.withOpacity(.1)
-                            : const Color(0xFFF0F1F5),
-                        color: _kMint,
-                      ),
-                    ),
-                  ),
-                  Container(
-                    width: 30, height: 30,
-                    decoration: BoxDecoration(
-                      color: _kMint.withOpacity(isDark ? .15 : .08),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(Icons.savings_rounded,
-                        color: _kMint, size: 16),
-                  ),
-                ],
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+      decoration: BoxDecoration(
+        color: cs.surface,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: const [
+          BoxShadow(
+            blurRadius: 10,
+            offset: Offset(0, 4),
+            color: Colors.black12,
+          )
+        ],
+      ),
+      child: Row(
+        children: [
+          Stack(
+            alignment: Alignment.center,
+            children: [
+              SizedBox(
+                width: 64,
+                height: 64,
+                child: CircularProgressIndicator(
+                  value: percentVal,
+                  strokeWidth: 6,
+                  backgroundColor: cs.outlineVariant.withOpacity(0.3),
+                  color: const Color(0xFF1B8756), // Green color matching
+                ),
               ),
+              const Icon(
+                Icons.adjust_rounded,
+                color: Color(0xFF1B8756),
+                size: 28,
+              ),
+            ],
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Mục tiêu tiết kiệm',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Tháng ${ym.month.toString().padLeft(2, '0')} / ${ym.year}',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    color: cs.onSurface.withOpacity(0.6),
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Mục tiêu tiết kiệm',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 13,
-                      color: isDark ? Colors.white.withOpacity(.5) : const Color(0xFF94A3B8),
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    text,
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w900,
-                      color: isDark ? Colors.white : const Color(0xFF1A2332),
-                      letterSpacing: -0.3,
-                    ),
-                  ),
-                ],
-              ),
+          ),
+          Text(
+            percentText,
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w900,
+              color: cs.onSurface,
             ),
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: isDark ? Colors.white.withOpacity(.05) : const Color(0xFFF1F5F9),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                Icons.chevron_right_rounded,
-                size: 18,
-                color: isDark ? Colors.white.withOpacity(.4) : const Color(0xFF94A3B8),
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 }
-

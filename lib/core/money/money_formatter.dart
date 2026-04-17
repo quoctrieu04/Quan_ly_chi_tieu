@@ -22,8 +22,7 @@ class MoneyFormatter {
         .replaceAll('TMP_COMMA', settings.thousandSeparator)
         .replaceAll('TMP_DOT', settings.decimalSeparator);
 
-    return settings.symbolPosition == CurrencySymbolPosition.before
-      ? '${settings.symbol}$numeric'
-      : '$numeric${settings.symbol}';
+    // Bỏ hẳn ký tự tiền tệ để đáp ứng nhu cầu tối giản (Ví dụ bỏ chữ 'đ')
+    return numeric;
   }
 }
