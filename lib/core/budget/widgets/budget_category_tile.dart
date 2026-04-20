@@ -134,6 +134,7 @@ class BudgetCategoryTile extends StatelessWidget {
       decoration: BoxDecoration(
         color: surfaceColor,
         borderRadius: BorderRadius.circular(24),
+        border: isOver ? Border.all(color: redTextColor.withOpacity(0.5), width: 1.5) : null,
         boxShadow: [
           BoxShadow(
             color: shadowColor,
@@ -155,22 +156,22 @@ class BudgetCategoryTile extends StatelessWidget {
                 // 2) Thân Card chính
                 Expanded(
                   child: Padding(
-                    padding: const EdgeInsets.all(18),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         // (2.1) AVATAR Hình vuông bo góc mượt
                         Container(
-                          width: 48,
-                          height: 48,
+                          width: 38,
+                          height: 38,
                           decoration: BoxDecoration(
                             color: avatarBg,
-                            borderRadius: BorderRadius.circular(14),
+                            borderRadius: BorderRadius.circular(10),
                           ),
                           alignment: Alignment.center,
                           child: Icon(
                             _getIconForCategory(category.name),
-                            size: 24,
+                            size: 20,
                             color: avatarColor,
                           ),
                         ),
@@ -230,102 +231,50 @@ class BudgetCategoryTile extends StatelessWidget {
                                 ],
                               ),
 
-                              const SizedBox(height: 6),
+                              const SizedBox(height: 4),
 
                               // HÀNG 2: Đã chi (Căn phải)
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.end,
-                                children: [
-                                  Text('Đã chi: ',
-                                      style: TextStyle(
-                                          color: textMuted, fontSize: 13)),
-                                  MoneyText(
-                                    item.spent,
-                                    style: TextStyle(
-                                      color:
-                                          spentColor, // Đỏ nếu vượt chữ, bình thường nếu an toàn
-                                      fontSize: 15,
-                                      fontWeight: FontWeight.w800,
-                                    ),
-                                  ),
-                                ],
-                              ),
-
-                              const SizedBox(height: 10),
-
-                              // HÀNG 3: THANH TIẾN TRÌNH
-                              ClipRRect(
-                                borderRadius: BorderRadius.circular(999),
-                                child: TweenAnimationBuilder<double>(
-                                  duration: const Duration(milliseconds: 600),
-                                  curve: Curves.easeOutQuart,
-                                  tween: Tween(
-                                      begin: 0, end: percent.clamp(0.0, 1.0)),
-                                  builder: (context, value, _) {
-                                    return LinearProgressIndicator(
-                                      value: value,
-                                      minHeight: 8,
-                                      backgroundColor: barTrackColor,
-                                      valueColor: AlwaysStoppedAnimation(
-                                          barIndicatorColor),
-                                    );
-                                  },
-                                ),
-                              ),
-
-                              // HÀNG 4: CẢNH BÁO BÊN DƯỚI THANH KHI VƯỢT MỨC
-                              if (isOver)
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 8),
-                                  child: InkWell(
-                                    onTap: () {
-                                      showDialog(
-                                        context: context,
-                                        builder: (ctx) => AlertDialog(
-                                          title: const Text(
-                                              '💸 Ui chao! Cảnh báo lạm chi!'),
-                                          content: Text(
-                                              'Bạn lại lỡ tay vung quá trán cho khoản "${_capFirst(category.name)}" mất rồi!\nĐừng để rỗng túi nhé, từ giờ tới cuối tháng hãy "thắt lưng buộc bụng" nha.'),
-                                          actions: [
-                                            TextButton(
-                                              onPressed: () =>
-                                                  Navigator.pop(ctx),
-                                              child: const Text(
-                                                  'Biết rồi khổ lắm nói mãi!'),
-                                            ),
-                                          ],
+                              GestureDetector(
+                                onTap: isOver ? () {
+                                  showDialog(
+                                    context: context,
+                                    builder: (ctx) => AlertDialog(
+                                      title: const Text('💸 Ui chao! Cảnh báo lạm chi!'),
+                                      content: Text('Bạn lại lỡ tay vung quá trán cho khoản "${_capFirst(category.name)}" mất rồi!\nĐừng để rỗng túi nhé, từ giờ tới cuối tháng hãy "thắt lưng buộc bụng" nha.'),
+                                      actions: [
+                                        TextButton(
+                                          onPressed: () => Navigator.pop(ctx),
+                                          child: const Text('Biết rồi khổ lắm nói mãi!'),
                                         ),
-                                      );
-                                    },
-                                    borderRadius: BorderRadius.circular(4),
-                                    child: Padding(
-                                      padding: const EdgeInsets.all(2.0),
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Icon(Icons.warning_amber_rounded,
-                                              size: 16, color: redTextColor),
-                                          const SizedBox(width: 4),
-                                          Text('Đã vượt Kế hoạch ',
-                                              style: TextStyle(
-                                                  color: redTextColor,
-                                                  fontSize: 13,
-                                                  fontWeight: FontWeight.w600)),
-                                          // MoneyText(
-                                          //   remaining.abs(),
-                                          //   style: TextStyle(color: redTextColor, fontSize: 13, fontWeight: FontWeight.w800),
-                                          // ),
-                                          const SizedBox(width: 6),
-                                          // Icon ngón tay chọt báo hiệu bấm được
-                                          Icon(Icons.touch_app,
-                                              size: 16,
-                                              color: redTextColor
-                                                  .withOpacity(0.8)),
-                                        ],
+                                      ],
+                                    ),
+                                  );
+                                } : null,
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.end,
+                                  children: [
+                                    Text('Đã chi: ',
+                                        style: TextStyle(
+                                            color: textMuted, fontSize: 13)),
+                                    MoneyText(
+                                      item.spent,
+                                      style: TextStyle(
+                                        color:
+                                            spentColor, // Đỏ nếu vượt chữ, bình thường nếu an toàn
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w800,
                                       ),
                                     ),
-                                  ),
+                                    if (isOver) ...[
+                                      const SizedBox(width: 4),
+                                      Icon(Icons.touch_app, size: 14, color: redTextColor.withOpacity(0.8)),
+                                    ]
+                                  ],
                                 ),
+                              ),
+
+                              // Removed: HÀNG 3: THANH TIẾN TRÌNH
+
                             ],
                           ),
                         ),

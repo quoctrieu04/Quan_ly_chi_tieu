@@ -188,7 +188,27 @@ class _NotePageState extends State<NotePage> {
     }
 
     if (text.isEmpty) {
-      await _tts.say('Mình không nghe rõ, bạn nói lại nhé.');
+      final retry = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Khoan đã...', style: TextStyle(fontWeight: FontWeight.bold)),
+          content: const Text('Xung quanh ồn quá hoặc âm thanh quá bé nên mic đã tắt. Bạn có muốn thu âm lại không?'),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Đóng', style: TextStyle(color: Colors.grey)),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Nói lại', style: TextStyle(fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      );
+      if (retry == true) {
+        _toggleListening();
+      }
       return;
     }
 
@@ -203,13 +223,7 @@ class _NotePageState extends State<NotePage> {
       if (intent.type == VoiceIntentType.income) type = FlowType.in_;
     });
 
-    final catsDebug = context.read<CategoryProvider>().items.map((e)=>e.name).toList();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('DEBUG: List Cat: $catsDebug\nGemini Cat: ${intent.categoryName}'),
-        duration: const Duration(seconds: 4),
-      )
-    );
+    // (Removed debug SnackBar for cats output here)
 
     final wals = context.read<BankAccountProvider>().items;
     if (wals.isNotEmpty) {
@@ -263,28 +277,76 @@ class _NotePageState extends State<NotePage> {
           debugPrint('📚 Nhận diện danh mục: ${found.name}');
         } else {
           debugPrint('⚠️ Không tìm thấy danh mục "${intent.categoryName}".');
-          await _tts.say(
-            'Không tìm thấy danh mục ${intent.categoryName}. Bạn có thể chọn thủ công nhé.',
-          );
         }
       }
     }
 
-    if (type == FlowType.in_ && selectedIncome == null) {
-      await _tts.say('Đã nhận thông tin, bạn vui lòng chọn nguồn thu trên màn hình để hoàn tất nhé.');
-    }
-
     final amt = intent.amount ?? 0;
-    if (type == FlowType.out && selectedCategory == null && amt > 0) {
-      await _tts.say('Trường hợp này đặc biệt, bạn vui lòng tự tay chạm vào danh mục trên màn hình để lưu nhé.');
+
+    bool isFullyRecognized = false;
+    if (amt > 0 && selectedWallet != null) {
+      if (type == FlowType.out && selectedCategory != null) isFullyRecognized = true;
+      if (type == FlowType.in_ && selectedIncome != null) isFullyRecognized = true;
     }
 
-    // TODO: Không hỏi lằng nhằng nữa, mặc định user nhìn trên UI là hiểu.
-    // Chỉ cần phát âm báo ngắn gọn hoặc không nói gì để user tự tay bấm nút Check màu xanh là nhanh nhất.
-    if (amt > 0 && selectedWallet != null && 
-        ((type == FlowType.out && selectedCategory != null) || (type == FlowType.in_ && selectedIncome != null))) {
-        await _tts.say('Đã lưu');
-        await _submit(); 
+    if (!mounted) return;
+
+    if (isFullyRecognized) {
+      final confirm = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Xác nhận giao dịch', style: TextStyle(fontWeight: FontWeight.bold)),
+          content: Text(
+            'Số tiền: ${_formatExpression(amount)} đ\n'
+            'Danh mục: ${selectedCategory?.name ?? selectedIncome?.title}\n'
+            'Ví: ${selectedWallet?.name ?? selectedWallet?.title}\n'
+            'Ghi chú: ${_noteText.isEmpty ? "Không có" : _noteText}\n\n'
+            'Bạn có muốn lưu thông tin này?',
+            style: const TextStyle(height: 1.5),
+          ),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Hủy', style: TextStyle(color: Colors.grey)),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Lưu giao dịch', style: TextStyle(fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      );
+
+      if (confirm == true) {
+        await _submit();
+      }
+    } else if (amt > 0) {
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Thiếu danh mục', style: TextStyle(fontWeight: FontWeight.bold)),
+          content: const Text(
+            'Đã nhận diện số tiền, nhưng chưa gán được danh mục.\nVui lòng chọn trên màn hình rồi bấm xác nhận.',
+            style: TextStyle(height: 1.4),
+          ),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Đã hiểu', style: TextStyle(fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      );
+    } else if (intent.categoryName != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Vui lòng nhập thêm số tiền hợp lệ!')),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Không nhận diện được số tiền và danh mục!')),
+      );
     }
   }
 
@@ -675,8 +737,6 @@ class _NotePageState extends State<NotePage> {
   // ====== UI HELPERS ======
 
   Widget _buildQuickActions() {
-    if (widget.autoVoice) return const SizedBox.shrink();
-
     final cs = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     
@@ -704,6 +764,15 @@ class _NotePageState extends State<NotePage> {
               label: _noteText.isNotEmpty ? 'Đã ghi chú' : 'Ghi chú',
               active: _noteText.isNotEmpty,
               onTap: _openNoteEditor,
+              cs: cs,
+              isDark: isDark,
+            ),
+          if (widget.autoVoice)
+            _quickBtn(
+              icon: _listening ? Icons.mic_rounded : Icons.mic_none_rounded,
+              label: _listening ? 'Đang nghe' : 'Giọng nói',
+              active: _listening || _voiceText.isNotEmpty,
+              onTap: _toggleListening,
               cs: cs,
               isDark: isDark,
             ),
@@ -980,9 +1049,20 @@ class _NotePageState extends State<NotePage> {
             const SizedBox(height: 16),
             // ── Keypad ──
             _KeypadBar(
+                currentAmount: amount,
+                onSug: (val) {
+                  setState(() {
+                    if (amount.isEmpty) {
+                      amount = val;
+                    } else if (RegExp(r'\d+$').hasMatch(amount)) {
+                      amount = amount.replaceFirst(RegExp(r'\d+$'), val);
+                    }
+                  });
+                },
                 onTap: _onKey,
                 onBack: _onBackspace,
                 onConfirm: _submit,
+                isVoiceMode: widget.autoVoice,
                 onVoice: _toggleListening),
           ],
         ),
@@ -1123,10 +1203,16 @@ class _KeypadBar extends StatelessWidget {
       {required this.onTap,
       required this.onBack,
       required this.onConfirm,
+      required this.currentAmount,
+      required this.onSug,
+      this.isVoiceMode = false,
       this.onVoice});
   final ValueChanged<String> onTap;
   final VoidCallback onBack;
   final VoidCallback onConfirm;
+  final String currentAmount;
+  final ValueChanged<String> onSug;
+  final bool isVoiceMode;
   final VoidCallback? onVoice;
 
   @override
@@ -1181,43 +1267,71 @@ class _KeypadBar extends StatelessWidget {
       );
     }
 
+    final vi = NumberFormat.decimalPattern('vi_VN');
+
+    // Generate suggestions
+    List<int> suggestions = [];
+    if (currentAmount.isEmpty) {
+      suggestions = [100000, 200000, 500000];
+    } else {
+      final match = RegExp(r'\d+$').stringMatch(currentAmount);
+      if (match != null) {
+        final val = int.tryParse(match) ?? 0;
+        if (val > 0 && val < 500000000) {
+          suggestions = [val * 1000, val * 10000, val * 100000];
+        }
+      }
+    }
+
+    Widget suggestionBar = suggestions.isEmpty
+        ? const SizedBox.shrink()
+        : Container(
+            height: 48,
+            margin: const EdgeInsets.only(bottom: 8),
+            child: Row(
+              children: suggestions.map((s) {
+                return Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: OutlinedButton(
+                      style: OutlinedButton.styleFrom(
+                        side: BorderSide(color: mint.withOpacity(0.5)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                        padding: EdgeInsets.zero,
+                        backgroundColor: isDark ? const Color(0xFF2D2D2D) : Colors.white,
+                      ),
+                      onPressed: () => onSug(s.toString()),
+                      child: Text(
+                        vi.format(s),
+                        style: TextStyle(color: mint, fontWeight: FontWeight.bold, fontSize: 13),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+          );
+
     return Container(
       color: bg,
-      padding: const EdgeInsets.fromLTRB(8, 8, 8, 16),
+      padding: const EdgeInsets.fromLTRB(8, 12, 8, 16),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          SizedBox(
-            height: 64,
-            child: Row(
-              children: [
-                btn('C', textColor: mint, action: () => onTap('C')),
-                btn('÷', textColor: mint, action: () => onTap('/')),
-                btn('×', textColor: mint, action: () => onTap('*')),
-                iconBtn(Icons.backspace_outlined, action: onBack),
-              ],
-            ),
-          ),
+          suggestionBar,
           SizedBox(
             height: 64,
             child: Row(
               children: [
                 btn('7'), btn('8'), btn('9'),
-                btn('-', textColor: mint, action: () => onTap('-')),
+                iconBtn(Icons.backspace_outlined, action: onBack),
               ],
             ),
           ),
           SizedBox(
-            height: 64,
-            child: Row(
-              children: [
-                btn('4'), btn('5'), btn('6'),
-                btn('+', textColor: mint, action: () => onTap('+')),
-              ],
-            ),
-          ),
-          SizedBox(
-            height: 128,
+            height: 192,
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -1225,8 +1339,9 @@ class _KeypadBar extends StatelessWidget {
                   flex: 3,
                   child: Column(
                     children: [
+                      Expanded(child: Row(children: [btn('4'), btn('5'), btn('6')])),
                       Expanded(child: Row(children: [btn('1'), btn('2'), btn('3')])),
-                      Expanded(child: Row(children: [btn('0'), btn('000'), btn('.')])),
+                      Expanded(child: Row(children: [Expanded(flex: 3, child: btn('0', action: () => onTap('0')))])),
                     ],
                   ),
                 ),
@@ -1239,10 +1354,7 @@ class _KeypadBar extends StatelessWidget {
                       borderRadius: BorderRadius.circular(10),
                       child: InkWell(
                         borderRadius: BorderRadius.circular(10),
-                        onTap: () {
-                          // Phím 'Lưu' được mô phỏng như nút nhập liệu hoặc hoàn tất
-                          onConfirm();
-                        },
+                        onTap: onConfirm,
                         child: const Center(
                           child: Icon(Icons.check_rounded, color: Colors.white, size: 36),
                         ),

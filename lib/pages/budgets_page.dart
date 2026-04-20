@@ -367,6 +367,7 @@ class _BudgetsPageState extends State<BudgetsPage> {
                         onAssignPressed: () => _openAllocateMoney(
                           unassigned > 0 ? unassigned : 0,
                         ),
+                        onAddCategory: authed ? _openCreateCategory : null,
                       ),
                       const SizedBox(height: _vGap),
                       if (authed)
@@ -390,6 +391,7 @@ class _BudgetsPageState extends State<BudgetsPage> {
     num assigned,
     num unassigned, {
     required VoidCallback onAssignPressed,
+    VoidCallback? onAddCategory,
   }) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     
@@ -567,36 +569,66 @@ class _BudgetsPageState extends State<BudgetsPage> {
             
             const SizedBox(height: 24),
             
-            // --- BOTTOM ROW: NÚT PHÂN BỔ TIỀN TRÒN PILL ---
-            Container(
-              width: double.infinity,
-              height: 56, // Cao dày đúng chuẩn App cao cấp
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(999), // Tròn hoàn toàn
-                boxShadow: [
-                  BoxShadow(
-                    color: primaryDark.withOpacity(0.2),
-                    blurRadius: 16,
-                    offset: const Offset(0, 6),
-                  )
-                ],
-              ),
-              child: FilledButton.icon(
-                onPressed: onAssignPressed,
-                icon: const Icon(Icons.account_balance_wallet_outlined, size: 22),
-                label: Text(
-                  t.assignMoneyCta,
-                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 0.3),
-                ),
-                style: FilledButton.styleFrom(
-                  backgroundColor: primaryDark,
-                  foregroundColor: isDark ? const Color(0xFF0F172A) : Colors.white,
-                  shape: RoundedRectangleBorder(
+            // --- BOTTOM ROW: TÍCH HỢP DANH MỤC VÀ LÊN KẾ HOẠCH ---
+            // --- BOTTOM ROW: HAI NÚT HÀNH ĐỘNG CHÍNH ---
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                // PHẦN TRÁI: NÚT LÊN KẾ HOẠCH
+                Container(
+                  height: 38,
+                  decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(999),
+                    boxShadow: [
+                      BoxShadow(
+                        color: primaryDark.withOpacity(0.2),
+                        blurRadius: 8,
+                        offset: const Offset(0, 3),
+                      )
+                    ],
                   ),
-                  elevation: 0,
+                  child: FilledButton.icon(
+                    onPressed: onAssignPressed,
+                    icon: const Icon(Icons.account_balance_wallet_outlined, size: 16),
+                    label: const Text(
+                      'Lên Kế Hoạch',
+                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, letterSpacing: 0.3),
+                    ),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: primaryDark,
+                      foregroundColor: isDark ? const Color(0xFF0F172A) : Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      elevation: 0,
+                    ),
+                  ),
                 ),
-              ),
+                
+                // PHẦN PHẢI: NÚT TẠO DANH MỤC
+                if (onAddCategory != null)
+                  SizedBox(
+                    height: 38,
+                    child: OutlinedButton.icon(
+                      onPressed: onAddCategory,
+                      icon: const Icon(Icons.add_chart_rounded, size: 16),
+                      label: const Text(
+                        'Tạo Danh Mục',
+                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, letterSpacing: 0.3),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: primaryDark,
+                        side: BorderSide(color: primaryDark.withOpacity(0.3), width: 1.5),
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
             ),
           ],
         ),
@@ -718,24 +750,9 @@ class _BudgetsPageState extends State<BudgetsPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
-          child: Row(
-            children: [
-              Text(
-                t.createCategoryTitle,
-                style:
-                    const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
-              ),
-              const Spacer(),
-              IconButton(
-                icon: const Icon(Icons.add),
-                tooltip: t.createMyOwn,
-                onPressed: _openCreateCategory,
-              )
-            ],
-          ),
-        ),
+        // Tiêu đề Danh mục và nút (+) đã được di chuyển lên ghép chung với nút Lên Kế Hoạch ở phía trên,
+        // giúp lấp đầy khoảng trắng và tạo khối thống nhất.
+
         const SizedBox(height: 8),
         ...cat.items.map((c) => _categoryTile(context, c, ym)).toList(),
         const SizedBox(height: 12),
