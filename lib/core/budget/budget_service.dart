@@ -64,10 +64,12 @@ class BudgetService {
     required int month,
     required int categoryId,
     required num amount,
+    String mode = 'add',
   }) async {
     final body = {
       'month': month,
       'year': year,
+      'mode': mode,
       'allocations': [
         {'category_id': categoryId, 'amount': amount}
       ],

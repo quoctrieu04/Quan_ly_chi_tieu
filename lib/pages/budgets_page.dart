@@ -6,13 +6,11 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:chitieu/l10n/app_localizations.dart';
 
-// mở trang Cài đặt Ngân sách
-import 'setting/money_settings_page.dart';
-
 // provider
 import 'package:chitieu/api/bankaccount/bank_account_provider.dart';
 import '../core/budget/budgets_provider.dart';
 import 'package:chitieu/pages/setting/settings_provider.dart';
+import 'package:chitieu/core/theme/app_colors.dart';
 
 // hiển thị tiền
 import '../core/money/widgets/money_text.dart';
@@ -38,19 +36,8 @@ import 'package:chitieu/core/budget/widgets/budget_category_tile.dart';
 
 // NEW: dùng chung tháng/năm
 import 'package:chitieu/core/date/year_month_provider.dart';
-
-/// tiện ích: làm sáng/tối màu để tạo gradient từ primary
-Color _lighter(Color c, [double amount = .14]) {
-  final hsl = HSLColor.fromColor(c);
-  final l = (hsl.lightness + amount).clamp(0.0, 1.0);
-  return hsl.withLightness(l).toColor();
-}
-
-Color _darker(Color c, [double amount = .18]) {
-  final hsl = HSLColor.fromColor(c);
-  final l = (hsl.lightness - amount).clamp(0.0, 1.0);
-  return hsl.withLightness(l).toColor();
-}
+import 'package:chitieu/widgets/app_page_header.dart';
+import 'package:chitieu/widgets/app_month_picker_sheet.dart';
 
 class BudgetsPage extends StatefulWidget {
   const BudgetsPage({super.key});
@@ -62,7 +49,7 @@ class BudgetsPage extends StatefulWidget {
 class _BudgetsPageState extends State<BudgetsPage> {
   static const double _radius = 20;
   static const double _hPad = 16;
-  static const double _vGap = 20;
+  static const double _vGap = 12;
   static const double _maxContentWidth = 640;
 
   bool _loadedOnce = false;
@@ -184,6 +171,46 @@ class _BudgetsPageState extends State<BudgetsPage> {
     }
   }
 
+  Future<void> _openBudgetActions(
+      Future<void> Function() openMonthPicker) async {
+    final t = AppLocalizations.of(context)!;
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(8, 0, 8, 12),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.calendar_today_outlined),
+                  title: Text(t.selectMonth),
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    openMonthPicker();
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.edit_rounded),
+                  title: Text(t.editCategories),
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    _openManageCategories();
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   Future<void> _reloadAll() async {
     final futures = <Future<void>>[];
     final auth = context.read<AuthProvider>();
@@ -287,7 +314,7 @@ class _BudgetsPageState extends State<BudgetsPage> {
   Widget build(BuildContext context) {
     // Ép BudgetsPage luôn build lại khi thay đổi màu chủ đạo ở SettingsProvider
     context.watch<SettingsProvider>();
-    
+
     final t = AppLocalizations.of(context)!;
 
     final totalBalance =
@@ -300,49 +327,30 @@ class _BudgetsPageState extends State<BudgetsPage> {
 
     final cs = Theme.of(context).colorScheme;
     final ym = context.watch<YearMonthProvider>().ym;
+    Future<void> openMonthPicker() async {
+      final picked = await showAppMonthPicker(
+        context: context,
+        initial: ym,
+        min: DateTime(2020, 1),
+        max: DateTime(2035, 12),
+      );
+      if (picked != null && mounted) {
+        context.read<YearMonthProvider>().setYm(picked);
+      }
+    }
 
     return Scaffold(
-      backgroundColor: cs.background,
-      appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.settings),
-          onPressed: () {
-            Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const MoneySettingsPage()),
-            );
-          },
-          color: cs.onPrimary,
-        ),
-        centerTitle: true,
-        backgroundColor: cs.primary,
-        foregroundColor: cs.onPrimary,
-        title: _MonthPill(
-          label: _formatMonthYear(context, ym),
-          onTap: () async {
-            final picked = await showModalBottomSheet<DateTime>(
-              context: context,
-              isScrollControlled: true,
-              useSafeArea: true,
-              backgroundColor: Colors.transparent,
-              builder: (_) => MonthPickerSheet(
-                initial: ym,
-                min: DateTime(2020, 1),
-                max: DateTime(2035, 12),
-              ),
-            );
-            if (picked != null && mounted) {
-              context
-                  .read<YearMonthProvider>()
-                  .setYm(picked); // chỉ set ⇒ listeners reload
-            }
-          },
-        ),
+      backgroundColor: const Color(0xFFFBFDFF),
+      appBar: AppPageHeaderBar(
+        icon: Icons.wallet_rounded,
+        title: t.tabBudgets,
+        subtitle: _formatMonthYear(context, ym),
+        onTap: openMonthPicker,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.edit),
-            tooltip: t.editCategories,
-            onPressed: _openManageCategories,
-            color: cs.onPrimary,
+          HeaderIconButton(
+            icon: Icons.more_vert_rounded,
+            tooltip: 'Tuỳ chọn',
+            onPressed: () => _openBudgetActions(openMonthPicker),
           ),
         ],
       ),
@@ -352,7 +360,7 @@ class _BudgetsPageState extends State<BudgetsPage> {
           onRefresh: _reloadAll,
           child: ListView(
             physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.all(_hPad),
+            padding: const EdgeInsets.fromLTRB(_hPad, 12, _hPad, 8),
             children: [
               Center(
                 child: ConstrainedBox(
@@ -367,7 +375,7 @@ class _BudgetsPageState extends State<BudgetsPage> {
                         onAssignPressed: () => _openAllocateMoney(
                           unassigned > 0 ? unassigned : 0,
                         ),
-                        onAddCategory: authed ? _openCreateCategory : null,
+                        onCreateCategoryPressed: _openCreateCategory,
                       ),
                       const SizedBox(height: _vGap),
                       if (authed)
@@ -391,20 +399,26 @@ class _BudgetsPageState extends State<BudgetsPage> {
     num assigned,
     num unassigned, {
     required VoidCallback onAssignPressed,
-    VoidCallback? onAddCategory,
+    required VoidCallback onCreateCategoryPressed,
   }) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    
+    final cs = Theme.of(context).colorScheme;
+
     // Tính toán thanh tiến trình chung
     final total = assigned + (unassigned > 0 ? unassigned : 0);
     final percent = total > 0 ? (assigned / total).clamp(0.0, 1.0) : 0.0;
 
     // Màu sắc neo-fintech theo ảnh thiết kế
-    final primaryDark = isDark ? Colors.white : const Color(0xFF0F4C5C); 
+    final primaryDark = isDark ? Colors.white : AppColors.primaryDark;
+    final actionColor = cs.primary;
     final textMuted = isDark ? Colors.white60 : const Color(0xFF64748B);
-    final cardBg1 = isDark ? Colors.white10 : const Color(0xFFF8FAFC); // Thẻ "ALLOCATED"
-    final cardBg2 = isDark ? const Color(0xFF1E293B) : Colors.white; // Thẻ "UNALLOCATED"
-    final shadowColor = isDark ? Colors.black.withOpacity(0.2) : const Color(0xFF0F172A).withOpacity(0.06);
+    final cardBg1 =
+        isDark ? const Color(0xFF1E293B) : Colors.white; // Thẻ "ALLOCATED"
+    final cardBg2 =
+        isDark ? const Color(0xFF1E293B) : Colors.white; // Thẻ "UNALLOCATED"
+    final shadowColor = isDark
+        ? Colors.black.withOpacity(0.2)
+        : const Color(0xFF0F172A).withOpacity(0.06);
 
     // Tính trạng ví
     final walletLoading =
@@ -422,10 +436,19 @@ class _BudgetsPageState extends State<BudgetsPage> {
                   // THẺ 1: ĐÃ PHÂN BỔ (ALLOCATED)
                   Expanded(
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 14),
                       decoration: BoxDecoration(
                         color: cardBg1,
                         borderRadius: BorderRadius.circular(20),
+                        boxShadow: [
+                          BoxShadow(
+                            color: shadowColor,
+                            blurRadius: 16,
+                            offset: const Offset(0, 8),
+                            spreadRadius: -4,
+                          )
+                        ],
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -464,14 +487,16 @@ class _BudgetsPageState extends State<BudgetsPage> {
                               ),
                             ],
                           ),
-                          const SizedBox(height: 18),
+                          const SizedBox(height: 14),
                           // Thanh Progress nhỏ
                           ClipRRect(
                             borderRadius: BorderRadius.circular(999),
                             child: LinearProgressIndicator(
                               value: percent,
                               minHeight: 4, // Rất mỏng gọn gàng
-                              backgroundColor: isDark ? Colors.white10 : const Color(0xFFE2E8F0),
+                              backgroundColor: isDark
+                                  ? Colors.white10
+                                  : const Color(0xFFE2E8F0),
                               valueColor: AlwaysStoppedAnimation(primaryDark),
                             ),
                           ),
@@ -479,13 +504,14 @@ class _BudgetsPageState extends State<BudgetsPage> {
                       ),
                     ),
                   ),
-                  
+
                   const SizedBox(width: 16),
-                  
+
                   // THẺ 2: CHƯA PHÂN BỔ (UNALLOCATED)
                   Expanded(
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 14),
                       decoration: BoxDecoration(
                         color: cardBg2,
                         borderRadius: BorderRadius.circular(20),
@@ -525,7 +551,9 @@ class _BudgetsPageState extends State<BudgetsPage> {
                                   child: MoneyText(
                                     unassigned,
                                     style: TextStyle(
-                                      color: unassigned < 0 ? const Color(0xFFDC2626) : primaryDark.withOpacity(0.85),
+                                      color: unassigned < 0
+                                          ? const Color(0xFFDC2626)
+                                          : primaryDark.withOpacity(0.85),
                                       fontSize: 24,
                                       fontWeight: FontWeight.w900,
                                       letterSpacing: -0.5,
@@ -535,21 +563,29 @@ class _BudgetsPageState extends State<BudgetsPage> {
                               ),
                             ],
                           ),
-                          const SizedBox(height: 18),
+                          const SizedBox(height: 14),
                           // Nhãn phụ: Safe to Save
                           Row(
                             children: [
                               Icon(
-                                unassigned < 0 ? Icons.warning_rounded : Icons.trending_up_rounded,
+                                unassigned < 0
+                                    ? Icons.warning_rounded
+                                    : Icons.trending_up_rounded,
                                 size: 15,
-                                color: unassigned < 0 ? const Color(0xFFDC2626) : primaryDark,
+                                color: unassigned < 0
+                                    ? const Color(0xFFDC2626)
+                                    : primaryDark,
                               ),
                               const SizedBox(width: 4),
                               Expanded(
                                 child: Text(
-                                  unassigned < 0 ? 'Thâm hụt!' : 'An toàn dự trữ',
+                                  unassigned < 0
+                                      ? 'Thâm hụt!'
+                                      : 'An toàn dự trữ',
                                   style: TextStyle(
-                                    color: unassigned < 0 ? const Color(0xFFDC2626) : primaryDark,
+                                    color: unassigned < 0
+                                        ? const Color(0xFFDC2626)
+                                        : primaryDark,
                                     fontSize: 12,
                                     fontWeight: FontWeight.w700,
                                   ),
@@ -566,68 +602,66 @@ class _BudgetsPageState extends State<BudgetsPage> {
                 ],
               ),
             ),
-            
-            const SizedBox(height: 24),
-            
-            // --- BOTTOM ROW: TÍCH HỢP DANH MỤC VÀ LÊN KẾ HOẠCH ---
-            // --- BOTTOM ROW: HAI NÚT HÀNH ĐỘNG CHÍNH ---
+
+            const SizedBox(height: 14),
+
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                // PHẦN TRÁI: NÚT LÊN KẾ HOẠCH
-                Container(
-                  height: 38,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(999),
-                    boxShadow: [
-                      BoxShadow(
-                        color: primaryDark.withOpacity(0.2),
-                        blurRadius: 8,
-                        offset: const Offset(0, 3),
-                      )
-                    ],
-                  ),
-                  child: FilledButton.icon(
-                    onPressed: onAssignPressed,
-                    icon: const Icon(Icons.account_balance_wallet_outlined, size: 16),
-                    label: const Text(
-                      'Lên Kế Hoạch',
-                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, letterSpacing: 0.3),
-                    ),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: primaryDark,
-                      foregroundColor: isDark ? const Color(0xFF0F172A) : Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(999),
+                Expanded(
+                  child: SizedBox(
+                    height: 42,
+                    child: FilledButton.icon(
+                      onPressed: onAssignPressed,
+                      icon: const Icon(
+                        Icons.account_balance_wallet_outlined,
+                        size: 18,
                       ),
-                      elevation: 0,
+                      label: Text(
+                        'Lên kế hoạch',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: actionColor,
+                        foregroundColor: cs.onPrimary,
+                        textStyle: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w800,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        elevation: 0,
+                      ),
                     ),
                   ),
                 ),
-                
-                // PHẦN PHẢI: NÚT TẠO DANH MỤC
-                if (onAddCategory != null)
-                  SizedBox(
-                    height: 38,
+                const SizedBox(width: 10),
+                Expanded(
+                  child: SizedBox(
+                    height: 42,
                     child: OutlinedButton.icon(
-                      onPressed: onAddCategory,
-                      icon: const Icon(Icons.add_chart_rounded, size: 16),
-                      label: const Text(
-                        'Tạo Danh Mục',
-                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, letterSpacing: 0.3),
+                      onPressed: onCreateCategoryPressed,
+                      icon: const Icon(Icons.add_chart_rounded, size: 18),
+                      label: Text(
+                        t.createMyOwn,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                       style: OutlinedButton.styleFrom(
-                        foregroundColor: primaryDark,
-                        side: BorderSide(color: primaryDark.withOpacity(0.3), width: 1.5),
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        foregroundColor: actionColor,
+                        side: BorderSide(color: actionColor.withOpacity(.55)),
+                        textStyle: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w800,
+                        ),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(999),
                         ),
                       ),
                     ),
                   ),
+                ),
               ],
             ),
           ],
@@ -647,7 +681,9 @@ class _BudgetsPageState extends State<BudgetsPage> {
                       decoration: const BoxDecoration(
                         color: Colors.white,
                         shape: BoxShape.circle,
-                        boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 10)],
+                        boxShadow: [
+                          BoxShadow(color: Colors.black12, blurRadius: 10)
+                        ],
                       ),
                       child: CircularProgressIndicator(color: primaryDark),
                     ),
@@ -659,7 +695,10 @@ class _BudgetsPageState extends State<BudgetsPage> {
     );
   }
 
-  Color surfaceColor(BuildContext context) => Theme.of(context).brightness == Brightness.dark ? const Color(0xFF1E293B) : Colors.white;
+  Color surfaceColor(BuildContext context) =>
+      Theme.of(context).brightness == Brightness.dark
+          ? const Color(0xFF1E293B)
+          : Colors.white;
 
   Widget _askLoginCard(BuildContext context, AppLocalizations t) {
     final cs = Theme.of(context).colorScheme;
@@ -750,10 +789,6 @@ class _BudgetsPageState extends State<BudgetsPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // Tiêu đề Danh mục và nút (+) đã được di chuyển lên ghép chung với nút Lên Kế Hoạch ở phía trên,
-        // giúp lấp đầy khoảng trắng và tạo khối thống nhất.
-
-        const SizedBox(height: 8),
         ...cat.items.map((c) => _categoryTile(context, c, ym)).toList(),
         const SizedBox(height: 12),
       ],
@@ -810,163 +845,5 @@ class _BudgetsPageState extends State<BudgetsPage> {
     final monthName = DateFormat.MMMM(locale).format(ym);
     final year = DateFormat.y(locale).format(ym);
     return t.monthYearTitle(monthName, year);
-  }
-}
-
-/// Pill hiển thị tháng/năm
-class _MonthPill extends StatelessWidget {
-  final String label;
-  final VoidCallback onTap;
-  const _MonthPill({required this.label, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        decoration: BoxDecoration(
-          color: _darker(cs.primary, .1),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: cs.onPrimary.withOpacity(.6)),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              label,
-              style: TextStyle(
-                color: cs.onPrimary,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const SizedBox(width: 4),
-            Icon(Icons.keyboard_arrow_down, color: cs.onPrimary, size: 18),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// Bottom-sheet chọn tháng
-class MonthPickerSheet extends StatefulWidget {
-  final DateTime initial, min, max;
-  const MonthPickerSheet({
-    super.key,
-    required this.initial,
-    required this.min,
-    required this.max,
-  });
-
-  @override
-  State<MonthPickerSheet> createState() => _MonthPickerSheetState();
-}
-
-class _MonthPickerSheetState extends State<MonthPickerSheet> {
-  late int _year;
-
-  @override
-  void initState() {
-    super.initState();
-    _year = widget.initial.year;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final locale = Localizations.localeOf(context).toLanguageTag();
-    final t = AppLocalizations.of(context)!;
-
-    return Container(
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 40,
-            height: 4,
-            margin: const EdgeInsets.only(bottom: 12),
-            decoration: BoxDecoration(
-              color: Colors.black12,
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              IconButton(
-                onPressed: _year > widget.min.year
-                    ? () => setState(() => _year--)
-                    : null,
-                icon: const Icon(Icons.chevron_left),
-              ),
-              Text(
-                '$_year',
-                style:
-                    const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
-              ),
-              IconButton(
-                onPressed: _year < widget.max.year
-                    ? () => setState(() => _year++)
-                    : null,
-                icon: const Icon(Icons.chevron_right),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          GridView.count(
-            crossAxisCount: 3,
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            mainAxisSpacing: 12,
-            crossAxisSpacing: 12,
-            childAspectRatio: 2.7,
-            children: List.generate(12, (i) {
-              final m = i + 1;
-              final dt = DateTime(_year, m);
-              final enabled = dt.isAfter(
-                      DateTime(widget.min.year, widget.min.month - 1)) &&
-                  dt.isBefore(DateTime(widget.max.year, widget.max.month + 1));
-
-              final monthName = DateFormat.MMMM(locale).format(dt);
-              final label =
-                  Localizations.of<AppLocalizations>(context, AppLocalizations)!
-                              .localeName ==
-                          'vi'
-                      ? t.monthGridLabel(m.toString())
-                      : monthName;
-
-              final isSelected =
-                  _year == widget.initial.year && m == widget.initial.month;
-
-              return OutlinedButton(
-                onPressed: enabled ? () => Navigator.pop(context, dt) : null,
-                style: OutlinedButton.styleFrom(
-                  backgroundColor: isSelected
-                      ? Theme.of(context).colorScheme.primaryContainer
-                      : null,
-                  side: BorderSide(
-                    color: isSelected
-                        ? Theme.of(context).colorScheme.primary
-                        : Colors.black12,
-                  ),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
-                ),
-                child:
-                    Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
-              );
-            }),
-          ),
-          const SizedBox(height: 12),
-        ],
-      ),
-    );
   }
 }

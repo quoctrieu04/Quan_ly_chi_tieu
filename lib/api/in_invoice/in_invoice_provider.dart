@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'in_invoice_model.dart';
 import 'in_invoice_service.dart';
 import 'package:chitieu/api/bankaccount/bank_account_provider.dart';
+import 'package:chitieu/utils/safe_ui.dart';
 
 class InInvoiceProvider with ChangeNotifier {
   final InInvoiceService api;
@@ -76,17 +77,14 @@ class InInvoiceProvider with ChangeNotifier {
       await _bankAccounts?.fetchAccounts();
 
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('✅ Đã thêm phiếu thu thành công')),
-        );
+        showAppSnackBar(context, 'Da them phieu thu thanh cong',
+            icon: Icons.receipt_long_rounded);
       }
       return true;
     } catch (e, st) {
       debugPrint('❌ InInvoiceProvider.create error: $e\n$st');
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Lỗi khi thêm phiếu thu: $e')),
-        );
+        showAppSnackBar(context, 'Loi khi them phieu thu: $e', isError: true);
       }
       return false;
     }
@@ -103,8 +101,7 @@ class InInvoiceProvider with ChangeNotifier {
     await fetch(year: now.year, month: now.month);
     notifyListeners();
   }
-    /// 💰 Tổng tiền thu trong danh sách hiện tại
-  num get totalAmount =>
-      _items.fold<num>(0, (sum, e) => sum + (e.amount ?? 0));
 
+  /// 💰 Tổng tiền thu trong danh sách hiện tại
+  num get totalAmount => _items.fold<num>(0, (sum, e) => sum + (e.amount ?? 0));
 }

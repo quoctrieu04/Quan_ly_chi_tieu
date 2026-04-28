@@ -13,7 +13,9 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
 import 'package:chitieu/widgets/spending_trend_card.dart';
-import 'package:chitieu/widgets/saving_goal_card.dart';
+import 'package:chitieu/widgets/app_page_header.dart';
+import 'package:chitieu/widgets/app_month_picker_sheet.dart';
+import 'package:chitieu/core/theme/app_colors.dart';
 
 import 'package:chitieu/l10n/app_localizations.dart';
 import 'package:chitieu/core/money/money_formatter.dart';
@@ -78,6 +80,8 @@ class _AccountsPageState extends State<AccountsPage> {
   AuthProvider? _auth;
   bool _hideBalance = false;
   VoidCallback? _authListener;
+  VoidCallback? _financeListener;
+  bool _trendRefreshQueued = false;
 
   @override
   @override
@@ -129,6 +133,21 @@ class _AccountsPageState extends State<AccountsPage> {
 
       _auth!.addListener(_authListener!);
       context.read<YearMonthProvider>().addListener(_onYmChanged);
+
+      _financeListener = () {
+        if (!mounted || _trendRefreshQueued) return;
+        _trendRefreshQueued = true;
+        Future.microtask(() async {
+          try {
+            await _loadLast6MonthsTrend();
+          } finally {
+            _trendRefreshQueued = false;
+          }
+        });
+      };
+      context
+          .read<FinancialTransactionProvider>()
+          .addListener(_financeListener!);
     });
   }
 
@@ -169,6 +188,13 @@ class _AccountsPageState extends State<AccountsPage> {
   @override
   void dispose() {
     if (_authListener != null) _auth?.removeListener(_authListener!);
+    try {
+      if (_financeListener != null) {
+        context
+            .read<FinancialTransactionProvider>()
+            .removeListener(_financeListener!);
+      }
+    } catch (_) {}
     try {
       context.read<YearMonthProvider>().removeListener(_onYmChanged);
     } catch (_) {}
@@ -234,16 +260,9 @@ class _AccountsPageState extends State<AccountsPage> {
 
   Future<void> _openMonthPicker() async {
     final ym = context.read<YearMonthProvider>().ym;
-    final picked = await showModalBottomSheet<DateTime>(
+    final picked = await showAppMonthPicker(
       context: context,
-      useSafeArea: true,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (ctx) => _MonthPickerSheet(
-        initial: DateTime(ym.year, ym.month, 1),
-      ),
+      initial: DateTime(ym.year, ym.month),
     );
     if (picked != null && mounted) {
       context.read<YearMonthProvider>().setYm(picked);
@@ -287,12 +306,10 @@ class _AccountsPageState extends State<AccountsPage> {
     context.watch<SettingsProvider>();
 
     final t = AppLocalizations.of(context)!;
-    final cs = Theme.of(context).colorScheme;
-
     final ym = context.watch<YearMonthProvider>().ym;
-    final isLoggedIn =
-        context.select<AuthProvider, bool>((a) => a.isAuthenticated);
-
+    final monthLabel = DateFormat.yMMMM(
+      Localizations.localeOf(context).toLanguageTag(),
+    ).format(ym);
     final walletProv = context.watch<BankAccountProvider>();
     final totalBalance =
         walletProv.items.fold<double>(0, (s, w) => s + (w.balance ?? 0));
@@ -328,243 +345,208 @@ class _AccountsPageState extends State<AccountsPage> {
     final totalSaved =
         savingProv.items.fold<double>(0, (sum, s) => sum + s.currentAmount);
 
-    return RefreshIndicator(
-      onRefresh: () async => _fetchCurrentYm(),
-      child: SafeArea(
-        bottom: true,
-        child: SingleChildScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // ===== Tháng + Info =====
-              Row(
-                children: [
-                  InkWell(
-                    onTap: _openMonthPicker,
-                    borderRadius: BorderRadius.circular(12),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: cs.primary.withOpacity(.15),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.calendar_month_rounded, size: 18),
-                          const SizedBox(width: 8),
-                          Text(
-                            'Tháng ${ym.month.toString().padLeft(2, '0')} / ${ym.year}',
-                            style: const TextStyle(fontWeight: FontWeight.w800),
-                          ),
-                          const SizedBox(width: 6),
-                          const Icon(Icons.expand_more, size: 18),
-                        ],
-                      ),
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      appBar: AppPageHeaderBar(
+        icon: Icons.account_balance_rounded,
+        title: t.tabAccounts,
+        subtitle: monthLabel,
+        onTap: _openMonthPicker,
+        actions: [
+          HeaderIconButton(
+            icon: Icons.calendar_today_outlined,
+            tooltip: t.selectMonth,
+            onPressed: _openMonthPicker,
+          ),
+          HeaderIconButton(
+            icon: Icons.info_outline_rounded,
+            tooltip: 'Gợi ý chi tiêu',
+            onPressed: () => _openAdviceSheet(
+              combinedRemaining: combinedRemaining,
+              dailyAllowance: dailyAllowance,
+            ),
+          ),
+        ],
+      ),
+      body: RefreshIndicator(
+        onRefresh: () async => _fetchCurrentYm(),
+        child: SafeArea(
+          top: false,
+          bottom: true,
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // ===== Tổng tiền / Đã chi / Còn lại =====
+                HeaderCard(
+                  title: t.totalAssets,
+                  totalText: _hideBalance
+                      ? '•••'
+                      : fmt(totalBalance), // Dùng totalBalance cho tổng tiền
+                  loading: walletProv.loading || ftProv.loading,
+                  paymentText: _hideBalance ? '•••' : fmt(totalSpent),
+                  trackingText: _hideBalance
+                      ? '•••'
+                      : fmt(
+                          totalSaved), // Dùng combinedRemaining cho số tiền còn lại
+                  onToggleEye: _toggleHide,
+                  isHidden: _hideBalance,
+                ),
+                const SizedBox(height: 16),
+
+                FeatureHorizontalMenu(
+                  items: [
+                    FeatureItem(
+                      icon: Icons.account_balance_wallet_rounded,
+                      label: 'Tài khoản',
+                      onTap: () async {
+                        final prov = context.read<BankAccountProvider>();
+
+                        if (prov.loading) return;
+
+                        // ✅ Delay 1 frame để thoát gesture
+                        await Future.delayed(Duration.zero);
+
+                        if (!context.mounted) return;
+
+                        if (prov.items.isEmpty) {
+                          final created = await showModalBottomSheet<bool>(
+                            context: context,
+                            isScrollControlled: true,
+                            useSafeArea: true,
+                            builder: (_) => const CreateBankAccountForm(),
+                          );
+
+                          if (created == true && context.mounted) {
+                            await prov.fetch();
+                          }
+                        } else {
+                          Navigator.pushNamed(context, '/accounts');
+                        }
+                      },
                     ),
-                  ),
-                  const Spacer(),
-                  Padding(
-                    padding: const EdgeInsets.only(left: 4),
-                    child: InkWell(
-                      onTap: () => _openAdviceSheet(
-                        combinedRemaining: combinedRemaining,
-                        dailyAllowance: dailyAllowance,
-                      ),
-                      borderRadius: BorderRadius.circular(24),
-                      child: Container(
-                        width: 36,
-                        height: 36,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(color: cs.primary, width: 1.7),
-                        ),
-                        alignment: Alignment.center,
-                        child: Icon(Icons.info_outline_rounded,
-                            size: 20, color: cs.primary),
-                      ),
+                    FeatureItem(
+                      icon: Icons.attach_money_rounded,
+                      label: 'Nguồn tiền',
+                      onTap: () async {
+                        final prov = context.read<IncomeProvider>();
+
+                        if (prov.items.isEmpty) {
+                          final created = await showModalBottomSheet<bool>(
+                            context: context,
+                            isScrollControlled: true,
+                            useSafeArea: true,
+                            builder: (_) => const CreateIncomeForm(),
+                          );
+                          if (created == true && context.mounted) {
+                            final ym = context.read<YearMonthProvider>().ym;
+                            await prov.fetch(year: ym.year, month: ym.month);
+                          }
+                        } else {
+                          Navigator.pushNamed(context, '/income');
+                        }
+                      },
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
+                    FeatureItem(
+                      icon: Icons.savings_rounded,
+                      label: 'Tiết kiệm',
+                      onTap: () async {
+                        final prov = context.read<SavingProvider>();
+                        final ym = context.read<YearMonthProvider>().ym;
 
-              // ===== Tổng tiền / Đã chi / Còn lại =====
-              HeaderCard(
-                title: t.totalAssets,
-                totalText: _hideBalance
-                    ? '•••'
-                    : fmt(totalBalance), // Dùng totalBalance cho tổng tiền
-                loading: walletProv.loading || ftProv.loading,
-                paymentText: _hideBalance ? '•••' : fmt(totalSpent),
-                trackingText: _hideBalance
-                    ? '•••'
-                    : fmt(
-                        totalSaved), // Dùng combinedRemaining cho số tiền còn lại
-                onToggleEye: _toggleHide,
-                isHidden: _hideBalance,
-              ),
-              const SizedBox(height: 16),
-
-              FeatureHorizontalMenu(
-                items: [
-                  FeatureItem(
-                    icon: Icons.account_balance_wallet_rounded,
-                    label: 'Tài khoản',
-                    onTap: () async {
-                      final prov = context.read<BankAccountProvider>();
-
-                      if (prov.loading) return;
-
-                      // ✅ Delay 1 frame để thoát gesture
-                      await Future.delayed(Duration.zero);
-
-                      if (!context.mounted) return;
-
-                      if (prov.items.isEmpty) {
-                        final created = await showModalBottomSheet<bool>(
-                          context: context,
-                          isScrollControlled: true,
-                          useSafeArea: true,
-                          builder: (_) => const CreateBankAccountForm(),
-                        );
-
-                        if (created == true && context.mounted) {
-                          await prov.fetch();
+                        if (prov.items.isEmpty) {
+                          final created = await showModalBottomSheet<bool>(
+                            context: context,
+                            isScrollControlled: true,
+                            useSafeArea: true,
+                            builder: (_) => const CreateSavingForm(),
+                          );
+                          if (created == true && context.mounted) {
+                            await prov.fetch(year: ym.year, month: ym.month);
+                          }
+                        } else {
+                          Navigator.pushNamed(context, '/saving');
                         }
-                      } else {
-                        Navigator.pushNamed(context, '/accounts');
-                      }
-                    },
-                  ),
-                  FeatureItem(
-                    icon: Icons.attach_money_rounded,
-                    label: 'Nguồn tiền',
-                    onTap: () async {
-                      final prov = context.read<IncomeProvider>();
-
-                      if (prov.items.isEmpty) {
-                        final created = await showModalBottomSheet<bool>(
-                          context: context,
-                          isScrollControlled: true,
-                          useSafeArea: true,
-                          builder: (_) => const CreateIncomeForm(),
+                      },
+                    ),
+                    FeatureItem(
+                      icon: Icons.trending_up_rounded,
+                      label: 'Đầu tư',
+                      onTap: () {
+                        Navigator.pushNamed(context, '/investment');
+                      },
+                    ),
+                    FeatureItem(
+                      icon: Icons.history_rounded,
+                      label: 'Lịch sử',
+                      onTap: () {
+                        Navigator.pushNamed(
+                          context,
+                          '/transactions',
+                          arguments: {'year': ym.year, 'month': ym.month},
                         );
-                        if (created == true && context.mounted) {
-                          final ym = context.read<YearMonthProvider>().ym;
-                          await prov.fetch(year: ym.year, month: ym.month);
-                        }
-                      } else {
-                        Navigator.pushNamed(context, '/income');
-                      }
-                    },
-                  ),
-                  FeatureItem(
-                    icon: Icons.savings_rounded,
-                    label: 'Tiết kiệm',
-                    onTap: () async {
-                      final prov = context.read<SavingProvider>();
-                      final ym = context.read<YearMonthProvider>().ym;
-
-                      if (prov.items.isEmpty) {
-                        final created = await showModalBottomSheet<bool>(
-                          context: context,
-                          isScrollControlled: true,
-                          useSafeArea: true,
-                          builder: (_) => const CreateSavingForm(),
-                        );
-                        if (created == true && context.mounted) {
-                          await prov.fetch(year: ym.year, month: ym.month);
-                        }
-                      } else {
-                        Navigator.pushNamed(context, '/saving');
-                      }
-                    },
-                  ),
-                  FeatureItem(
-                    icon: Icons.trending_up_rounded,
-                    label: 'Đầu tư',
-                    onTap: () {
-                      Navigator.pushNamed(context, '/investment');
-                    },
-                  ),
-                  FeatureItem(
-                    icon: Icons.history_rounded,
-                    label: 'Lịch sử',
-                    onTap: () {
-                      Navigator.pushNamed(
-                        context,
-                        '/transactions',
-                        arguments: {'year': ym.year, 'month': ym.month},
-                      );
-                    },
-                  ),
-                ],
-              ),
-              const SizedBox(height: 20),
+                      },
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
 
 // ===== TỔNG THU / TỔNG CHI =====
-              MonthSummaryCard(
-                totalIncome: totalIncome,
-                totalExpense: totalSpent,
-                hideBalance: _hideBalance,
-              ),
-
-              const SizedBox(height: 16),
-
-              if (_loadingTrend)
-                const Center(child: CircularProgressIndicator())
-              else
-                SpendingTrendCard(data: _trendData),
-
-              const SizedBox(height: 16),
-
-              SavingGoalCard(
-                totalSaved: totalSaved,
-                onCreate: () {
-                  Navigator.pushNamed(context, '/saving');
-                },
-              ),
-
-              // ===== Cảnh báo vượt chi =====
-              if (overSpent) ...[
-                const SizedBox(height: 8),
-                WarningBanner(
-                  message: _hideBalance
-                      ? 'Chi dự kiến tháng này đang vượt số tiền còn lại.'
-                      : 'Chi dự kiến tháng này vượt quá số tiền còn lại ${fmt(deficit)}.',
-                  onFixBudgets: () {
-                    Navigator.pushNamed(context, '/budgets');
-                  },
-                  onAddIncome: () async {
-                    final created = await showModalBottomSheet<bool>(
-                      context: context,
-                      isScrollControlled: true,
-                      useSafeArea: true,
-                      shape: const RoundedRectangleBorder(
-                        borderRadius:
-                            BorderRadius.vertical(top: Radius.circular(20)),
-                      ),
-                      builder: (context) => Padding(
-                        padding: EdgeInsets.only(
-                          bottom: MediaQuery.of(context).viewInsets.bottom,
-                        ),
-                        child: const CreateIncomeForm(),
-                      ),
-                    );
-                    if (created == true && context.mounted) {
-                      await _fetchCurrentYm();
-                      safeShowSnackBar(
-                        context,
-                        const SnackBar(content: Text('Đã thêm nguồn thu')),
-                      );
-                    }
-                  },
+                MonthSummaryCard(
+                  totalIncome: totalIncome,
+                  totalExpense: totalSpent,
+                  hideBalance: _hideBalance,
                 ),
+
+                const SizedBox(height: 16),
+
+                if (_loadingTrend)
+                  const Center(child: CircularProgressIndicator())
+                else
+                  SpendingTrendCard(data: _trendData),
+
+                const SizedBox(height: 16),
+
+                // ===== Cảnh báo vượt chi =====
+                if (overSpent) ...[
+                  const SizedBox(height: 8),
+                  WarningBanner(
+                    message: _hideBalance
+                        ? 'Chi dự kiến tháng này đang vượt số tiền còn lại.'
+                        : 'Chi dự kiến tháng này vượt quá số tiền còn lại ${fmt(deficit)}.',
+                    onFixBudgets: () {
+                      Navigator.pushNamed(context, '/budgets');
+                    },
+                    onAddIncome: () async {
+                      final created = await showModalBottomSheet<bool>(
+                        context: context,
+                        isScrollControlled: true,
+                        useSafeArea: true,
+                        shape: const RoundedRectangleBorder(
+                          borderRadius:
+                              BorderRadius.vertical(top: Radius.circular(20)),
+                        ),
+                        builder: (context) => Padding(
+                          padding: EdgeInsets.only(
+                            bottom: MediaQuery.of(context).viewInsets.bottom,
+                          ),
+                          child: const CreateIncomeForm(),
+                        ),
+                      );
+                      if (created == true && context.mounted) {
+                        await _fetchCurrentYm();
+                        safeShowSnackBar(
+                          context,
+                          const SnackBar(content: Text('Đã thêm nguồn thu')),
+                        );
+                      }
+                    },
+                  ),
+                ],
               ],
-            ],
+            ),
           ),
         ),
       ),
@@ -626,115 +608,120 @@ class HeaderCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final headerBg = cs.primary;
-    final headerTitleBg = cs.tertiaryContainer;
-    final onHeader = cs.onPrimary;
-    final onHeaderTitle = cs.onTertiaryContainer;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cardBg = isDark ? cs.surfaceContainerHigh : Colors.white;
+    final textColor = isDark ? cs.onSurface : AppColors.textMain;
+    final mutedColor = cs.onSurface.withOpacity(.52);
+    final accent = cs.primary;
 
     return Container(
       decoration: BoxDecoration(
-        color: headerBg,
+        color: cardBg,
         borderRadius: BorderRadius.circular(24),
-      ),
-      padding: const EdgeInsets.fromLTRB(24, 20, 20, 24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                title.toUpperCase(),
-                style: TextStyle(
-                  color: onHeader.withOpacity(0.9),
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 1.1,
-                ),
-              ),
-              InkWell(
-                onTap: onToggleEye,
-                borderRadius: BorderRadius.circular(20),
-                child: Padding(
-                  padding: const EdgeInsets.all(4.0),
-                  child: Icon(
-                    isHidden ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                    size: 22,
-                    color: onHeader.withOpacity(0.9),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          AnimatedSwitcher(
-            duration: const Duration(milliseconds: 200),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                totalText,
-                key: ValueKey(totalText),
-                style: TextStyle(
-                  color: onHeader,
-                  fontSize: 42,
-                  fontWeight: FontWeight.w800,
-                  height: 1.1,
-                  letterSpacing: -0.5,
-                ),
-              ),
+        border: Border.all(
+          color: isDark ? cs.outlineVariant.withOpacity(.1) : AppColors.border,
+        ),
+        boxShadow: [
+          if (!isDark)
+            BoxShadow(
+              color: Colors.black.withOpacity(.035),
+              blurRadius: 16,
+              offset: const Offset(0, 7),
             ),
-          ),
-          if (loading) ...[
-            const SizedBox(height: 10),
-            LinearProgressIndicator(minHeight: 2, backgroundColor: onHeader.withOpacity(0.2), valueColor: AlwaysStoppedAnimation(onHeader)),
-            const SizedBox(height: 12),
-          ] else ...[
-            const SizedBox(height: 28),
-          ],
-          Row(
-            children: [
-              Expanded(
-                child: _Col(
-                  label: 'Đã chi',
-                  value: paymentText,
-                  color: onHeader,
-                  alignLeft: true,
-                ),
-              ),
-              Expanded(
-                child: _Col(
-                  label: 'Tiết kiệm',
-                  value: trackingText,
-                  color: onHeader,
-                  alignLeft: true,
-                ),
-              ),
-            ],
-          ),
         ],
       ),
-    );
-  }
-}
-
-class _Col extends StatelessWidget {
-  final String label, value;
-  final Color color;
-  final bool alignLeft;
-  const _Col({required this.label, required this.value, required this.color, this.alignLeft = false});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: alignLeft ? CrossAxisAlignment.start : CrossAxisAlignment.center,
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Text(label,
-            style: TextStyle(color: color.withOpacity(0.85), fontWeight: FontWeight.w500, fontSize: 13)),
-        const SizedBox(height: 4),
-        Text(value,
-            style: TextStyle(color: color, fontWeight: FontWeight.w700, fontSize: 16)),
-      ],
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(24),
+        child: Stack(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(18, 16, 16, 18),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        width: 34,
+                        height: 34,
+                        decoration: BoxDecoration(
+                          color: accent.withOpacity(.1),
+                          borderRadius: BorderRadius.circular(11),
+                        ),
+                        child: Icon(
+                          Icons.account_balance_wallet_outlined,
+                          size: 19,
+                          color: accent,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          title,
+                          style: TextStyle(
+                            color: mutedColor,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: .1,
+                          ),
+                        ),
+                      ),
+                      InkWell(
+                        onTap: onToggleEye,
+                        borderRadius: BorderRadius.circular(999),
+                        child: Container(
+                          width: 34,
+                          height: 34,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: accent.withOpacity(.1),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            isHidden
+                                ? Icons.visibility_off_outlined
+                                : Icons.visibility_outlined,
+                            size: 20,
+                            color: accent,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 200),
+                    child: Text(
+                      totalText,
+                      key: ValueKey(totalText),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: textColor,
+                        fontSize: 35,
+                        fontWeight: FontWeight.w800,
+                        height: 1,
+                        letterSpacing: 0,
+                      ),
+                    ),
+                  ),
+                  if (loading) ...[
+                    const SizedBox(height: 14),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(999),
+                      child: LinearProgressIndicator(
+                        minHeight: 3,
+                        backgroundColor: accent.withOpacity(0.12),
+                        valueColor: AlwaysStoppedAnimation(accent),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -806,15 +793,17 @@ class WarningBanner extends StatelessWidget {
   }
 }
 
-class _MonthPickerSheet extends StatefulWidget {
+class LegacyAccountsMonthPickerSheet extends StatefulWidget {
   final DateTime initial;
-  const _MonthPickerSheet({required this.initial});
+  const LegacyAccountsMonthPickerSheet({required this.initial});
 
   @override
-  State<_MonthPickerSheet> createState() => _MonthPickerSheetState();
+  State<LegacyAccountsMonthPickerSheet> createState() =>
+      LegacyAccountsMonthPickerSheetState();
 }
 
-class _MonthPickerSheetState extends State<_MonthPickerSheet> {
+class LegacyAccountsMonthPickerSheetState
+    extends State<LegacyAccountsMonthPickerSheet> {
   late int y;
   @override
   void initState() {
@@ -1164,7 +1153,7 @@ class _SimpleTxItem extends StatelessWidget {
                 style:
                     const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
             Text(
-              '$sign${fmt(total)}',
+              fmt(total),
               style: TextStyle(
                 fontWeight: FontWeight.w900,
                 fontSize: 18,
@@ -1192,54 +1181,53 @@ class MonthSummaryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final moneySettings = context.watch<MoneySettingsProvider>().settings;
 
     String fmt(num v) =>
         hideBalance ? '•••' : MoneyFormatter(moneySettings).format(v);
 
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: const [
-          BoxShadow(
-            blurRadius: 10,
-            offset: Offset(0, 4),
-            color: Colors.black12,
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'TỔNG QUAN',
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 2, bottom: 10),
+          child: Text(
+            'Tổng quan',
             style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 1.1,
-              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+              fontSize: 16,
+              fontWeight: FontWeight.w800,
+              color: cs.onSurface,
             ),
           ),
-          const SizedBox(height: 16),
-          _SummaryItem(
-            icon: Icons.trending_up_rounded,
-            label: 'Tổng thu',
-            value: '+${fmt(totalIncome)}',
-            color: const Color(0xFF1B8756),
-            bg: const Color(0xFFE8F5E9),
-          ),
-          const SizedBox(height: 16),
-          _SummaryItem(
-            icon: Icons.trending_down_rounded,
-            label: 'Tổng chi',
-            value: '-${fmt(totalExpense)}',
-            color: const Color(0xFFC62828),
-            bg: const Color(0xFFFFEBEE),
-          ),
-        ],
-      ),
+        ),
+        Row(
+          children: [
+            Expanded(
+              child: _SummaryItem(
+                icon: Icons.arrow_downward_rounded,
+                label: 'Thu vào',
+                value: fmt(totalIncome),
+                color: const Color(0xFF12805C),
+                bg: const Color(0xFFE9F7EF),
+                isDark: isDark,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _SummaryItem(
+                icon: Icons.arrow_upward_rounded,
+                label: 'Chi ra',
+                value: fmt(totalExpense),
+                color: const Color(0xFFD13B3B),
+                bg: const Color(0xFFFFEFEF),
+                isDark: isDark,
+              ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 }
@@ -1250,6 +1238,7 @@ class _SummaryItem extends StatelessWidget {
   final String value;
   final Color color;
   final Color bg;
+  final bool isDark;
 
   const _SummaryItem({
     required this.icon,
@@ -1257,39 +1246,77 @@ class _SummaryItem extends StatelessWidget {
     required this.value,
     required this.color,
     required this.bg,
+    required this.isDark,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Container(
-          width: 44,
-          height: 44,
-          decoration: BoxDecoration(
-            color: bg,
-            shape: BoxShape.circle,
-          ),
-          child: Icon(icon, color: color, size: 24),
+    final cs = Theme.of(context).colorScheme;
+
+    return Container(
+      
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: isDark ? cs.surfaceContainerHigh : Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: isDark
+              ? cs.outlineVariant.withOpacity(.12)
+              : const Color(0xFFE8EEF2),
         ),
-        const SizedBox(width: 16),
-        Text(
-          label,
-          style: const TextStyle(
-            fontSize: 15,
-            fontWeight: FontWeight.w600,
+        boxShadow: [
+          if (!isDark)
+            BoxShadow(
+              color: Colors.black.withOpacity(.035),
+              blurRadius: 14,
+              offset: const Offset(0, 6),
+            ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: bg,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(icon, color: color, size: 18),
+              ),
+              const Spacer(),
+              Icon(
+                Icons.more_horiz_rounded,
+                size: 18,
+                color: cs.onSurface.withOpacity(.25),
+              ),
+            ],
           ),
-        ),
-        const Spacer(),
-        Text(
-          value,
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w800,
-            color: color,
+          const SizedBox(height: 12),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: cs.onSurface.withOpacity(.55),
+            ),
           ),
-        ),
-      ],
+          const SizedBox(height: 4),
+          Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 17,
+              fontWeight: FontWeight.w900,
+              color: color,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

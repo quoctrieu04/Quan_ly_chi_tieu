@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:chitieu/core/theme/app_colors.dart';
 
 import 'bank/bank_investment_form.dart';
 import 'stock/stock_investment_form.dart';
@@ -33,7 +34,7 @@ class _CreateInvestmentSheetState extends State<CreateInvestmentSheet> {
       case 'real_estate':
         return const Color(0xFFE65100);
       default:
-        return const Color(0xFF2EC4B6);
+        return Theme.of(context).colorScheme.primary;
     }
   }
 
@@ -41,7 +42,7 @@ class _CreateInvestmentSheetState extends State<CreateInvestmentSheet> {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bgColor = isDark ? cs.surface : const Color(0xFFFAFBFE);
+    final bgColor = isDark ? cs.surface : AppColors.background;
 
     return Container(
       decoration: BoxDecoration(

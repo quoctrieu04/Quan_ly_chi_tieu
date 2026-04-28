@@ -191,6 +191,7 @@ class BudgetsProvider extends ChangeNotifier {
   Future<void> setOne({
     required int categoryId,
     required num amount,
+    String mode = 'add',
   }) async {
     final year = _currentYear ?? DateTime.now().year;
     final month = _currentMonth ?? DateTime.now().month;
@@ -200,6 +201,7 @@ class BudgetsProvider extends ChangeNotifier {
       month: month,
       categoryId: categoryId,
       amount: amount,
+      mode: mode,
     );
 
     await loadForMonth(year: year, month: month);

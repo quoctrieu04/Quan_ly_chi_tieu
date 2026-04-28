@@ -6,6 +6,7 @@ import 'package:chitieu/api/real_estate/real_estate_provider.dart';
 import 'package:chitieu/api/real_estate/real_estate_service.dart';
 import 'package:chitieu/financial_transaction/financial_transaction_provider.dart';
 import 'package:chitieu/financial_transaction/financial_transaction_service.dart';
+import 'package:chitieu/core/theme/app_colors.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:dio/dio.dart';
@@ -293,7 +294,7 @@ class MyApp extends StatelessWidget {
       title: 'Chi Tiêu',
       builder: (context, child) {
         return MediaQuery(
-          // Sử dụng copyWith(textScaler: ...) để bọc lại cỡ chữ toàn cục 
+          // Sử dụng copyWith(textScaler: ...) để bọc lại cỡ chữ toàn cục
           data: MediaQuery.of(context).copyWith(
             textScaler: TextScaler.linear(settings.textScale),
           ),
@@ -317,17 +318,43 @@ class MyApp extends StatelessWidget {
       themeMode: settings.themeMode,
       theme: ThemeData(
         useMaterial3: false,
-        colorScheme: ColorScheme.fromSeed(seedColor: settings.seed),
-        scaffoldBackgroundColor: const Color(0xFFFAF3E6),
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: settings.seed,
+          primary: settings.seed,
+          secondary: AppColors.primaryLight,
+          surface: AppColors.surface,
+          error: AppColors.danger,
+        ),
+        scaffoldBackgroundColor: AppColors.background,
+        appBarTheme: const AppBarTheme(
+          backgroundColor: AppColors.surface,
+          foregroundColor: AppColors.textMain,
+          elevation: 0,
+          surfaceTintColor: Colors.transparent,
+        ),
+        cardColor: AppColors.surface,
+        dividerColor: AppColors.border,
+        inputDecorationTheme: InputDecorationTheme(
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: AppColors.primary, width: 1.6),
+          ),
+        ),
       ),
       darkTheme: ThemeData.dark().copyWith(
         colorScheme: ColorScheme.fromSeed(
           seedColor: settings.seed,
           brightness: Brightness.dark,
+          primary: AppColors.primaryLight,
+          secondary: AppColors.primary,
+          surface: AppColors.darkSurface,
+          error: AppColors.danger,
         ),
+        scaffoldBackgroundColor: AppColors.darkBackground,
       ),
 
-      home: const RootRouter(), // Sử dụng RootRouter thay vì vào thẳng HomeScaffold
+      home:
+          const RootRouter(), // Sử dụng RootRouter thay vì vào thẳng HomeScaffold
       routes: {
         '/settings/money': (_) => const MoneySettingsPage(),
         '/transactions': (_) => const TransactionsPage(),
@@ -374,8 +401,8 @@ class _RootRouterState extends State<RootRouter> {
 
     // Lắng nghe trạng thái đăng nhập
     final auth = context.watch<AuthProvider>();
-    
-    // Nếu chưa đăng nhập -> Ép vào trang Login 
+
+    // Nếu chưa đăng nhập -> Ép vào trang Login
     // (Bảo vệ toàn bộ màn hình chính)
     if (!auth.isAuthenticated) {
       return const LoginPage();
@@ -460,7 +487,7 @@ class _HomeScaffoldState extends State<HomeScaffold> {
 //  Bottom Nav — Mint/Teal
 // ═══════════════════════════════════════
 class _ModernBottomNav extends StatelessWidget {
-  static const _inactive  = Color(0xFF9CA3AF);
+  static const _inactive = Color(0xFF9CA3AF);
 
   final int currentIndex;
   final ValueChanged<int> onTabSelected;
@@ -490,9 +517,7 @@ class _ModernBottomNav extends StatelessWidget {
         color: isDark ? const Color(0xFF1C2530) : Colors.white,
         border: Border(
           top: BorderSide(
-            color: isDark
-                ? const Color(0xFF2A3544)
-                : const Color(0xFFE8ECF0),
+            color: isDark ? const Color(0xFF2A3544) : const Color(0xFFE8ECF0),
             width: 1,
           ),
         ),
@@ -558,7 +583,8 @@ class _ModernBottomNav extends StatelessWidget {
   Widget _buildNavItem(int index) {
     final selected = currentIndex == index;
     final _mint = cs.primary;
-    final color = selected ? _mint : (isDark ? Colors.white.withOpacity(.45) : _inactive);
+    final color =
+        selected ? _mint : (isDark ? Colors.white.withOpacity(.45) : _inactive);
 
     return Expanded(
       child: GestureDetector(
@@ -647,7 +673,10 @@ class _ActionMenuOverlay extends StatelessWidget {
                       icon: Icons.receipt_long_rounded,
                       label: 'Nhập thường',
                       onTap: () {
-                        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const NotePage()));
+                        Navigator.pushReplacement(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) => const NotePage()));
                       },
                     ),
                   ),
@@ -658,7 +687,11 @@ class _ActionMenuOverlay extends StatelessWidget {
                       icon: Icons.camera_alt_outlined,
                       label: 'Chụp ảnh',
                       onTap: () {
-                        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const NotePage(autoCamera: true)));
+                        Navigator.pushReplacement(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) =>
+                                    const NotePage(autoCamera: true)));
                       },
                     ),
                   ),
@@ -670,7 +703,11 @@ class _ActionMenuOverlay extends StatelessWidget {
                       icon: Icons.mic_none_rounded,
                       label: 'Giọng nói',
                       onTap: () {
-                        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const NotePage(autoVoice: true)));
+                        Navigator.pushReplacement(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) =>
+                                    const NotePage(autoVoice: true)));
                       },
                     ),
                   ),
@@ -683,7 +720,9 @@ class _ActionMenuOverlay extends StatelessWidget {
                         width: 52,
                         height: 52,
                         decoration: BoxDecoration(
-                          color: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF2A3544) : Colors.white,
+                          color: Theme.of(context).brightness == Brightness.dark
+                              ? const Color(0xFF2A3544)
+                              : Colors.white,
                           shape: BoxShape.circle,
                           boxShadow: const [
                             BoxShadow(
@@ -693,7 +732,9 @@ class _ActionMenuOverlay extends StatelessWidget {
                             ),
                           ],
                         ),
-                        child: Icon(Icons.close_rounded, color: Theme.of(context).colorScheme.primary, size: 26),
+                        child: Icon(Icons.close_rounded,
+                            color: Theme.of(context).colorScheme.primary,
+                            size: 26),
                       ),
                     ),
                   ),
@@ -711,7 +752,8 @@ class _ActionBtn extends StatelessWidget {
   final IconData icon;
   final String label;
   final VoidCallback onTap;
-  const _ActionBtn({required this.icon, required this.label, required this.onTap});
+  const _ActionBtn(
+      {required this.icon, required this.label, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -730,12 +772,15 @@ class _ActionBtn extends StatelessWidget {
                 end: Alignment.bottomRight,
                 colors: [
                   Theme.of(context).colorScheme.primary,
-                  Color.lerp(Theme.of(context).colorScheme.primary, Colors.white, 0.3) ?? Theme.of(context).colorScheme.primary
+                  Color.lerp(Theme.of(context).colorScheme.primary,
+                          Colors.white, 0.3) ??
+                      Theme.of(context).colorScheme.primary
                 ],
               ),
               boxShadow: [
                 BoxShadow(
-                  color: Theme.of(context).colorScheme.primary.withOpacity(0.35),
+                  color:
+                      Theme.of(context).colorScheme.primary.withOpacity(0.35),
                   blurRadius: 12,
                   offset: const Offset(0, 4),
                 ),

@@ -1,4 +1,5 @@
 import 'package:chitieu/api/investment/investment_provider.dart';
+import 'package:chitieu/core/theme/app_colors.dart';
 import 'package:chitieu/api/real_estate/real_estate_provider.dart';
 import 'package:chitieu/widgets/investment/create_investment_sheet.dart';
 import 'package:flutter/material.dart';
@@ -8,8 +9,6 @@ import 'package:provider/provider.dart';
 import '../../widgets/investment/investment_summary_card.dart';
 import '../../widgets/investment/investment_item_tile.dart';
 import 'real_estate_detail_page.dart';
-
-const _kMint = Color(0xFF2EC4B6);
 
 class InvestmentListPage extends StatefulWidget {
   const InvestmentListPage({super.key});
@@ -44,7 +43,7 @@ class _InvestmentListPageState extends State<InvestmentListPage> {
     final realEstateProv = context.watch<RealEstateProvider>();
     final cs = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bgColor = isDark ? cs.surface : const Color(0xFFFAFBFE);
+    final bgColor = isDark ? cs.surface : AppColors.background;
     final moneyFmt = NumberFormat('#,###', 'vi_VN');
     String money(num v) => '${moneyFmt.format(v).replaceAll(',', '.')}đ';
 
@@ -87,30 +86,23 @@ class _InvestmentListPageState extends State<InvestmentListPage> {
           ),
         ),
       ),
-
-      floatingActionButton: FloatingActionButton.extended(
+      floatingActionButton: FloatingActionButton(
         onPressed: _openCreateForm,
-        backgroundColor: _kMint,
-        foregroundColor: Colors.white,
+        backgroundColor: cs.primary,
+        foregroundColor: cs.onPrimary,
         elevation: 3,
-        icon: const Icon(Icons.add_rounded),
-        label: const Text(
-          'Tạo mới',
-          style: TextStyle(fontWeight: FontWeight.w700),
-        ),
+        child: const Icon(Icons.add_rounded),
       ),
-
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 90),
         children: [
           const InvestmentSummaryCard(),
           const SizedBox(height: 24),
-
           if (bankItems.isNotEmpty) ...[
             _buildSectionHeader(
               title: 'Tiền gửi ngân hàng',
               count: bankItems.length,
-              color: _kMint,
+              color: cs.primary,
               isExpanded: _bankExpanded,
               onToggle: () => setState(() => _bankExpanded = !_bankExpanded),
               cs: cs,
@@ -132,7 +124,6 @@ class _InvestmentListPageState extends State<InvestmentListPage> {
             ),
             const SizedBox(height: 18),
           ],
-
           if (stockItems.isNotEmpty) ...[
             _buildSectionHeader(
               title: 'Cổ phiếu',
@@ -159,7 +150,6 @@ class _InvestmentListPageState extends State<InvestmentListPage> {
             ),
             const SizedBox(height: 18),
           ],
-
           if (realEstateItems.isNotEmpty) ...[
             _buildSectionHeader(
               title: 'Bất động sản',
@@ -190,7 +180,6 @@ class _InvestmentListPageState extends State<InvestmentListPage> {
               sizeCurve: Curves.easeInOut,
             ),
           ],
-
           if (totalCount == 0)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 60),
@@ -235,14 +224,14 @@ class _InvestmentListPageState extends State<InvestmentListPage> {
       child: Row(
         children: [
           Container(
-            width: 10,
-            height: 10,
+            width: 4,
+            height: 18,
             decoration: BoxDecoration(
               color: color,
-              shape: BoxShape.circle,
+              borderRadius: BorderRadius.circular(99),
             ),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 9),
           Text(
             title,
             style: TextStyle(
@@ -366,7 +355,7 @@ class _RealEstateTile extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w800,
-                      color: _kMint,
+                      color: cs.primary,
                     ),
                   ),
                 ],
@@ -439,7 +428,7 @@ class _RealEstateTile extends StatelessWidget {
                           style: TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w800,
-                            color: _kMint,
+                            color: cs.primary,
                           ),
                         ),
                       ],

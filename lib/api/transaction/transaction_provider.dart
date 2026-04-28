@@ -46,6 +46,7 @@ class TransactionProvider extends ChangeNotifier {
     required int month,
     required int year,
     String? occurredAt,
+    bool refreshAfterCreate = true,
   }) async {
     if (!_auth.isAuthenticated) {
       throw Exception('Chưa đăng nhập');
@@ -64,7 +65,9 @@ class TransactionProvider extends ChangeNotifier {
       );
 
       // ✅ Reload list
-      await fetchAll();
+      if (refreshAfterCreate) {
+        await fetchAll();
+      }
     } on DioException catch (e) {
       final code = e.response?.statusCode;
       final msg = e.response?.data?['message'] ?? e.message;

@@ -5,6 +5,7 @@ import 'out_invoice_model.dart';
 import 'out_invoice_service.dart';
 import 'package:chitieu/api/bankaccount/bank_account_provider.dart';
 import 'package:chitieu/core/budget/budgets_provider.dart';
+import 'package:chitieu/utils/safe_ui.dart';
 
 class OutInvoiceProvider with ChangeNotifier {
   final OutInvoiceService api;
@@ -73,6 +74,8 @@ class OutInvoiceProvider with ChangeNotifier {
     BuildContext context,
     OutInvoice invoice, {
     File? photoFile,
+    bool refreshAfterCreate = true,
+    bool showSuccessMessage = true,
   }) async {
     try {
       final selectedYear = _budgets?.currentYear ?? DateTime.now().year;
@@ -91,25 +94,27 @@ class OutInvoiceProvider with ChangeNotifier {
         photoFile: photoFile,
       );
 
-      await fetch(year: selectedYear, month: selectedMonth);
-      await _bankAccounts?.fetchAccounts();
-      await _budgets?.loadForMonth(
-        year: selectedYear,
-        month: selectedMonth,
-      );
+      if (refreshAfterCreate) {
+        await Future.wait([
+          fetch(year: selectedYear, month: selectedMonth),
+          if (_bankAccounts != null) _bankAccounts!.fetchAccounts(),
+          if (_budgets != null)
+            _budgets!.loadForMonth(
+              year: selectedYear,
+              month: selectedMonth,
+            ),
+        ]);
+      }
 
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('✅ Đã thêm phiếu chi thành công')),
-        );
+      if (showSuccessMessage && context.mounted) {
+        showAppSnackBar(context, 'Da them phieu chi thanh cong',
+            icon: Icons.receipt_long_rounded);
       }
       return true;
     } catch (e, st) {
       debugPrint('❌ OutInvoiceProvider.create error: $e\n$st');
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Lỗi khi thêm phiếu chi: $e')),
-        );
+        showAppSnackBar(context, 'Loi khi them phieu chi: $e', isError: true);
       }
       return false;
     }

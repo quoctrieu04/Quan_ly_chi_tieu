@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
@@ -9,6 +11,7 @@ import 'package:chitieu/api/in_invoice/in_invoice_provider.dart';
 import 'package:chitieu/core/money/money_formatter.dart';
 import 'package:chitieu/core/money/money_settings_provider.dart';
 import 'package:chitieu/core/money/money_settings.dart';
+import 'package:chitieu/core/theme/app_colors.dart';
 
 import 'package:chitieu/financial_transaction/financial_transaction_model.dart';
 import 'package:chitieu/financial_transaction/financial_transaction_provider.dart';
@@ -25,8 +28,12 @@ class TransactionsPage extends StatefulWidget {
 class _TransactionsPageState extends State<TransactionsPage> {
   late int _year;
   late int _month;
+  late int _baseYear;
+  late int _baseMonth;
   int? _day;
   bool _inited = false;
+  final TextEditingController _dateFilterCtl = TextEditingController();
+  Timer? _dateFilterDebounce;
 
   HistoryTab _tab = HistoryTab.transaction;
 
@@ -46,6 +53,9 @@ class _TransactionsPageState extends State<TransactionsPage> {
       _month = (args['month'] as int?) ?? _month;
       _day = args['day'] as int?;
     }
+    _baseYear = _year;
+    _baseMonth = _month;
+    _syncDateFilterText();
 
     _inited = true;
 
@@ -92,32 +102,135 @@ class _TransactionsPageState extends State<TransactionsPage> {
       _year = picked.year;
       _month = picked.month;
       _day = picked.day;
+      _syncDateFilterText();
     });
 
     await _fetchCurrentTab();
+  }
+
+  void _syncDateFilterText() {
+    _dateFilterCtl.text = _day == null
+        ? ''
+        : DateFormat('dd/MM/yyyy').format(DateTime(_year, _month, _day!));
+  }
+
+  DateTime? _parseDateFilter(String raw) {
+    final text = raw.trim();
+    if (text.isEmpty) return null;
+
+    final parts = text
+        .split(RegExp(r'[/.\-\s]+'))
+        .where((part) => part.trim().isNotEmpty)
+        .toList();
+
+    final day = parts.isNotEmpty ? int.tryParse(parts[0]) : null;
+    final month = parts.length >= 2 ? int.tryParse(parts[1]) : _baseMonth;
+    final year = parts.length >= 3 ? int.tryParse(parts[2]) : _baseYear;
+
+    if (day == null || month == null || year == null) return null;
+    if (year < 1000 || month < 1 || month > 12 || day < 1) return null;
+
+    final date = DateTime(year, month, day);
+    if (date.year != year || date.month != month || date.day != day) {
+      return null;
+    }
+    return date;
+  }
+
+  bool _isIncompleteDateInput(String text) {
+    return RegExp(r'[/.\-\s]$').hasMatch(text.trim());
+  }
+
+  void _onDateFilterChanged(String value) {
+    setState(() {});
+    _dateFilterDebounce?.cancel();
+    _dateFilterDebounce = Timer(const Duration(milliseconds: 550), () {
+      if (!mounted) return;
+      _applyDateFilter(showError: false, normalizeInput: false);
+    });
+  }
+
+  Future<void> _applyDateFilter({
+    bool showError = true,
+    bool normalizeInput = true,
+  }) async {
+    final text = _dateFilterCtl.text.trim();
+    if (text.isEmpty) {
+      if (_year == _baseYear && _month == _baseMonth && _day == null) return;
+      setState(() {
+        _year = _baseYear;
+        _month = _baseMonth;
+        _day = null;
+      });
+      await _fetchCurrentTab();
+      return;
+    }
+
+    if (!showError && _isIncompleteDateInput(text)) return;
+
+    final date = _parseDateFilter(text);
+    if (date == null) {
+      if (showError) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Nhap ngay theo dang 28, 28/04 hoac 28/04/2026'),
+          ),
+        );
+      }
+      return;
+    }
+
+    if (_year == date.year && _month == date.month && _day == date.day) {
+      if (normalizeInput) {
+        setState(_syncDateFilterText);
+      }
+      return;
+    }
+
+    setState(() {
+      _year = date.year;
+      _month = date.month;
+      _day = date.day;
+      if (normalizeInput) _syncDateFilterText();
+    });
+    await _fetchCurrentTab();
+  }
+
+  Future<void> _clearDateFilter() async {
+    _dateFilterDebounce?.cancel();
+    setState(() {
+      _year = _baseYear;
+      _month = _baseMonth;
+      _day = null;
+      _dateFilterCtl.clear();
+    });
+    await _fetchCurrentTab();
+  }
+
+  @override
+  void dispose() {
+    _dateFilterDebounce?.cancel();
+    _dateFilterCtl.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bgColor = isDark ? cs.surface : const Color(0xFFFAFBFE);
+    final bgColor = isDark ? cs.surface : AppColors.background;
     final MoneySettings settings =
         context.watch<MoneySettingsProvider>().settings;
 
-    final localeTag = Localizations.localeOf(context).toLanguageTag();
-    final monthLabel =
-        DateFormat.yMMMM(localeTag).format(DateTime(_year, _month));
+    final monthLabel = '${_month.toString().padLeft(2, '0')}/$_year';
     final dayLabel = (_day != null)
-        ? DateFormat('dd MMMM yyyy', localeTag)
-            .format(DateTime(_year, _month, _day!))
+        ? DateFormat('dd/MM/yyyy').format(DateTime(_year, _month, _day!))
         : null;
 
     return Scaffold(
       backgroundColor: bgColor,
       appBar: AppBar(
-        backgroundColor:
-            isDark ? cs.surfaceContainerHigh : Colors.white,
+        backgroundColor: isDark ? cs.surfaceContainerHigh : Colors.white,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
@@ -127,9 +240,7 @@ class _TransactionsPageState extends State<TransactionsPage> {
         ),
         centerTitle: true,
         title: Text(
-          _day == null
-              ? 'Lịch sử • $monthLabel'
-              : 'Lịch sử • $dayLabel',
+          _day == null ? 'Lịch sử $monthLabel' : 'Lịch sử $dayLabel',
           style: TextStyle(
             fontSize: 15,
             fontWeight: FontWeight.w700,
@@ -161,8 +272,7 @@ class _TransactionsPageState extends State<TransactionsPage> {
                   borderRadius: BorderRadius.circular(10),
                 ),
               ),
-              constraints:
-                  const BoxConstraints(minWidth: 38, minHeight: 38),
+              constraints: const BoxConstraints(minWidth: 38, minHeight: 38),
             ),
           ),
           const SizedBox(width: 4),
@@ -170,6 +280,7 @@ class _TransactionsPageState extends State<TransactionsPage> {
       ),
       body: Column(
         children: [
+          _buildDateFilterBar(cs, isDark),
           _buildTabSwitcher(cs, isDark),
           Expanded(
             child: RefreshIndicator(
@@ -185,6 +296,69 @@ class _TransactionsPageState extends State<TransactionsPage> {
     );
   }
 
+  Widget _buildDateFilterBar(ColorScheme cs, bool isDark) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      child: TextField(
+        controller: _dateFilterCtl,
+        keyboardType: TextInputType.datetime,
+        textInputAction: TextInputAction.search,
+        onChanged: _onDateFilterChanged,
+        onSubmitted: (_) => _applyDateFilter(),
+        style: TextStyle(
+          fontSize: 14,
+          fontWeight: FontWeight.w600,
+          color: cs.onSurface,
+        ),
+        decoration: InputDecoration(
+          hintText: 'Loc theo ngay: 28/04/2026',
+          hintStyle: TextStyle(
+            color: cs.onSurface.withOpacity(.38),
+            fontWeight: FontWeight.w500,
+          ),
+          prefixIcon: Icon(Icons.search_rounded,
+              color: cs.onSurface.withOpacity(.45), size: 20),
+          suffixIcon: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (_day != null || _dateFilterCtl.text.trim().isNotEmpty)
+                IconButton(
+                  icon: Icon(Icons.close_rounded,
+                      color: cs.onSurface.withOpacity(.45), size: 20),
+                  onPressed: _clearDateFilter,
+                  tooltip: 'Bo loc ngay',
+                ),
+            ],
+          ),
+          filled: true,
+          fillColor: isDark ? cs.surfaceContainerHigh : Colors.white,
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: BorderSide(
+              color: isDark
+                  ? cs.outlineVariant.withOpacity(.08)
+                  : const Color(0xFFECEDF2),
+            ),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: BorderSide(
+              color: isDark
+                  ? cs.outlineVariant.withOpacity(.08)
+                  : const Color(0xFFECEDF2),
+            ),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: BorderSide(color: cs.primary.withOpacity(.45)),
+          ),
+        ),
+      ),
+    );
+  }
+
   // ═══════════════════════════
   //  TAB SWITCHER
   // ═══════════════════════════
@@ -194,9 +368,7 @@ class _TransactionsPageState extends State<TransactionsPage> {
       child: Container(
         padding: const EdgeInsets.all(4),
         decoration: BoxDecoration(
-          color: isDark
-              ? cs.surfaceContainerHigh
-              : Colors.white,
+          color: isDark ? cs.surfaceContainerHigh : Colors.white,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
             color: isDark
@@ -209,16 +381,16 @@ class _TransactionsPageState extends State<TransactionsPage> {
             _tabBtn('Giao dịch', HistoryTab.transaction,
                 Icons.receipt_long_rounded, cs, isDark),
             const SizedBox(width: 4),
-            _tabBtn('Đầu tư', HistoryTab.investment,
-                Icons.trending_up_rounded, cs, isDark),
+            _tabBtn('Đầu tư', HistoryTab.investment, Icons.trending_up_rounded,
+                cs, isDark),
           ],
         ),
       ),
     );
   }
 
-  Widget _tabBtn(String label, HistoryTab tab, IconData icon,
-      ColorScheme cs, bool isDark) {
+  Widget _tabBtn(String label, HistoryTab tab, IconData icon, ColorScheme cs,
+      bool isDark) {
     final active = _tab == tab;
 
     return Expanded(
@@ -234,13 +406,9 @@ class _TransactionsPageState extends State<TransactionsPage> {
           padding: const EdgeInsets.symmetric(vertical: 10),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(11),
-            color: active
-                ? cs.primary.withOpacity(.1)
-                : Colors.transparent,
+            color: active ? cs.primary.withOpacity(.1) : Colors.transparent,
             border: Border.all(
-              color: active
-                  ? cs.primary.withOpacity(.2)
-                  : Colors.transparent,
+              color: active ? cs.primary.withOpacity(.2) : Colors.transparent,
             ),
           ),
           child: Row(
@@ -249,20 +417,15 @@ class _TransactionsPageState extends State<TransactionsPage> {
               Icon(
                 icon,
                 size: 16,
-                color: active
-                    ? cs.primary
-                    : cs.onSurface.withOpacity(.35),
+                color: active ? cs.primary : cs.onSurface.withOpacity(.35),
               ),
               const SizedBox(width: 6),
               Text(
                 label,
                 style: TextStyle(
-                  fontWeight:
-                      active ? FontWeight.w700 : FontWeight.w500,
+                  fontWeight: active ? FontWeight.w700 : FontWeight.w500,
                   fontSize: 13.5,
-                  color: active
-                      ? cs.primary
-                      : cs.onSurface.withOpacity(.45),
+                  color: active ? cs.primary : cs.onSurface.withOpacity(.45),
                 ),
               ),
             ],
@@ -313,26 +476,21 @@ class _TransactionsPageState extends State<TransactionsPage> {
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 40),
       itemCount: rows.length,
-      itemBuilder: (_, i) =>
-          _transactionTile(rows[i], settings, cs, isDark, i),
+      itemBuilder: (_, i) => _transactionTile(rows[i], settings, cs, isDark, i),
     );
   }
 
-  Widget _transactionTile(_TxnRow tx, MoneySettings settings,
-      ColorScheme cs, bool isDark, int index) {
+  Widget _transactionTile(_TxnRow tx, MoneySettings settings, ColorScheme cs,
+      bool isDark, int index) {
     final isOut = tx.type == 'out';
     final color = isOut ? cs.error : const Color(0xFF2E7D32);
-    final sign = isOut ? '-' : '+';
 
-    final hasPhoto =
-        (tx.photoUrl != null && tx.photoUrl!.trim().isNotEmpty);
-    final amountText =
-        '$sign${MoneyFormatter(settings).format(tx.amount)}';
+    final hasPhoto = (tx.photoUrl != null && tx.photoUrl!.trim().isNotEmpty);
+    final amountText = MoneyFormatter(settings).format(tx.amount);
 
-    final noteText =
-        (tx.content != null && tx.content!.trim().isNotEmpty)
-            ? tx.content!.trim()
-            : DateFormat('dd/MM/yyyy HH:mm').format(tx.date);
+    final noteText = (tx.content != null && tx.content!.trim().isNotEmpty)
+        ? tx.content!.trim()
+        : DateFormat('dd/MM/yyyy HH:mm').format(tx.date);
 
     return TweenAnimationBuilder<double>(
       duration: Duration(milliseconds: 350 + (index * 30)),
@@ -447,10 +605,8 @@ class _TransactionsPageState extends State<TransactionsPage> {
                             : const Color(0xFFF0F1F5),
                         borderRadius: BorderRadius.circular(12),
                       ),
-                      child: Icon(
-                          Icons.image_not_supported_outlined,
-                          size: 18,
-                          color: cs.onSurface.withOpacity(.3)),
+                      child: Icon(Icons.image_not_supported_outlined,
+                          size: 18, color: cs.onSurface.withOpacity(.3)),
                     );
                   },
                 ),
@@ -497,7 +653,6 @@ class _TransactionsPageState extends State<TransactionsPage> {
       ColorScheme cs, bool isDark, int index) {
     final isOut = tx.direction == 'out';
     final color = isOut ? cs.error : const Color(0xFF2E7D32);
-    final sign = isOut ? '-' : '+';
 
     final subtitle =
         (tx.description != null && tx.description!.trim().isNotEmpty)
@@ -572,14 +727,13 @@ class _TransactionsPageState extends State<TransactionsPage> {
             ),
             const SizedBox(width: 8),
             Container(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 10, vertical: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               decoration: BoxDecoration(
                 color: color.withOpacity(.06),
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Text(
-                '$sign${MoneyFormatter(settings).format(tx.amount)}',
+                MoneyFormatter(settings).format(tx.amount),
                 style: TextStyle(
                   fontWeight: FontWeight.w800,
                   color: color,

@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:chitieu/core/theme/app_colors.dart';
 import 'package:chitieu/core/money/widgets/money_text.dart';
 import 'package:chitieu/core/budget/budget_model.dart';
 import 'package:chitieu/api/category/category_model.dart';
 
-const double kWarn1 = 0.75;
-const double kWarn2 = 0.90;
+const double kWarn1 = 0.80;
 
-enum BudgetStatus { normal, warn1, warn2, overspent }
+enum BudgetStatus { normal, warn1, overspent }
 
 String _capFirst(String text) {
   if (text.isEmpty) return text;
@@ -88,11 +88,6 @@ class BudgetCategoryTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final remaining = item.amount - item.spent;
-    final percent = item.amount > 0
-        ? (item.spent / item.amount)
-        : (item.spent > 0 ? 1.0 : 0.0);
-
     final status = _statusFor(item.amount, item.spent);
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
@@ -104,6 +99,7 @@ class BudgetCategoryTile extends StatelessWidget {
     final textMuted = isDark ? Colors.white54 : const Color(0xFF64748B);
 
     final isOver = status == BudgetStatus.overspent;
+    final isWarning = status == BudgetStatus.warn1;
 
     // Màu sắc Red Theme (Dựa theo bản thiết kế)
     final redStripColor = const Color(0xFF991B1B); // Vạch đỏ mép Card
@@ -111,30 +107,36 @@ class BudgetCategoryTile extends StatelessWidget {
     final redBadgeBg = isDark
         ? const Color(0xFF7F1D1D).withOpacity(0.4)
         : const Color(0xFFFEE2E2); // Nền chip đỏ
+    const orangeTextColor = Color(0xFFD97706);
+    const orangeBorderColor = Color(0xFFF59E0B);
 
     // Màu chính phụ thuộc trạng thái
     final spentColor = isOver
         ? redTextColor
-        : (isDark
-            ? Colors.white
-            : const Color(0xFF0F172A)); // Màu chữ tiền chi (Đen hoặc Đỏ)
-
-    // Màu thanh tiến trình (Dựa theo ảnh 2)
-    final barIndicatorColor = isOver ? redStripColor : cs.primary;
-    final barTrackColor = isDark ? Colors.white10 : const Color(0xFFE2E8F0);
+        : isWarning
+            ? orangeTextColor
+            : (isDark
+                ? Colors.white
+                : const Color(0xFF0F172A)); // Màu chữ tiền chi
 
     // Kênh màu phụ (Dành cho Avatar vuông bo góc theo mẫu)
     final avatarBg = isDark ? Colors.white10 : const Color(0xFFF1F5F9);
-    final avatarColor =
-        isDark ? Colors.white : const Color(0xFF0F4C5C); // Teal đậm sang trọng
+    final avatarColor = isDark ? Colors.white : AppColors.primaryDark;
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 16),
+      margin: const EdgeInsets.only(bottom: 10),
       clipBehavior: Clip.antiAlias, // Để thanh strip màu đỏ ốp dính rìa bo tròn
       decoration: BoxDecoration(
         color: surfaceColor,
-        borderRadius: BorderRadius.circular(24),
-        border: isOver ? Border.all(color: redTextColor.withOpacity(0.5), width: 1.5) : null,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: isOver
+              ? redTextColor.withOpacity(.55)
+              : isWarning
+                  ? orangeBorderColor.withOpacity(.7)
+                  : Colors.transparent,
+          width: isOver || isWarning ? 1.4 : 0,
+        ),
         boxShadow: [
           BoxShadow(
             color: shadowColor,
@@ -156,27 +158,30 @@ class BudgetCategoryTile extends StatelessWidget {
                 // 2) Thân Card chính
                 Expanded(
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 14,
+                    ),
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         // (2.1) AVATAR Hình vuông bo góc mượt
                         Container(
-                          width: 38,
-                          height: 38,
+                          width: 42,
+                          height: 42,
                           decoration: BoxDecoration(
                             color: avatarBg,
-                            borderRadius: BorderRadius.circular(10),
+                            borderRadius: BorderRadius.circular(13),
                           ),
                           alignment: Alignment.center,
                           child: Icon(
                             _getIconForCategory(category.name),
-                            size: 20,
+                            size: 22,
                             color: avatarColor,
                           ),
                         ),
 
-                        const SizedBox(width: 16),
+                        const SizedBox(width: 12),
 
                         // (2.2) NỘI DUNG VÀ THANH TIẾN TRÌNH CHIẾM GỌN PHẦN CÒN LẠI
                         Expanded(
@@ -192,7 +197,7 @@ class BudgetCategoryTile extends StatelessWidget {
                                     child: Text(
                                       _capFirst(category.name),
                                       style: TextStyle(
-                                        fontSize: 16,
+                                        fontSize: 15,
                                         fontWeight: FontWeight.w700,
                                         color: isDark
                                             ? Colors.white
@@ -209,14 +214,14 @@ class BudgetCategoryTile extends StatelessWidget {
                                         Text('Kế hoạch: ',
                                             style: TextStyle(
                                                 color: textMuted,
-                                                fontSize: 13)),
+                                                fontSize: 12)),
                                         MoneyText(
                                           item.amount,
                                           style: TextStyle(
                                             color: isDark
                                                 ? Colors.white
                                                 : const Color(0xFF0F172A),
-                                            fontSize: 14,
+                                            fontSize: 13,
                                             fontWeight: FontWeight.w700,
                                           ),
                                         ),
@@ -226,7 +231,7 @@ class BudgetCategoryTile extends StatelessWidget {
                                     Text('Chưa cấp ngân sách',
                                         style: TextStyle(
                                             color: textMuted,
-                                            fontSize: 13,
+                                            fontSize: 12,
                                             fontStyle: FontStyle.italic)),
                                 ],
                               ),
@@ -234,47 +239,93 @@ class BudgetCategoryTile extends StatelessWidget {
                               const SizedBox(height: 4),
 
                               // HÀNG 2: Đã chi (Căn phải)
-                              GestureDetector(
-                                onTap: isOver ? () {
-                                  showDialog(
-                                    context: context,
-                                    builder: (ctx) => AlertDialog(
-                                      title: const Text('💸 Ui chao! Cảnh báo lạm chi!'),
-                                      content: Text('Bạn lại lỡ tay vung quá trán cho khoản "${_capFirst(category.name)}" mất rồi!\nĐừng để rỗng túi nhé, từ giờ tới cuối tháng hãy "thắt lưng buộc bụng" nha.'),
-                                      actions: [
-                                        TextButton(
-                                          onPressed: () => Navigator.pop(ctx),
-                                          child: const Text('Biết rồi khổ lắm nói mãi!'),
-                                        ),
-                                      ],
-                                    ),
-                                  );
-                                } : null,
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.end,
-                                  children: [
-                                    Text('Đã chi: ',
-                                        style: TextStyle(
-                                            color: textMuted, fontSize: 13)),
-                                    MoneyText(
-                                      item.spent,
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.end,
+                                children: [
+                                  Text('Đã chi: ',
                                       style: TextStyle(
-                                        color:
-                                            spentColor, // Đỏ nếu vượt chữ, bình thường nếu an toàn
-                                        fontSize: 15,
-                                        fontWeight: FontWeight.w800,
-                                      ),
+                                          color: textMuted, fontSize: 12)),
+                                  MoneyText(
+                                    item.spent,
+                                    style: TextStyle(
+                                      color:
+                                          spentColor, // Đỏ nếu vượt chữ, bình thường nếu an toàn
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w800,
                                     ),
-                                    if (isOver) ...[
-                                      const SizedBox(width: 4),
-                                      Icon(Icons.touch_app, size: 14, color: redTextColor.withOpacity(0.8)),
-                                    ]
-                                  ],
-                                ),
+                                  ),
+                                ],
                               ),
 
-                              // Removed: HÀNG 3: THANH TIẾN TRÌNH
-
+                              // CẢNH BÁO BÊN DƯỚI KHI GẦN/VƯỢT KẾ HOẠCH
+                              if (isWarning && !isOver)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 6),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.warning_amber_rounded,
+                                          size: 16, color: orangeTextColor),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        'Sắp chạm kế hoạch',
+                                        style: const TextStyle(
+                                          color: orangeTextColor,
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              if (isOver)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 6),
+                                  child: InkWell(
+                                    onTap: () {
+                                      showDialog(
+                                        context: context,
+                                        builder: (ctx) => AlertDialog(
+                                          title: const Text(
+                                              '💸 Ui chao! Cảnh báo lạm chi!'),
+                                          content: Text(
+                                              'Bạn lại lỡ tay vung quá trán cho khoản "${_capFirst(category.name)}" mất rồi!\nĐừng để rỗng túi nhé, từ giờ tới cuối tháng hãy "thắt lưng buộc bụng" nha.'),
+                                          actions: [
+                                            TextButton(
+                                              onPressed: () =>
+                                                  Navigator.pop(ctx),
+                                              child: const Text(
+                                                  'Biết rồi khổ lắm nói mãi!'),
+                                            ),
+                                          ],
+                                        ),
+                                      );
+                                    },
+                                    borderRadius: BorderRadius.circular(4),
+                                    child: Padding(
+                                      padding: const EdgeInsets.all(2.0),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(Icons.warning_amber_rounded,
+                                              size: 16, color: redTextColor),
+                                          const SizedBox(width: 4),
+                                          Text('Đã vượt Kế hoạch ',
+                                              style: TextStyle(
+                                                  color: redTextColor,
+                                                  fontSize: 12,
+                                                  fontWeight: FontWeight.w600)),
+                                          const SizedBox(width: 6),
+                                          // Icon ngón tay chọt báo hiệu bấm được
+                                          Icon(Icons.touch_app,
+                                              size: 16,
+                                              color: redTextColor
+                                                  .withOpacity(0.8)),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
                             ],
                           ),
                         ),
@@ -294,11 +345,10 @@ class BudgetCategoryTile extends StatelessWidget {
 
   BudgetStatus _statusFor(num amount, num spent) {
     if (amount <= 0) {
-      return spent > 0 ? BudgetStatus.warn2 : BudgetStatus.normal;
+      return spent > 0 ? BudgetStatus.warn1 : BudgetStatus.normal;
     }
     final p = spent / amount;
     if (spent > amount) return BudgetStatus.overspent;
-    if (p >= kWarn2) return BudgetStatus.warn2;
     if (p >= kWarn1) return BudgetStatus.warn1;
     return BudgetStatus.normal;
   }

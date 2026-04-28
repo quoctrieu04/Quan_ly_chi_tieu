@@ -2,13 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'package:chitieu/api/income/income_provider.dart';
+import 'package:chitieu/core/theme/app_colors.dart';
 import 'package:chitieu/widgets/create_income_form.dart';
 import 'package:chitieu/widgets/edit_income_form.dart';
 import 'package:chitieu/core/date/year_month_provider.dart';
 
 // ── Design tokens ──
-const _kMint      = Color(0xFF2EC4B6);
-const _kMintLight = Color(0xFF5DE8DA);
+const _kMint = AppColors.primary;
+const _kMintLight = AppColors.primaryLight;
 
 class IncomeListPage extends StatelessWidget {
   const IncomeListPage({super.key});
@@ -16,16 +17,13 @@ class IncomeListPage extends StatelessWidget {
   // ── Icon map loại thu nhập ──
   IconData _incomeIcon(String title) {
     final n = title.toLowerCase();
-    if (n.contains('lương') || n.contains('salary'))
-      return Icons.work_rounded;
+    if (n.contains('lương') || n.contains('salary')) return Icons.work_rounded;
     if (n.contains('thưởng') || n.contains('bonus'))
       return Icons.card_giftcard_rounded;
     if (n.contains('đầu tư') || n.contains('invest'))
       return Icons.trending_up_rounded;
-    if (n.contains('cho thuê') || n.contains('rent'))
-      return Icons.home_rounded;
-    if (n.contains('freelance'))
-      return Icons.laptop_mac_rounded;
+    if (n.contains('cho thuê') || n.contains('rent')) return Icons.home_rounded;
+    if (n.contains('freelance')) return Icons.laptop_mac_rounded;
     if (n.contains('bán') || n.contains('sell'))
       return Icons.storefront_rounded;
     if (n.contains('lãi') || n.contains('interest'))
@@ -36,16 +34,14 @@ class IncomeListPage extends StatelessWidget {
   // ── Color cho từng loại ──
   Color _incomeColor(String title) {
     final n = title.toLowerCase();
-    if (n.contains('lương') || n.contains('salary'))
-      return _kMint;
+    if (n.contains('lương') || n.contains('salary')) return _kMint;
     if (n.contains('thưởng') || n.contains('bonus'))
       return const Color(0xFFF59E0B);
     if (n.contains('đầu tư') || n.contains('invest'))
       return const Color(0xFF8B5CF6);
     if (n.contains('cho thuê') || n.contains('rent'))
       return const Color(0xFF3B82F6);
-    if (n.contains('freelance'))
-      return const Color(0xFFEC4899);
+    if (n.contains('freelance')) return const Color(0xFFEC4899);
     return _kMint;
   }
 
@@ -56,7 +52,7 @@ class IncomeListPage extends StatelessWidget {
     final ym = context.read<YearMonthProvider>().ym;
     final cs = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bgColor = isDark ? const Color(0xFF0F1419) : const Color(0xFFF5F7FA);
+    final bgColor = isDark ? const Color(0xFF0F1419) : AppColors.background;
 
     return Scaffold(
       backgroundColor: bgColor,
@@ -111,8 +107,7 @@ class IncomeListPage extends StatelessWidget {
                   borderRadius: BorderRadius.circular(10),
                 ),
               ),
-              constraints:
-                  const BoxConstraints(minWidth: 38, minHeight: 38),
+              constraints: const BoxConstraints(minWidth: 38, minHeight: 38),
             ),
           ),
           const SizedBox(width: 4),
@@ -123,42 +118,6 @@ class IncomeListPage extends StatelessWidget {
           : ListView(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 40),
               children: [
-                // ── Hero card ──
-                _buildHeroCard(items.length, isDark),
-                const SizedBox(height: 20),
-
-                // ── Section header ──
-                Row(
-                  children: [
-                    Text(
-                      'Danh sách',
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                        color: isDark ? Colors.white.withOpacity(.5) : const Color(0xFF94A3B8),
-                        letterSpacing: -0.2,
-                      ),
-                    ),
-                    const Spacer(),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: _kMint.withOpacity(.08),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        '${items.length} nguồn',
-                        style: const TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          color: _kMint,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-
                 // ── Income cards ──
                 ...items.asMap().entries.map((e) {
                   final i = e.key;
@@ -176,8 +135,8 @@ class IncomeListPage extends StatelessWidget {
                     ),
                     child: Container(
                       margin: const EdgeInsets.only(bottom: 10),
-                      child: _buildIncomeCard(
-                          context, inc, cs, isDark, prov, ym),
+                      child:
+                          _buildIncomeCard(context, inc, cs, isDark, prov, ym),
                     ),
                   );
                 }),
@@ -203,42 +162,39 @@ class IncomeListPage extends StatelessWidget {
       ),
       child: Container(
         width: double.infinity,
-        padding: const EdgeInsets.all(22),
+        padding: const EdgeInsets.fromLTRB(18, 16, 16, 18),
         decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: isDark
-                ? [const Color(0xFF0F2D28), const Color(0xFF0A1F1C)]
-                : [_kMint, _kMintLight],
-          ),
+          color: isDark ? const Color(0xFF1C2530) : Colors.white,
           borderRadius: BorderRadius.circular(22),
+          border: Border.all(
+            color: isDark ? const Color(0xFF2A3544) : AppColors.border,
+          ),
           boxShadow: [
-            BoxShadow(
-              color: _kMint.withOpacity(isDark ? .12 : .25),
-              blurRadius: 24,
-              offset: const Offset(0, 8),
-              spreadRadius: -4,
-            ),
+            if (!isDark)
+              BoxShadow(
+                color: Colors.black.withOpacity(.035),
+                blurRadius: 16,
+                offset: const Offset(0, 7),
+              ),
           ],
         ),
         child: Row(
           children: [
             // Icon
             Container(
-              width: 52,
-              height: 52,
+              width: 38,
+              height: 38,
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(.15),
-                borderRadius: BorderRadius.circular(16),
+                color: _kMint.withOpacity(.1),
+                borderRadius: BorderRadius.circular(12),
               ),
               child: const Icon(
                 Icons.account_balance_wallet_rounded,
-                color: Colors.white,
-                size: 26,
+                color: _kMint,
+                size: 20,
               ),
             ),
-            const SizedBox(width: 16),
+            const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -246,19 +202,18 @@ class IncomeListPage extends StatelessWidget {
                   Text(
                     'Nguồn thu nhập',
                     style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w500,
-                      color: Colors.white.withOpacity(.65),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: isDark ? Colors.white54 : AppColors.textSub,
                     ),
                   ),
                   const SizedBox(height: 4),
                   Text(
                     '$count nguồn đang hoạt động',
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 20,
-                      fontWeight: FontWeight.w900,
-                      color: Colors.white,
-                      letterSpacing: -0.5,
+                      fontWeight: FontWeight.w800,
+                      color: isDark ? Colors.white : AppColors.textMain,
                     ),
                   ),
                 ],
@@ -319,7 +274,10 @@ class IncomeListPage extends StatelessWidget {
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       gradient: LinearGradient(
-                        colors: [_kMint.withOpacity(.15), _kMintLight.withOpacity(.1)],
+                        colors: [
+                          _kMint.withOpacity(.15),
+                          _kMintLight.withOpacity(.1)
+                        ],
                       ),
                     ),
                     child: Icon(
@@ -337,7 +295,9 @@ class IncomeListPage extends StatelessWidget {
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w800,
-                color: isDark ? Colors.white.withOpacity(.7) : const Color(0xFF1A2332),
+                color: isDark
+                    ? Colors.white.withOpacity(.7)
+                    : const Color(0xFF1A2332),
                 letterSpacing: -0.3,
               ),
             ),
@@ -348,7 +308,9 @@ class IncomeListPage extends StatelessWidget {
               style: TextStyle(
                 fontSize: 13.5,
                 height: 1.5,
-                color: isDark ? Colors.white.withOpacity(.4) : const Color(0xFF94A3B8),
+                color: isDark
+                    ? Colors.white.withOpacity(.4)
+                    : const Color(0xFF94A3B8),
               ),
             ),
             const SizedBox(height: 28),
@@ -366,7 +328,8 @@ class IncomeListPage extends StatelessWidget {
                 }
               },
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
                 decoration: BoxDecoration(
                   gradient: const LinearGradient(
                     colors: [_kMint, _kMintLight],
@@ -414,50 +377,43 @@ class IncomeListPage extends StatelessWidget {
 
     return Material(
       color: isDark ? const Color(0xFF1C2530) : Colors.white,
-      borderRadius: BorderRadius.circular(18),
+      borderRadius: BorderRadius.circular(16),
       child: InkWell(
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(16),
         onTap: () {},
         child: Container(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(18),
+            borderRadius: BorderRadius.circular(16),
             border: Border.all(
-              color: isDark
-                  ? const Color(0xFF2A3544)
-                  : const Color(0xFFE8ECF0),
+              color: isDark ? const Color(0xFF2A3544) : AppColors.border,
             ),
-            boxShadow: isDark ? [] : [
-              BoxShadow(
-                color: Colors.black.withOpacity(.03),
-                blurRadius: 10,
-                offset: const Offset(0, 2),
-              ),
-            ],
+            boxShadow: isDark
+                ? []
+                : [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(.03),
+                      blurRadius: 10,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
           ),
           child: Row(
             children: [
               // Icon with gradient background
               Container(
-                width: 48,
-                height: 48,
+                width: 42,
+                height: 42,
                 decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      color.withOpacity(.12),
-                      color.withOpacity(.04),
-                    ],
-                  ),
-                  borderRadius: BorderRadius.circular(14),
+                  color: color.withOpacity(.08),
+                  borderRadius: BorderRadius.circular(13),
                   border: Border.all(
                     color: color.withOpacity(.1),
                   ),
                 ),
-                child: Icon(icon, color: color, size: 22),
+                child: Icon(icon, color: color, size: 20),
               ),
-              const SizedBox(width: 14),
+              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -467,12 +423,12 @@ class IncomeListPage extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        fontSize: 15,
+                        fontSize: 14.5,
                         fontWeight: FontWeight.w700,
                         color: isDark ? Colors.white : const Color(0xFF1A2332),
                       ),
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 3),
                     Container(
                       padding: const EdgeInsets.symmetric(
                           horizontal: 8, vertical: 2),
@@ -515,7 +471,9 @@ class IncomeListPage extends StatelessWidget {
                   }
                 },
                 icon: Icon(Icons.more_vert_rounded,
-                    color: isDark ? Colors.white.withOpacity(.3) : const Color(0xFF94A3B8),
+                    color: isDark
+                        ? Colors.white.withOpacity(.3)
+                        : const Color(0xFF94A3B8),
                     size: 20),
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14)),
@@ -524,12 +482,10 @@ class IncomeListPage extends StatelessWidget {
                     value: 'edit',
                     child: Row(
                       children: [
-                        Icon(Icons.edit_outlined,
-                            size: 18, color: _kMint),
+                        Icon(Icons.edit_outlined, size: 18, color: _kMint),
                         const SizedBox(width: 10),
                         const Text('Sửa',
-                            style:
-                                TextStyle(fontWeight: FontWeight.w600)),
+                            style: TextStyle(fontWeight: FontWeight.w600)),
                       ],
                     ),
                   ),
@@ -542,8 +498,7 @@ class IncomeListPage extends StatelessWidget {
                         const SizedBox(width: 10),
                         Text('Xóa',
                             style: TextStyle(
-                                fontWeight: FontWeight.w600,
-                                color: cs.error)),
+                                fontWeight: FontWeight.w600, color: cs.error)),
                       ],
                     ),
                   ),
@@ -564,8 +519,7 @@ class IncomeListPage extends StatelessWidget {
     final ok = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Row(
           children: [
             Container(
@@ -574,8 +528,8 @@ class IncomeListPage extends StatelessWidget {
                 color: cs.error.withOpacity(.08),
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: Icon(Icons.delete_outline_rounded,
-                  color: cs.error, size: 20),
+              child:
+                  Icon(Icons.delete_outline_rounded, color: cs.error, size: 20),
             ),
             const SizedBox(width: 12),
             const Text('Xóa nguồn tiền',
@@ -594,8 +548,7 @@ class IncomeListPage extends StatelessWidget {
           TextButton(
             onPressed: () => Navigator.pop(context, false),
             style: TextButton.styleFrom(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 20, vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12)),
             ),
@@ -605,8 +558,7 @@ class IncomeListPage extends StatelessWidget {
             onPressed: () => Navigator.pop(context, true),
             style: FilledButton.styleFrom(
               backgroundColor: cs.error,
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 20, vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12)),
             ),

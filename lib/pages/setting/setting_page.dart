@@ -3,8 +3,11 @@ import 'package:provider/provider.dart';
 
 import '../../auth/auth_provider.dart';
 import '../../auth/login.dart';
+import 'package:chitieu/core/theme/app_colors.dart';
+import 'money_settings_page.dart';
 import 'settings_provider.dart';
 import '../profile_page.dart'; // 👈 trang thông tin tài khoản
+import 'package:chitieu/widgets/app_page_header.dart';
 
 // import file i18n đã generate trong lib/l10n
 import 'package:chitieu/l10n/app_localizations.dart';
@@ -47,7 +50,7 @@ class SettingsPage extends StatelessWidget {
     final name = auth.user?['name'] ?? '';
     final cs = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bgColor = isDark ? cs.surface : const Color(0xFFFAFBFE);
+    final bgColor = isDark ? cs.surface : AppColors.background;
 
     return Scaffold(
       backgroundColor: bgColor,
@@ -98,6 +101,19 @@ class SettingsPage extends StatelessWidget {
                           cs: cs,
                           isDark: isDark,
                         ),
+                      ),
+                      _thinDivider(cs, isDark),
+                      _buildActionRow(
+                        icon: Icons.payments_outlined,
+                        label: 'Định dạng tiền',
+                        cs: cs,
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => const MoneySettingsPage(),
+                            ),
+                          );
+                        },
                       ),
                       _thinDivider(cs, isDark),
                       // Theme toggle
@@ -178,40 +194,16 @@ class SettingsPage extends StatelessWidget {
   //  HEADER
   // ═══════════════════════════
   Widget _buildHeader(BuildContext context, ColorScheme cs, bool isDark) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
-      decoration: BoxDecoration(
-        color: isDark ? cs.surfaceContainerHigh : Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(isDark ? .10 : .03),
-            blurRadius: 6,
-            offset: const Offset(0, 1),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Text(
-            'Cài đặt',
-            style: TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.w800,
-              color: cs.onSurface,
-              letterSpacing: -0.3,
-            ),
-          ),
-          const Spacer(),
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: cs.primary.withOpacity(.08),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(Icons.settings_rounded, color: cs.primary, size: 20),
-          ),
-        ],
-      ),
+    return AppPageHeader(
+      icon: Icons.settings_rounded,
+      title: 'Cài đặt',
+      actions: [
+        HeaderIconButton(
+          icon: Icons.person_outline_rounded,
+          tooltip: 'Tài khoản',
+          onPressed: () => _openProfileOrLogin(context),
+        ),
+      ],
     );
   }
 
@@ -481,7 +473,7 @@ class SettingsPage extends StatelessWidget {
   Widget _buildColorPicker(BuildContext context, SettingsProvider settings,
       ColorScheme cs, bool isDark) {
     const colors = <Color>[
-      Color(0xFF2EC4B6), // Mint (Mặc định)
+      AppColors.primary, // Mint (Mặc định)
       Color(0xFF3F51B5), // Indigo
       Color(0xFF1976D2), // Blue
       Color(0xFF00897B), // Teal

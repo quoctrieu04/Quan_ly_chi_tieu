@@ -9,9 +9,11 @@ import 'package:chitieu/api/category/category_provider.dart';
 import 'package:chitieu/api/category/category_model.dart';
 import 'package:chitieu/core/budget/budgets_provider.dart';
 import 'package:chitieu/core/budget/budget_model.dart';
-import 'package:chitieu/api/bankaccount/bank_account_provider.dart';
-import 'package:month_picker_dialog/month_picker_dialog.dart';
+import 'package:chitieu/financial_transaction/financial_transaction_provider.dart';
 import 'package:chitieu/pages/setting/settings_provider.dart';
+import 'package:chitieu/core/theme/app_colors.dart';
+import 'package:chitieu/widgets/app_page_header.dart';
+import 'package:chitieu/widgets/app_month_picker_sheet.dart';
 
 class AnalyticsPage extends StatefulWidget {
   const AnalyticsPage({super.key});
@@ -45,9 +47,11 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final b = context.read<BudgetsProvider>();
       final c = context.read<CategoryProvider>();
+      final ft = context.read<FinancialTransactionProvider>();
 
       final futures = <Future<void>>[
         b.loadForMonth(year: _ym.year, month: _ym.month),
+        ft.fetchByMonth(year: _ym.year, month: _ym.month),
       ];
 
       if (!c.loading && c.items.isEmpty) {
@@ -132,24 +136,15 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
     final locale = Localizations.localeOf(context).toLanguageTag();
     final budgetsProv = context.watch<BudgetsProvider>();
     final catsProv = context.watch<CategoryProvider>();
-    final walletProv = context.watch<BankAccountProvider>();
-
+    final ftProv = context.watch<FinancialTransactionProvider>();
     final items = budgetsProv.items;
     final categories = {for (final c in catsProv.items) c.id: c};
 
     final totalAssigned = budgetsProv.totalAssigned;
-    num totalSpent = 0;
-    for (final it in items) {
-      try {
-        final s = (it as dynamic).spent;
-        if (s is num) totalSpent += s;
-      } catch (_) {}
-    }
-
-    final num totalBalance =
-        walletProv.items.fold<num>(0, (sum, w) => sum + w.balance);
-    final num combinedRemaining = totalBalance - totalSpent;
-    final num unallocated = budgetsProv.unallocated;
+    final num totalIncome = ftProv.totalIncome;
+    final num totalSpent = ftProv.totalExpense;
+    final num monthRemaining = totalIncome - totalSpent;
+    final num budgetRemaining = totalAssigned - totalSpent;
     final totalBudgetAmount = items
         .map((e) => e.amount)
         .where((v) => v > 0)
@@ -157,42 +152,33 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
 
     final nf = NumberFormat.decimalPattern(locale);
     final monthLabel = DateFormat.yMMMM(locale).format(_ym);
+    Future<void> openMonthPicker() async {
+      final picked = await _pickMonth(context, initial: _ym);
+      if (picked != null) {
+        setState(() => _ym = picked);
+        await Future.wait([
+          budgetsProv.loadForMonth(
+            year: _ym.year,
+            month: _ym.month,
+          ),
+          ftProv.fetchByMonth(year: _ym.year, month: _ym.month),
+        ]);
+        await _fetchPrediction();
+      }
+    }
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF7F7FB),
-      appBar: AppBar(
-        elevation: 0,
-        centerTitle: true,
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black87,
-        title: Column(
-          children: [
-            Text(
-              t.analyticsTitle,
-              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              monthLabel,
-              style: const TextStyle(fontSize: 13, color: Colors.black54),
-            ),
-          ],
-        ),
+      backgroundColor: AppColors.background,
+      appBar: AppPageHeaderBar(
+        icon: Icons.analytics_outlined,
+        title: t.analyticsTitle,
+        subtitle: monthLabel,
+        onTap: openMonthPicker,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.calendar_month_rounded),
+          HeaderIconButton(
+            icon: Icons.calendar_today_outlined,
             tooltip: t.selectMonth,
-            onPressed: () async {
-              final picked = await _pickMonth(context, initial: _ym);
-              if (picked != null) {
-                setState(() => _ym = picked);
-                await budgetsProv.loadForMonth(
-                  year: _ym.year,
-                  month: _ym.month,
-                );
-                await _fetchPrediction();
-              }
-            },
+            onPressed: openMonthPicker,
           ),
         ],
       ),
@@ -200,6 +186,7 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
         onRefresh: () async {
           await Future.wait([
             budgetsProv.loadForMonth(year: _ym.year, month: _ym.month),
+            ftProv.fetchByMonth(year: _ym.year, month: _ym.month),
             if (!catsProv.loading) catsProv.refresh(),
           ]);
           await _fetchPrediction();
@@ -209,7 +196,7 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
           children: [
             _SectionCard(
               title: "Dự báo & Cảnh báo",
-              child: _buildPredictionCard(nf),
+              child: _buildPredictionInsightCard(nf),
             ),
             const SizedBox(height: 16),
             _SectionCard(
@@ -220,23 +207,13 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
             ),
             const SizedBox(height: 16),
             _SectionCard(
-              title: t.topCategories,
-              child: totalBudgetAmount <= 0
-                  ? const _Empty(text: 'Chưa có dữ liệu tháng này')
-                  : _TopCategoriesList(
-                      items: items,
-                      categories: categories,
-                      number: nf,
-                    ),
-            ),
-            const SizedBox(height: 16),
-            _SectionCard(
               title: t.summary,
               child: _SummaryBox(
+                totalIncome: totalIncome,
                 totalAssigned: totalAssigned,
                 totalSpent: totalSpent,
-                unallocated: unallocated,
-                combinedRemaining: combinedRemaining,
+                monthRemaining: monthRemaining,
+                budgetRemaining: budgetRemaining,
               ),
             ),
           ],
@@ -245,7 +222,9 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
     );
   }
 
-  Widget _buildPredictionCard(NumberFormat nf) {
+  bool get _showLegacyPredictionCard => false;
+
+  Widget _buildPredictionInsightCard(NumberFormat nf) {
     if (_loadingAI) {
       return const Padding(
         padding: EdgeInsets.all(16),
@@ -275,16 +254,16 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
     final nextLabel =
         DateFormat('MM/yyyy', locale).format(DateTime(_ym.year, _ym.month + 1));
 
+    final nextMonthPrediction = (_nextMonthPrediction ?? 0).toDouble();
     final currentMonthPrediction = (_currentMonthPrediction ?? 0).toDouble();
     final snapshotPrediction = (_snapshotPrediction ?? 0).toDouble();
-    final nextMonthPrediction = (_nextMonthPrediction ?? 0).toDouble();
     final warningLimit = (_warningLimit ?? 0).toDouble();
     final spentMtd = (_spentMtd ?? 0).toDouble();
-
     final mainPrediction = currentMonthPrediction > 0
         ? currentMonthPrediction
         : snapshotPrediction;
 
+    final currentPredictionValue = mainPrediction;
     final progress = (_progressPercent.clamp(0, 100)) / 100.0;
     final percentLabel =
         mainPrediction > 0 ? '${_progressPercent.clamp(0, 100)}%' : '--';
@@ -324,14 +303,329 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
         break;
     }
 
+    final isOver =
+        _predictionStatus == 'over' || _predictionStatus == 'over_limit';
+    final isWarning =
+        _predictionStatus == 'near_limit' || _predictionStatus == 'warning';
+    final statusLabel = isOver
+        ? 'Vượt mốc'
+        : isWarning
+            ? 'Cần chú ý'
+            : (_predictionStatus == 'watch')
+                ? 'Theo dõi'
+                : 'An toàn';
+    final spentLabel = nf.format(spentMtd.round());
+    final limitSummary = warningLimit > 0
+        ? '${nf.format(spentMtd.round())} / ${nf.format(warningLimit.round())}'
+        : '${nf.format(spentMtd.round())} / --';
+    final remainingToLimit = warningLimit - spentMtd;
+    final insightText = warningLimit <= 0
+        ? (_statusMessage ?? 'Chưa có mốc cảnh báo')
+        : isOver
+            ? 'Đã vượt mốc ${nf.format(remainingToLimit.abs().round())}'
+            : 'Còn ${nf.format(remainingToLimit.round())} trước khi chạm mốc';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(
+                child: _PredictionMiniCard(
+                  label: 'DỰ ĐOÁN $nextLabel',
+                  value: nf.format(nextMonthPrediction.round()),
+                  caption: 'Ước chi tháng tới',
+                  color: const Color(0xFF2F73B8),
+                  footerIcon: Icons.trending_up_rounded,
+                  footerText: statusLabel,
+                  footerColor: AppColors.primaryDark,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _PredictionMiniCard(
+                  label: 'DỰ CHI $currentLabel',
+                  value: currentPredictionValue > 0
+                      ? nf.format(currentPredictionValue.round())
+                      : '--',
+                  caption: 'Ước chi tháng này',
+                  color: isOver
+                      ? const Color(0xFFEF4444)
+                      : const Color(0xFF2F73B8),
+                  progress: progress,
+                  progressColor: barColor,
+                  footerIcon:
+                      isOver ? Icons.warning_rounded : Icons.shield_rounded,
+                  footerText: 'Đã chi $spentLabel',
+                  footerColor: barColor,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+          decoration: BoxDecoration(
+            color: badgeBg,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                isOver ? Icons.warning_rounded : Icons.shield_rounded,
+                color: badgeText,
+                size: 18,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: RichText(
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  text: TextSpan(
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w800,
+                      color: badgeText,
+                    ),
+                    children: [
+                      const TextSpan(text: 'Cảnh báo: '),
+                      TextSpan(text: insightText),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (_showLegacyPredictionCard) ...[
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Dự báo $nextLabel',
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF6B7280),
+                  ),
+                ),
+              ),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: badgeBg,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      isOver ? Icons.error_rounded : Icons.check_circle_rounded,
+                      color: badgeText,
+                      size: 15,
+                    ),
+                    const SizedBox(width: 5),
+                    Text(
+                      statusLabel,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                        color: badgeText,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    nf.format(nextMonthPrediction.round()),
+                    style: const TextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.w900,
+                      height: 1.05,
+                      color: Color(0xFF111827),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withOpacity(.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.trending_up_rounded,
+                  color: AppColors.primaryDark,
+                  size: 21,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFAFBFE),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: const Color(0xFFEFF2F6)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Cảnh báo mức chi $currentLabel',
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFF374151),
+                        ),
+                      ),
+                    ),
+                    Text(
+                      percentLabel,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w900,
+                        color: barColor,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Đã chi / Mốc cảnh báo: $limitSummary',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF9CA3AF),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Container(
+                  height: 7,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF3F4F6),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: FractionallySizedBox(
+                      widthFactor: progress,
+                      child: Container(color: barColor.withOpacity(.86)),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Container(
+                  width: double.infinity,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+                  decoration: BoxDecoration(
+                    color: badgeBg,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        isOver ? Icons.warning_rounded : Icons.shield_rounded,
+                        color: badgeText,
+                        size: 18,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          insightText,
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w800,
+                            color: badgeText,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Future<DateTime?> _pickMonth(
+    BuildContext context, {
+    required DateTime initial,
+  }) async {
+    final picked = await showAppMonthPicker(
+      context: context,
+      initial: initial,
+      min: DateTime(2020, 1),
+      max: DateTime(2035, 12),
+    );
+
+    if (picked == null) return null;
+    return DateTime(picked.year, picked.month);
+  }
+}
+
+class _PredictionMiniCard extends StatelessWidget {
+  const _PredictionMiniCard({
+    required this.label,
+    required this.value,
+    required this.color,
+    required this.footerIcon,
+    required this.footerText,
+    required this.footerColor,
+    this.caption,
+    this.footerSubtext,
+    this.progress,
+    this.progressColor,
+  });
+
+  final String label;
+  final String value;
+  final Color color;
+  final IconData footerIcon;
+  final String footerText;
+  final Color footerColor;
+  final String? caption;
+  final String? footerSubtext;
+  final double? progress;
+  final Color? progressColor;
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      constraints: const BoxConstraints(minHeight: 118),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(18),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(.04),
+            color: Colors.black.withOpacity(.035),
             blurRadius: 14,
             offset: const Offset(0, 6),
           ),
@@ -340,223 +634,103 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              const Expanded(
-                child: Text(
-                  'Dự báo & Cảnh báo',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w800,
-                    color: Color(0xFF1F2937),
-                  ),
-                ),
-              ),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF3F4F6),
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Text(
-                  'Tháng $currentLabel',
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF6B7280),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 18),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Expanded(
-                child: Text(
-                  'Dự báo $nextLabel',
-                  style: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF374151),
-                  ),
-                ),
-              ),
-              Text(
-                'đ ${nf.format(nextMonthPrediction.round())}',
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w900,
-                  color: Color(0xFF111827),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          const Divider(height: 1, thickness: 1, color: Color(0xFFE5E7EB)),
-          const SizedBox(height: 14),
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  'Cảnh báo $currentLabel',
-                  style: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF374151),
-                  ),
-                ),
-              ),
-              Text(
-                warningLimit > 0
-                    ? 'Mốc: đ ${nf.format(warningLimit.round())}'
-                    : 'Mốc: --',
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                  color: Color(0xFF6B7280),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(999),
-            child: LinearProgressIndicator(
-              value: progress,
-              minHeight: 14,
-              backgroundColor: const Color(0xFFF3F4F6),
-              valueColor: AlwaysStoppedAnimation<Color>(barColor),
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+              color: Color(0xFF6B7280),
             ),
           ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  'Đã chi hiện tại: đ ${nf.format(spentMtd.round())}',
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF6B7280),
-                  ),
-                ),
-              ),
-              Text(
-                percentLabel,
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w900,
-                  color: barColor,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-            decoration: BoxDecoration(
-              color: badgeBg,
-              borderRadius: BorderRadius.circular(14),
-            ),
+          const SizedBox(height: 8),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
             child: Text(
-              _statusMessage ?? 'Không có cảnh báo',
+              value,
+              maxLines: 1,
               style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w700,
-                color: badgeText,
+                fontSize: 24,
+                fontWeight: FontWeight.w900,
+                height: 1.05,
+                color: color,
               ),
             ),
+          ),
+          if (caption != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              caption!,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF9CA3AF),
+              ),
+            ),
+          ],
+          const SizedBox(height: 14),
+          if (progress != null) ...[
+            Container(
+              height: 5,
+              decoration: BoxDecoration(
+                color: const Color(0xFFE7ECF3),
+                borderRadius: BorderRadius.circular(999),
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: FractionallySizedBox(
+                  widthFactor: progress!.clamp(0.0, 1.0),
+                  child: Container(color: progressColor ?? footerColor),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(footerIcon, size: 15, color: footerColor),
+              const SizedBox(width: 5),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      footerText,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w900,
+                        color: footerColor,
+                      ),
+                    ),
+                    if (footerSubtext != null) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        footerSubtext!,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          color: footerColor.withOpacity(.82),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
           ),
         ],
       ),
     );
-  }
-
-  Future<DateTime?> _pickMonth(
-    BuildContext context, {
-    required DateTime initial,
-  }) async {
-    final picked = await showMonthPicker(
-      context: context,
-      initialDate: initial,
-      firstDate: DateTime(2020, 1),
-      lastDate: DateTime(2035, 12),
-      headerTitle: const Text(
-        'Chọn tháng',
-        style: TextStyle(
-          fontSize: 14,
-          fontWeight: FontWeight.w600,
-          color: Color(0xFFE5E7EB),
-        ),
-      ),
-      monthPickerDialogSettings: const MonthPickerDialogSettings(
-        dialogSettings: PickerDialogSettings(
-          locale: Locale('vi'),
-          dialogRoundedCornersRadius: 24,
-          dialogBackgroundColor: Colors.white,
-          insetPadding: EdgeInsets.symmetric(horizontal: 20),
-        ),
-        headerSettings: PickerHeaderSettings(
-          headerBackgroundColor: Color(0xFF0F766E),
-          headerCurrentPageTextStyle: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w500,
-            color: Color(0xFFCCFBF1),
-          ),
-          headerSelectedIntervalTextStyle: TextStyle(
-            fontSize: 32,
-            fontWeight: FontWeight.w700,
-            color: Colors.white,
-          ),
-          headerIconsColor: Colors.white,
-          previousIcon: Icons.chevron_left_rounded,
-          nextIcon: Icons.chevron_right_rounded,
-        ),
-        dateButtonsSettings: PickerDateButtonsSettings(
-          buttonBorder: RoundedRectangleBorder(
-            borderRadius: BorderRadius.all(Radius.circular(18)),
-          ),
-          selectedMonthBackgroundColor: Color(0xFF0F766E),
-          selectedMonthTextColor: Colors.white,
-          unselectedMonthsTextColor: Color(0xFF374151),
-          currentMonthTextColor: Color(0xFF0F766E),
-          monthTextStyle: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.w700,
-          ),
-          yearTextStyle: TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-        actionBarSettings: PickerActionBarSettings(
-          actionBarPadding: EdgeInsets.fromLTRB(16, 0, 16, 16),
-          cancelWidget: Text(
-            'Huỷ',
-            style: TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w700,
-              color: Color(0xFF6B7280),
-            ),
-          ),
-          confirmWidget: Text(
-            'OK',
-            style: TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w700,
-              color: Color(0xFF0F766E),
-            ),
-          ),
-        ),
-      ),
-    );
-
-    if (picked == null) return null;
-    return DateTime(picked.year, picked.month);
   }
 }
 
@@ -612,24 +786,16 @@ class _SectionCardState extends State<_SectionCard> {
                 ? () => setState(() => _expanded = !_expanded)
                 : null,
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(14, 14, 10, 12),
+              padding: const EdgeInsets.fromLTRB(16, 16, 12, 12),
               child: Row(
                 children: [
-                  Container(
-                    width: 6,
-                    height: 18,
-                    decoration: BoxDecoration(
-                      color: Colors.indigo,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       widget.title,
                       style: const TextStyle(
-                        fontSize: 16,
+                        fontSize: 17,
                         fontWeight: FontWeight.w800,
+                        color: Color(0xFF1F2937),
                       ),
                     ),
                   ),
@@ -678,6 +844,16 @@ class _Empty extends StatelessWidget {
   }
 }
 
+class _BudgetChartSlice {
+  const _BudgetChartSlice({
+    required this.amount,
+    required this.label,
+  });
+
+  final num amount;
+  final String label;
+}
+
 class _BudgetPieChart extends StatelessWidget {
   const _BudgetPieChart({
     required this.items,
@@ -689,53 +865,186 @@ class _BudgetPieChart extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final data = items.where((e) => e.amount > 0).toList()
-      ..sort((a, b) => b.amount.compareTo(a.amount));
+    final data = items.where((e) => e.amount > 0).toList();
+    data.sort((a, b) => b.amount.compareTo(a.amount));
 
     final total = data.fold<num>(0, (a, b) => a + b.amount);
-
-    final sections = data
-        .map(
-          (e) => PieChartSectionData(
-            value: e.amount.toDouble(),
-            title: '${((e.amount / total) * 100).toStringAsFixed(0)}%',
-            radius: 70,
-            titleStyle: const TextStyle(
-              color: Colors.white,
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
+    final chartData = data.length > 6
+        ? [
+            ...data.take(5).map(
+                  (e) => _BudgetChartSlice(
+                    amount: e.amount,
+                    label: categories[e.categoryId]?.name ?? '#${e.categoryId}',
+                  ),
+                ),
+            _BudgetChartSlice(
+              amount: data.skip(5).fold<num>(0, (sum, e) => sum + e.amount),
+              label: 'Khác',
             ),
-          ),
-        )
-        .toList();
+          ]
+        : data
+            .map(
+              (e) => _BudgetChartSlice(
+                amount: e.amount,
+                label: categories[e.categoryId]?.name ?? '#${e.categoryId}',
+              ),
+            )
+            .toList();
 
-    return Column(
-      children: [
-        SizedBox(
-          height: 220,
-          child: PieChart(
+    // Teal / cyan color palette
+    const chartColors = [
+      AppColors.primaryDark,
+      AppColors.primary,
+      Color(0xFF5EEAD4),
+      Color(0xFF99F6E4),
+      Color(0xFF115E59),
+      Color(0xFF0D9488),
+      Color(0xFF2DD4BF),
+      Color(0xFFCCFBF1),
+    ];
+
+    final sections = chartData.asMap().entries.map((entry) {
+      final i = entry.key;
+      final e = entry.value;
+      final color = chartColors[i % chartColors.length];
+      return PieChartSectionData(
+        value: e.amount.toDouble(),
+        title: '',
+        radius: 24,
+        color: color,
+      );
+    }).toList();
+
+    final legendItems = chartData.asMap().entries.map((entry) {
+      final i = entry.key;
+      final e = entry.value;
+      final pct = total == 0 ? 0 : (e.amount / total) * 100;
+      final color = chartColors[i % chartColors.length];
+
+      return _BudgetLegendItem(
+        color: color,
+        percent: '${pct.toStringAsFixed(0)}%',
+        label: e.label.toUpperCase(),
+      );
+    }).toList();
+
+    final chart = SizedBox(
+      height: 170,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          PieChart(
             PieChartData(
               sections: sections,
               sectionsSpace: 2,
-              centerSpaceRadius: 44,
+              centerSpaceRadius: 52,
               centerSpaceColor: Colors.white,
             ),
           ),
-        ),
-        const SizedBox(height: 12),
-        Wrap(
-          spacing: 10,
-          runSpacing: 6,
-          children: data.take(8).map((e) {
-            final name = categories[e.categoryId]?.name ?? '#${e.categoryId}';
-            final pct = total == 0 ? 0 : (e.amount / total) * 100;
+          const Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                '100%',
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w900,
+                  color: Color(0xFF1F2937),
+                ),
+              ),
+              SizedBox(height: 1),
+              Text(
+                'Tổng chi',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF6B7280),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
 
-            return Chip(
-              label: Text('$name (${pct.toStringAsFixed(0)}%)'),
-              visualDensity: VisualDensity.compact,
-              backgroundColor: Colors.indigo.withOpacity(.06),
+    return Column(
+      children: [
+        chart,
+        const SizedBox(height: 12),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final itemWidth = (constraints.maxWidth - 20) / 2;
+
+            return Wrap(
+              spacing: 20,
+              runSpacing: 16,
+              children: legendItems
+                  .map((item) => SizedBox(width: itemWidth, child: item))
+                  .toList(),
             );
-          }).toList(),
+          },
+        ),
+      ],
+    );
+  }
+}
+
+class _BudgetLegendItem extends StatelessWidget {
+  const _BudgetLegendItem({
+    required this.color,
+    required this.percent,
+    required this.label,
+  });
+
+  final Color color;
+  final String percent;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 10,
+          height: 10,
+          decoration: BoxDecoration(
+            color: color,
+            shape: BoxShape.circle,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  percent,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w900,
+                    color: Color(0xFF111827),
+                  ),
+                  maxLines: 1,
+                ),
+              ),
+              const SizedBox(height: 1),
+              Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 9,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF6B7280),
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ),
         ),
       ],
     );
@@ -788,54 +1097,63 @@ class _TopCategoriesList extends StatelessWidget {
 
 class _SummaryBox extends StatelessWidget {
   const _SummaryBox({
+    required this.totalIncome,
     required this.totalAssigned,
     required this.totalSpent,
-    required this.unallocated,
-    required this.combinedRemaining,
+    required this.monthRemaining,
+    required this.budgetRemaining,
   });
 
+  final num totalIncome;
   final num totalAssigned;
   final num totalSpent;
-  final num unallocated;
-  final num combinedRemaining;
+  final num monthRemaining;
+  final num budgetRemaining;
 
   @override
   Widget build(BuildContext context) {
     final locale = Localizations.localeOf(context).toLanguageTag();
-    final nf = NumberFormat.decimalPattern(locale);
-    final isOver = combinedRemaining < 0;
-    final color = isOver ? Colors.red : Colors.green;
+    final nf = NumberFormat.decimalPattern(locale)..maximumFractionDigits = 0;
+    final isBudgetOver = budgetRemaining < 0;
+    final isMonthNegative = monthRemaining < 0;
+    final planPrefix = isBudgetOver ? 'Vượt' : 'Còn';
 
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    return GridView.count(
+      crossAxisCount: 2,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      childAspectRatio: 3.35,
+      mainAxisSpacing: 8,
+      crossAxisSpacing: 10,
       children: [
-        Expanded(
-          child: _SummaryTile(
-            label: "Đã phân bổ",
-            value: 'đ ${nf.format(totalAssigned)}',
-            icon: Icons.pie_chart_rounded,
-            color: Colors.indigo,
-          ),
+        _SummaryTile(
+          label: "Đã thu",
+          value: nf.format(totalIncome),
+          icon: Icons.add_circle_outline_rounded,
+          color: const Color(0xFF16A34A),
         ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: _SummaryTile(
-            label: "Đã tiêu",
-            value: 'đ ${nf.format(totalSpent)}',
-            icon: Icons.payments_rounded,
-            color: Colors.orange,
-          ),
+        _SummaryTile(
+          label: "Đã tiêu",
+          value: nf.format(totalSpent),
+          icon: Icons.remove_circle_outline_rounded,
+          color: const Color(0xFFE8A838),
         ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: _SummaryTile(
-            label: isOver ? "Vượt" : "Còn dư",
-            value: 'đ ${nf.format(combinedRemaining.abs())}',
-            icon: isOver
-                ? Icons.report_gmailerrorred_rounded
-                : Icons.savings_rounded,
-            color: color,
-          ),
+        _SummaryTile(
+          label: "Còn lại",
+          value:
+              '${isMonthNegative ? '-' : ''}${nf.format(monthRemaining.abs())}',
+          icon: isMonthNegative
+              ? Icons.trending_down_rounded
+              : Icons.account_balance_wallet_outlined,
+          color:
+              isMonthNegative ? const Color(0xFFEF4444) : AppColors.primaryDark,
+        ),
+        _SummaryTile(
+          label: "Kế hoạch",
+          value: '$planPrefix ${nf.format(budgetRemaining.abs())}',
+          icon: Icons.receipt_long_outlined,
+          color:
+              isBudgetOver ? const Color(0xFFEF4444) : const Color(0xFFDB2777),
         ),
       ],
     );
@@ -858,33 +1176,55 @@ class _SummaryTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
-      decoration: BoxDecoration(
-        color: color.withOpacity(.08),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Icon(icon, color: color, size: 22),
-          const SizedBox(height: 6),
-          Text(
-            label,
-            style: const TextStyle(fontSize: 12, color: Colors.black54),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 2),
-          Text(
-            value,
-            style: const TextStyle(
-              fontWeight: FontWeight.w800,
-              fontSize: 14,
+          Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              color: color.withOpacity(.1),
+              borderRadius: BorderRadius.circular(9),
             ),
-            textAlign: TextAlign.center,
+            child: Icon(icon, color: color, size: 17),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF6B7280),
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 2),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    value,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w900,
+                      fontSize: 14,
+                      color: Color(0xFF111827),
+                    ),
+                    maxLines: 1,
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
     );
   }
 }
+

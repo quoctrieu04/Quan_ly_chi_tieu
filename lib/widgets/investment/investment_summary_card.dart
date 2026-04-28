@@ -1,12 +1,8 @@
-import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import 'package:intl/intl.dart';
-import 'dart:math' as math;
-
 import 'package:chitieu/api/investment/investment_provider.dart';
-
-const _kMint      = Color(0xFF2EC4B6);
-const _kMintLight = Color(0xFF5DE8DA);
+import 'package:chitieu/core/theme/app_colors.dart';
+import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 
 class InvestmentSummaryCard extends StatelessWidget {
   const InvestmentSummaryCard({super.key});
@@ -14,215 +10,257 @@ class InvestmentSummaryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cs = Theme.of(context).colorScheme;
     final provider = context.watch<InvestmentProvider>();
 
     final totalInvested = provider.totalInvested;
     final profit = provider.totalProfit;
-    final percent = totalInvested == 0 ? 0.0 : provider.totalProfitPercent.toDouble();
-    final isProfit = profit >= 0;
+    final percent =
+        totalInvested == 0 ? 0.0 : provider.totalProfitPercent.toDouble();
     final totalCurrent = totalInvested + profit;
+    final isProfit = profit >= 0;
+    final profitColor = isProfit ? AppColors.primaryDark : AppColors.danger;
+    final valueColor = isDark ? cs.onSurface : AppColors.textMain;
 
     final moneyFmt = NumberFormat('#,###', 'vi_VN');
     String money(num v) => '${moneyFmt.format(v).replaceAll(',', '.')}đ';
 
-    final progressRatio = (percent.abs() / 100).clamp(0.0, 1.0);
-
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(22),
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: isDark
-              ? [const Color(0xFF162028), const Color(0xFF1A2B35)]
-              : [_kMint, _kMintLight],
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _TotalInvestmentTile(
+          label: 'Tổng đầu tư',
+          value: money(totalCurrent),
+          percent: percent,
+          color: cs.primary,
+          isDark: isDark,
         ),
-        boxShadow: [
-          BoxShadow(
-            color: _kMint.withOpacity(isDark ? .1 : .25),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
-            spreadRadius: -4,
-          ),
-        ],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        const SizedBox(height: 10),
+        Row(
           children: [
-            // ── Row 1: Label + Circle ──
-            Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Giá trị hiện tại',
-                        style: TextStyle(
-                          color: Colors.white.withOpacity(.7),
-                          fontSize: 13,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        money(totalCurrent),
-                        style: const TextStyle(
-                          fontSize: 28,
-                          fontWeight: FontWeight.w900,
-                          color: Colors.white,
-                          letterSpacing: -0.5,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                // Circle progress
-                SizedBox(
-                  width: 56,
-                  height: 56,
-                  child: TweenAnimationBuilder<double>(
-                    duration: const Duration(milliseconds: 1000),
-                    curve: Curves.easeOutCubic,
-                    tween: Tween(begin: 0, end: progressRatio),
-                    builder: (_, val, __) {
-                      return CustomPaint(
-                        painter: _CirclePainter(
-                          progress: val,
-                          color: isProfit
-                              ? Colors.white
-                              : const Color(0xFFEF9A9A),
-                        ),
-                        child: Center(
-                          child: Text(
-                            '${percent.toStringAsFixed(1)}%',
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w800,
-                              color: isProfit
-                                  ? Colors.white
-                                  : const Color(0xFFEF9A9A),
-                            ),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            // ── Row 2: Vốn gốc + Lợi nhuận ──
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(.1),
-                borderRadius: BorderRadius.circular(12),
+            Expanded(
+              child: _MetricTile(
+                label: 'Vốn gốc',
+                value: money(totalInvested),
+                icon: Icons.account_balance_wallet_outlined,
+                color: AppColors.primaryDark,
+                valueColor: valueColor,
+                isDark: isDark,
               ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Vốn gốc',
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: Colors.white.withOpacity(.5),
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          money(totalInvested),
-                          style: const TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w800,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Container(
-                    width: 1,
-                    height: 28,
-                    color: Colors.white.withOpacity(.15),
-                  ),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Text(
-                          isProfit ? 'Lợi nhuận' : 'Thua lỗ',
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: Colors.white.withOpacity(.5),
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          '${isProfit ? "+" : ""}${money(profit)}',
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w800,
-                            color: isProfit
-                                ? Colors.white
-                                : const Color(0xFFEF9A9A),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _MetricTile(
+                label: 'Lợi nhuận',
+                value: money(profit),
+                icon: isProfit
+                    ? Icons.trending_up_rounded
+                    : Icons.trending_down_rounded,
+                color: profitColor,
+                valueColor: valueColor,
+                isDark: isDark,
               ),
             ),
           ],
         ),
+      ],
+    );
+  }
+}
+
+class _TotalInvestmentTile extends StatelessWidget {
+  final String label;
+  final String value;
+  final double percent;
+  final Color color;
+  final bool isDark;
+
+  const _TotalInvestmentTile({
+    required this.label,
+    required this.value,
+    required this.percent,
+    required this.color,
+    required this.isDark,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final fg = isDark ? cs.onSurface : AppColors.textMain;
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(18, 16, 16, 16),
+      decoration: _tileDecoration(context, isDark),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(
+                    color: cs.onSurface.withOpacity(.5),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: fg,
+                    fontSize: 30,
+                    fontWeight: FontWeight.w900,
+                    height: 1,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 14),
+          _PercentBadge(percent: percent, color: color),
+        ],
       ),
     );
   }
 }
 
-// ── Circular progress painter ──
-class _CirclePainter extends CustomPainter {
-  final double progress;
+class _MetricTile extends StatelessWidget {
+  final String label;
+  final String value;
+  final IconData icon;
   final Color color;
+  final Color valueColor;
+  final bool isDark;
 
-  _CirclePainter({required this.progress, required this.color});
+  const _MetricTile({
+    required this.label,
+    required this.value,
+    required this.icon,
+    required this.color,
+    required this.valueColor,
+    required this.isDark,
+  });
 
   @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-    final radius = math.min(size.width, size.height) / 2 - 3;
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
 
-    canvas.drawCircle(
-      center,
-      radius,
-      Paint()
-        ..color = color.withOpacity(.15)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 4,
-    );
-
-    canvas.drawArc(
-      Rect.fromCircle(center: center, radius: radius),
-      -math.pi / 2,
-      2 * math.pi * progress,
-      false,
-      Paint()
-        ..color = color
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 4
-        ..strokeCap = StrokeCap.round,
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: _tileDecoration(context, isDark),
+      child: Row(
+        children: [
+          Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              color: color.withOpacity(.1),
+              borderRadius: BorderRadius.circular(11),
+            ),
+            child: Icon(icon, color: color, size: 18),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: cs.onSurface.withOpacity(.48),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: valueColor,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
+}
+
+class _PercentBadge extends StatelessWidget {
+  final double percent;
+  final Color color;
+
+  const _PercentBadge({
+    required this.percent,
+    required this.color,
+  });
 
   @override
-  bool shouldRepaint(covariant _CirclePainter oldDelegate) =>
-      oldDelegate.progress != progress;
+  Widget build(BuildContext context) {
+    final positive = percent >= 0;
+    final displayColor = positive ? color : AppColors.danger;
+
+    return Container(
+      width: 58,
+      height: 58,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        border: Border.all(color: displayColor.withOpacity(.22), width: 5),
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            positive
+                ? Icons.arrow_upward_rounded
+                : Icons.arrow_downward_rounded,
+            color: displayColor,
+            size: 14,
+          ),
+          Text(
+            '${percent.toStringAsFixed(1)}%',
+            style: TextStyle(
+              color: displayColor,
+              fontSize: 12,
+              fontWeight: FontWeight.w900,
+              height: 1,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+BoxDecoration _tileDecoration(BuildContext context, bool isDark) {
+  final cs = Theme.of(context).colorScheme;
+
+  return BoxDecoration(
+    color: isDark ? cs.surfaceContainerHigh : Colors.white,
+    borderRadius: BorderRadius.circular(20),
+    border: Border.all(
+      color: isDark ? cs.outlineVariant.withOpacity(.1) : AppColors.border,
+    ),
+    boxShadow: [
+      if (!isDark)
+        BoxShadow(
+          color: Colors.black.withOpacity(.035),
+          blurRadius: 16,
+          offset: const Offset(0, 7),
+        ),
+    ],
+  );
 }

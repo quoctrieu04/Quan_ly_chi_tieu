@@ -2,6 +2,7 @@ import 'package:chitieu/utils/safe_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:chitieu/api/bankaccount/bank_account_provider.dart';
+import 'package:chitieu/core/theme/app_colors.dart';
 import 'package:chitieu/widgets/edit_bank_account_form.dart';
 import 'package:chitieu/widgets/create_bank_account_form.dart';
 
@@ -63,11 +64,10 @@ class _AccountsListPageState extends State<AccountsListPage>
     final items = prov.items;
     final cs = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bgColor = isDark ? cs.surface : const Color(0xFFFAFBFE);
+    final bgColor = isDark ? cs.surface : AppColors.background;
 
     // Tổng số dư
-    final totalBalance =
-        items.fold<double>(0, (s, w) => s + (w.balance ?? 0));
+    final totalBalance = items.fold<double>(0, (s, w) => s + (w.balance ?? 0));
 
     return Scaffold(
       backgroundColor: bgColor,
@@ -116,9 +116,7 @@ class _AccountsListPageState extends State<AccountsListPage>
                   builder: (_) => const CreateBankAccountForm(),
                 );
                 if (created == true && mounted) {
-                  await context
-                      .read<BankAccountProvider>()
-                      .fetchAccounts();
+                  await context.read<BankAccountProvider>().fetchAccounts();
                 }
               },
               style: IconButton.styleFrom(
@@ -127,8 +125,7 @@ class _AccountsListPageState extends State<AccountsListPage>
                   borderRadius: BorderRadius.circular(10),
                 ),
               ),
-              constraints:
-                  const BoxConstraints(minWidth: 38, minHeight: 38),
+              constraints: const BoxConstraints(minWidth: 38, minHeight: 38),
             ),
           ),
           const SizedBox(width: 4),
@@ -137,8 +134,8 @@ class _AccountsListPageState extends State<AccountsListPage>
       body: items.isEmpty
           ? _buildEmptyState(cs, isDark)
           : FadeTransition(
-              opacity: CurvedAnimation(
-                  parent: _animCtrl, curve: Curves.easeOut),
+              opacity:
+                  CurvedAnimation(parent: _animCtrl, curve: Curves.easeOut),
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 40),
                 children: [
@@ -147,11 +144,8 @@ class _AccountsListPageState extends State<AccountsListPage>
                   const SizedBox(height: 20),
 
                   // ── Section title ──
-                  _buildSectionTitle(
-                      'Danh sách tài khoản',
-                      Icons.list_alt_rounded,
-                      cs,
-                      items.length),
+                  _buildSectionTitle('Danh sách tài khoản',
+                      Icons.list_alt_rounded, cs, items.length),
                   const SizedBox(height: 10),
 
                   // ── Account items ──
@@ -224,48 +218,48 @@ class _AccountsListPageState extends State<AccountsListPage>
   // ═══════════════════════════
   //  TOTAL BALANCE CARD
   // ═══════════════════════════
-  Widget _buildTotalCard(
-      ColorScheme cs, bool isDark, double totalBalance) {
+  Widget _buildTotalCard(ColorScheme cs, bool isDark, double totalBalance) {
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.fromLTRB(18, 16, 16, 18),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(20),
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            cs.primary,
-            Color.lerp(cs.primary, cs.tertiary, .35)!,
-          ],
+        color: isDark ? cs.surfaceContainerHigh : Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(
+          color: isDark ? cs.outlineVariant.withOpacity(.1) : AppColors.border,
         ),
         boxShadow: [
-          BoxShadow(
-            color: cs.primary.withOpacity(.15),
-            blurRadius: 16,
-            offset: const Offset(0, 6),
-          ),
+          if (!isDark)
+            BoxShadow(
+              color: Colors.black.withOpacity(.035),
+              blurRadius: 16,
+              offset: const Offset(0, 7),
+            ),
         ],
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
               Container(
-                padding: const EdgeInsets.all(8),
+                width: 34,
+                height: 34,
+                alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(.15),
-                  borderRadius: BorderRadius.circular(10),
+                  color: cs.primary.withOpacity(.1),
+                  borderRadius: BorderRadius.circular(11),
                 ),
-                child: const Icon(Icons.account_balance_rounded,
-                    color: Colors.white, size: 18),
+                child: Icon(Icons.account_balance_rounded,
+                    color: cs.primary, size: 18),
               ),
               const SizedBox(width: 10),
               Text(
                 'Tổng số dư',
                 style: TextStyle(
-                  color: Colors.white.withOpacity(.8),
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
+                  color: cs.onSurface.withOpacity(.52),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: .1,
                 ),
               ),
             ],
@@ -275,11 +269,13 @@ class _AccountsListPageState extends State<AccountsListPage>
             alignment: Alignment.centerLeft,
             child: Text(
               formatMoney(totalBalance),
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 30,
-                fontWeight: FontWeight.w900,
-                letterSpacing: -0.5,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: isDark ? cs.onSurface : AppColors.textMain,
+                fontSize: 32,
+                fontWeight: FontWeight.w700,
+                height: 1,
               ),
             ),
           ),
@@ -310,8 +306,7 @@ class _AccountsListPageState extends State<AccountsListPage>
           ),
           const SizedBox(width: 6),
           Container(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
             decoration: BoxDecoration(
               color: cs.primary.withOpacity(.08),
               borderRadius: BorderRadius.circular(8),
@@ -340,39 +335,39 @@ class _AccountsListPageState extends State<AccountsListPage>
 
     return Material(
       color: isDark ? cs.surfaceContainerHigh : Colors.white,
-      borderRadius: BorderRadius.circular(18),
+      borderRadius: BorderRadius.circular(16),
       child: InkWell(
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(16),
         onTap: () {
           // Có thể mở chi tiết tài khoản
         },
         child: Container(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(18),
+            borderRadius: BorderRadius.circular(16),
             border: Border.all(
               color: isDark
                   ? cs.outlineVariant.withOpacity(.08)
-                  : const Color(0xFFECEDF2),
+                  : AppColors.border,
             ),
           ),
           child: Row(
             children: [
               // Bank icon
               Container(
-                width: 48,
-                height: 48,
+                width: 42,
+                height: 42,
                 decoration: BoxDecoration(
                   color: cs.primary.withOpacity(.08),
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.circular(13),
                 ),
                 child: Icon(
                   _bankIcon(acc.bankname),
                   color: cs.primary,
-                  size: 22,
+                  size: 20,
                 ),
               ),
-              const SizedBox(width: 14),
+              const SizedBox(width: 12),
               // Info
               Expanded(
                 child: Column(
@@ -383,7 +378,7 @@ class _AccountsListPageState extends State<AccountsListPage>
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        fontSize: 15,
+                        fontSize: 14.5,
                         fontWeight: FontWeight.w700,
                         color: cs.onSurface,
                       ),
@@ -393,31 +388,19 @@ class _AccountsListPageState extends State<AccountsListPage>
                       Text(
                         acc.bankname!,
                         style: TextStyle(
-                          fontSize: 12.5,
+                          fontSize: 12,
                           fontWeight: FontWeight.w500,
                           color: cs.onSurface.withOpacity(.4),
                         ),
                       ),
                     ],
-                    const SizedBox(height: 6),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: isPositive
-                            ? const Color(0xFF2E7D32).withOpacity(.06)
-                            : cs.error.withOpacity(.06),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        formatMoney(acc.balance ?? 0),
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w800,
-                          color: isPositive
-                              ? const Color(0xFF2E7D32)
-                              : cs.error,
-                        ),
+                    const SizedBox(height: 4),
+                    Text(
+                      formatMoney(acc.balance ?? 0),
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w800,
+                        color: isPositive ? AppColors.textMain : cs.error,
                       ),
                     ),
                   ],
@@ -439,8 +422,7 @@ class _AccountsListPageState extends State<AccountsListPage>
                     value: 'edit',
                     child: Row(
                       children: [
-                        Icon(Icons.edit_outlined,
-                            size: 18, color: cs.primary),
+                        Icon(Icons.edit_outlined, size: 18, color: cs.primary),
                         const SizedBox(width: 10),
                         const Text('Sửa',
                             style: TextStyle(fontWeight: FontWeight.w600)),
@@ -456,8 +438,7 @@ class _AccountsListPageState extends State<AccountsListPage>
                         const SizedBox(width: 10),
                         Text('Xóa',
                             style: TextStyle(
-                                fontWeight: FontWeight.w600,
-                                color: cs.error)),
+                                fontWeight: FontWeight.w600, color: cs.error)),
                       ],
                     ),
                   ),
@@ -478,8 +459,7 @@ class _AccountsListPageState extends State<AccountsListPage>
     final ok = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
-        shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Row(
           children: [
             Container(
@@ -488,8 +468,8 @@ class _AccountsListPageState extends State<AccountsListPage>
                 color: cs.error.withOpacity(.08),
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: Icon(Icons.delete_outline_rounded,
-                  color: cs.error, size: 20),
+              child:
+                  Icon(Icons.delete_outline_rounded, color: cs.error, size: 20),
             ),
             const SizedBox(width: 12),
             const Text('Xóa tài khoản',
@@ -508,8 +488,7 @@ class _AccountsListPageState extends State<AccountsListPage>
           TextButton(
             onPressed: () => Navigator.pop(context, false),
             style: TextButton.styleFrom(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 20, vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12)),
             ),
@@ -519,8 +498,7 @@ class _AccountsListPageState extends State<AccountsListPage>
             onPressed: () => Navigator.pop(context, true),
             style: FilledButton.styleFrom(
               backgroundColor: cs.error,
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 20, vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12)),
             ),

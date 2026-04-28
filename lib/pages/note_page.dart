@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:chitieu/api/transaction/transaction_provider.dart';
 import 'package:chitieu/core/voice/voice_synonym_store.dart';
+import 'package:chitieu/utils/safe_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -9,7 +11,6 @@ import 'package:diacritic/diacritic.dart';
 import 'package:image_picker/image_picker.dart';
 
 import 'package:chitieu/l10n/app_localizations.dart';
-import 'package:chitieu/core/date/year_month_provider.dart';
 
 // Providers & models
 import 'package:chitieu/api/category/category_provider.dart';
@@ -19,8 +20,10 @@ import 'package:chitieu/core/money/widgets/money_text.dart';
 import 'package:chitieu/api/bankaccount/bank_account_provider.dart';
 import 'package:chitieu/api/income/income_provider.dart';
 import 'package:chitieu/api/income/income_model.dart';
+import 'package:chitieu/api/in_invoice/in_invoice_provider.dart';
 import 'package:chitieu/api/out_invoice/out_invoice_provider.dart';
 import 'package:chitieu/api/out_invoice/out_invoice_model.dart';
+import 'package:chitieu/financial_transaction/financial_transaction_provider.dart';
 
 // VOICE
 import 'package:chitieu/api/ai/stt_service.dart';
@@ -55,13 +58,15 @@ class _NotePageState extends State<NotePage> {
   String _formatExpression(String raw) {
     if (raw.isEmpty) return '0';
     try {
-      return raw.replaceAllMapped(RegExp(r'(\d+)'), (m) => _vi.format(int.parse(m[1]!)));
+      return raw.replaceAllMapped(
+          RegExp(r'(\d+)'), (m) => _vi.format(int.parse(m[1]!)));
     } catch (_) {
       return raw;
     }
   }
 
   bool _forceCancel = false;
+  bool _submitting = false;
 
   // PHOTO
   final ImagePicker _picker = ImagePicker();
@@ -143,8 +148,9 @@ class _NotePageState extends State<NotePage> {
 
     final file = await _picker.pickImage(
       source: ImageSource.camera,
-      // Removed native compression arguments to prevent Out of Memory (OOM) 
-      // crashes on low-end devices during Activity Lifecycle.
+      maxWidth: 1280,
+      maxHeight: 1280,
+      imageQuality: 70,
     );
 
     if (file != null && mounted) {
@@ -188,27 +194,7 @@ class _NotePageState extends State<NotePage> {
     }
 
     if (text.isEmpty) {
-      final retry = await showDialog<bool>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text('Khoan đã...', style: TextStyle(fontWeight: FontWeight.bold)),
-          content: const Text('Xung quanh ồn quá hoặc âm thanh quá bé nên mic đã tắt. Bạn có muốn thu âm lại không?'),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Đóng', style: TextStyle(color: Colors.grey)),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Nói lại', style: TextStyle(fontWeight: FontWeight.bold)),
-            ),
-          ],
-        ),
-      );
-      if (retry == true) {
-        _toggleListening();
-      }
+      await _tts.say('Mình không nghe rõ, bạn nói lại nhé.');
       return;
     }
 
@@ -223,7 +209,13 @@ class _NotePageState extends State<NotePage> {
       if (intent.type == VoiceIntentType.income) type = FlowType.in_;
     });
 
-    // (Removed debug SnackBar for cats output here)
+    final catsDebug =
+        context.read<CategoryProvider>().items.map((e) => e.name).toList();
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(
+          'DEBUG: List Cat: $catsDebug\nGemini Cat: ${intent.categoryName}'),
+      duration: const Duration(seconds: 4),
+    ));
 
     final wals = context.read<BankAccountProvider>().items;
     if (wals.isNotEmpty) {
@@ -277,76 +269,32 @@ class _NotePageState extends State<NotePage> {
           debugPrint('📚 Nhận diện danh mục: ${found.name}');
         } else {
           debugPrint('⚠️ Không tìm thấy danh mục "${intent.categoryName}".');
+          await _tts.say(
+            'Không tìm thấy danh mục ${intent.categoryName}. Bạn có thể chọn thủ công nhé.',
+          );
         }
       }
     }
 
-    final amt = intent.amount ?? 0;
-
-    bool isFullyRecognized = false;
-    if (amt > 0 && selectedWallet != null) {
-      if (type == FlowType.out && selectedCategory != null) isFullyRecognized = true;
-      if (type == FlowType.in_ && selectedIncome != null) isFullyRecognized = true;
+    if (type == FlowType.in_ && selectedIncome == null) {
+      await _tts.say(
+          'Đã nhận thông tin, bạn vui lòng chọn nguồn thu trên màn hình để hoàn tất nhé.');
     }
 
-    if (!mounted) return;
+    final amt = intent.amount ?? 0;
+    if (type == FlowType.out && selectedCategory == null && amt > 0) {
+      await _tts.say(
+          'Trường hợp này đặc biệt, bạn vui lòng tự tay chạm vào danh mục trên màn hình để lưu nhé.');
+    }
 
-    if (isFullyRecognized) {
-      final confirm = await showDialog<bool>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text('Xác nhận giao dịch', style: TextStyle(fontWeight: FontWeight.bold)),
-          content: Text(
-            'Số tiền: ${_formatExpression(amount)} đ\n'
-            'Danh mục: ${selectedCategory?.name ?? selectedIncome?.title}\n'
-            'Ví: ${selectedWallet?.name ?? selectedWallet?.title}\n'
-            'Ghi chú: ${_noteText.isEmpty ? "Không có" : _noteText}\n\n'
-            'Bạn có muốn lưu thông tin này?',
-            style: const TextStyle(height: 1.5),
-          ),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Hủy', style: TextStyle(color: Colors.grey)),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Lưu giao dịch', style: TextStyle(fontWeight: FontWeight.bold)),
-            ),
-          ],
-        ),
-      );
-
-      if (confirm == true) {
-        await _submit();
-      }
-    } else if (amt > 0) {
-      await showDialog<void>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text('Thiếu danh mục', style: TextStyle(fontWeight: FontWeight.bold)),
-          content: const Text(
-            'Đã nhận diện số tiền, nhưng chưa gán được danh mục.\nVui lòng chọn trên màn hình rồi bấm xác nhận.',
-            style: TextStyle(height: 1.4),
-          ),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Đã hiểu', style: TextStyle(fontWeight: FontWeight.bold)),
-            ),
-          ],
-        ),
-      );
-    } else if (intent.categoryName != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Vui lòng nhập thêm số tiền hợp lệ!')),
-      );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Không nhận diện được số tiền và danh mục!')),
-      );
+    // TODO: Không hỏi lằng nhằng nữa, mặc định user nhìn trên UI là hiểu.
+    // Chỉ cần phát âm báo ngắn gọn hoặc không nói gì để user tự tay bấm nút Check màu xanh là nhanh nhất.
+    if (amt > 0 &&
+        selectedWallet != null &&
+        ((type == FlowType.out && selectedCategory != null) ||
+            (type == FlowType.in_ && selectedIncome != null))) {
+      await _tts.say('Đã lưu');
+      await _submit();
     }
   }
 
@@ -368,15 +316,18 @@ class _NotePageState extends State<NotePage> {
         }
       }
       if (num.isNotEmpty) tokens.add(num);
-      
+
       if (tokens.isEmpty) return 0;
       double res = double.tryParse(tokens[0]) ?? 0;
       for (var i = 1; i < tokens.length - 1; i += 2) {
         var op = tokens[i];
-        var next = double.tryParse(tokens[i+1]) ?? 0;
-        if (op == '+') res += next;
-        else if (op == '-') res -= next;
-        else if (op == '*') res *= next;
+        var next = double.tryParse(tokens[i + 1]) ?? 0;
+        if (op == '+')
+          res += next;
+        else if (op == '-')
+          res -= next;
+        else if (op == '*')
+          res *= next;
         else if (op == '/') res /= next;
       }
       return res.toInt();
@@ -396,7 +347,9 @@ class _NotePageState extends State<NotePage> {
         return;
       }
       // Khóa nhập ký tự đặc biệt bất hợp lý
-      if ('+-*/'.contains(k) && amount.isNotEmpty && '+-*/'.contains(amount[amount.length - 1])) {
+      if ('+-*/'.contains(k) &&
+          amount.isNotEmpty &&
+          '+-*/'.contains(amount[amount.length - 1])) {
         amount = amount.substring(0, amount.length - 1) + k;
         return;
       }
@@ -410,59 +363,60 @@ class _NotePageState extends State<NotePage> {
   }
 
   Future<void> _submit() async {
-    final isOut = type == FlowType.out;
-    final amt = _evaluate(amount);
-    final selectedWalletId = (selectedWallet as dynamic)?.id ?? 0;
-    final categoryId = selectedCategory?.id ?? 0;
-    final incomeId = selectedIncome?.id ?? 0;
-
-    if (amt <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Vui lòng nhập số tiền > 0.')),
-      );
-      await _tts.say('Bạn muốn ghi số tiền bao nhiêu?');
-      return;
-    }
-
-    if (isOut && selectedWalletId == 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Vui lòng chọn tài khoản chi.')),
-      );
-      await _tts.say('Bạn chưa chọn tài khoản chi.');
-      return;
-    }
-
-    if (isOut && categoryId == 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Vui lòng chọn danh mục.')),
-      );
-      await _tts.say('Bạn chưa chọn danh mục.');
-      return;
-    }
-
-    if (!isOut && (selectedWalletId == 0 || incomeId == 0)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Vui lòng chọn nguồn thu và ví.')),
-      );
-      await _tts.say('Bạn chưa chọn nguồn thu hoặc ví nạp tiền.');
-      return;
-    }
-
-    final trimmedNote = _noteText.trim();
-    final safeNote = trimmedNote.isEmpty
-        ? null
-        : (trimmedNote.length <= 300
-            ? trimmedNote
-            : trimmedNote.substring(0, 300));
+    if (_submitting) return;
+    setState(() => _submitting = true);
 
     try {
-      if (isOut) {
-        final outProv = context.read<OutInvoiceProvider>();
+      final isOut = type == FlowType.out;
+      final amt = _evaluate(amount);
+      final selectedWalletId = (selectedWallet as dynamic)?.id ?? 0;
+      final categoryId = selectedCategory?.id ?? 0;
+      final incomeId = selectedIncome?.id ?? 0;
 
+      if (amt <= 0) {
+        showAppSnackBar(context, 'Vui long nhap so tien > 0.', isError: true);
+        await _tts.say('Ban muon ghi so tien bao nhieu?');
+        return;
+      }
+
+      if (isOut && selectedWalletId == 0) {
+        showAppSnackBar(context, 'Vui long chon tai khoan chi.', isError: true);
+        await _tts.say('Ban chua chon tai khoan chi.');
+        return;
+      }
+
+      if (isOut && categoryId == 0) {
+        showAppSnackBar(context, 'Vui long chon danh muc.', isError: true);
+        await _tts.say('Ban chua chon danh muc.');
+        return;
+      }
+
+      if (!isOut && (selectedWalletId == 0 || incomeId == 0)) {
+        showAppSnackBar(context, 'Vui long chon nguon thu va vi.',
+            isError: true);
+        await _tts.say('Ban chua chon nguon thu hoac vi nap tien.');
+        return;
+      }
+
+      final trimmedNote = _noteText.trim();
+      final safeNote = trimmedNote.isEmpty
+          ? null
+          : (trimmedNote.length <= 300
+              ? trimmedNote
+              : trimmedNote.substring(0, 300));
+      final bankAccountProv = context.read<BankAccountProvider>();
+      final inInvoiceProv = context.read<InInvoiceProvider>();
+      final outInvoiceProv = context.read<OutInvoiceProvider>();
+      final incomeProv = context.read<IncomeProvider>();
+      final budgetsProv = context.read<BudgetsProvider>();
+      final financialTxProv = context.read<FinancialTransactionProvider>();
+      final transactionProv = context.read<TransactionProvider>();
+
+      if (isOut) {
         final invoice = OutInvoice(
           id: 0,
           userId: 0,
-          bankId: selectedWalletId, // quan trọng
+          bankId: selectedWalletId,
           outcatId: categoryId,
           amount: amt,
           docType: 'OUT',
@@ -472,17 +426,17 @@ class _NotePageState extends State<NotePage> {
           occurredAt: _selectedDate,
         );
 
-        final ok = await outProv.create(
+        final ok = await outInvoiceProv.create(
           context,
           invoice,
           photoFile: _pickedPhoto != null ? File(_pickedPhoto!.path) : null,
+          refreshAfterCreate: false,
+          showSuccessMessage: false,
         );
 
         if (!ok) return;
       } else {
-        final tx = context.read<TransactionProvider>();
-
-        await tx.create(
+        await transactionProv.create(
           isIncome: true,
           bankId: selectedWalletId,
           categoryId: incomeId,
@@ -491,45 +445,62 @@ class _NotePageState extends State<NotePage> {
           month: _selectedDate.month,
           year: _selectedDate.year,
           occurredAt: _selectedDate.toIso8601String(),
+          refreshAfterCreate: false,
         );
       }
 
-      final ym = context.read<YearMonthProvider>().ym;
-
-      await Future.wait([
-        context.read<BankAccountProvider>().fetch(
-              year: ym.year,
-              month: ym.month,
-            ),
-        context.read<IncomeProvider>().fetchAll(),
-        context.read<BudgetsProvider>().loadForMonth(
-              year: ym.year,
-              month: ym.month,
-            ),
-      ]);
+      final refreshYear = _selectedDate.year;
+      final refreshMonth = _selectedDate.month;
 
       if (!mounted) return;
+
+      final messenger = ScaffoldMessenger.of(context);
+      final successSnackBar = appSnackBar(
+        isOut
+            ? 'Da ghi giao dich chi thanh cong'
+            : 'Da ghi giao dich thu thanh cong',
+        icon: Icons.receipt_long_rounded,
+      );
 
       Navigator.pop(context, true);
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            isOut
-                ? '✅ Đã ghi giao dịch chi thành công'
-                : '✅ Đã ghi giao dịch thu thành công',
-          ),
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(successSnackBar);
+
+      unawaited(Future.wait([
+        bankAccountProv.fetchAccounts(),
+        inInvoiceProv.fetch(
+          year: refreshYear,
+          month: refreshMonth,
         ),
-      );
+        outInvoiceProv.fetch(
+          year: refreshYear,
+          month: refreshMonth,
+        ),
+        transactionProv.fetchAll(),
+        incomeProv.fetchAll(),
+        budgetsProv.loadForMonth(
+          year: refreshYear,
+          month: refreshMonth,
+        ),
+        financialTxProv.fetchByMonth(
+          year: refreshYear,
+          month: refreshMonth,
+        ),
+      ]).catchError((e, st) {
+        debugPrint('Background refresh after transaction failed: $e\n$st');
+        return <void>[];
+      }));
     } catch (e) {
       if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('❌ Lỗi lưu giao dịch: $e')),
-      );
+      showAppSnackBar(context, 'Loi luu giao dich: $e', isError: true);
+    } finally {
+      if (mounted) {
+        setState(() => _submitting = false);
+      }
     }
   }
-
   // ================= Pickers =================
 
   Future<void> _openIncomePicker() async {
@@ -737,15 +708,17 @@ class _NotePageState extends State<NotePage> {
   // ====== UI HELPERS ======
 
   Widget _buildQuickActions() {
+    if (widget.autoVoice) return const SizedBox.shrink();
+
     final cs = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          if (type == FlowType.out && widget.autoCamera) 
+          if (type == FlowType.out && widget.autoCamera)
             _quickBtn(
               icon: _pickedPhoto != null
                   ? Icons.check_circle_rounded
@@ -764,15 +737,6 @@ class _NotePageState extends State<NotePage> {
               label: _noteText.isNotEmpty ? 'Đã ghi chú' : 'Ghi chú',
               active: _noteText.isNotEmpty,
               onTap: _openNoteEditor,
-              cs: cs,
-              isDark: isDark,
-            ),
-          if (widget.autoVoice)
-            _quickBtn(
-              icon: _listening ? Icons.mic_rounded : Icons.mic_none_rounded,
-              label: _listening ? 'Đang nghe' : 'Giọng nói',
-              active: _listening || _voiceText.isNotEmpty,
-              onTap: _toggleListening,
               cs: cs,
               isDark: isDark,
             ),
@@ -883,12 +847,79 @@ class _NotePageState extends State<NotePage> {
     );
   }
 
+  Widget _buildQuickAmountSuggestions() {
+    final raw = amount.replaceAll(RegExp(r'[^0-9]'), '');
+    final base = int.tryParse(raw) ?? 0;
+
+    if (base <= 0 || base >= 1000000000) return const SizedBox.shrink();
+
+    final moneyFmt = NumberFormat('#,###', 'vi_VN');
+
+    final suggestions = <int>[];
+    for (final m in [1000, 10000, 100000, 1000000, 10000000]) {
+      final v = base * m;
+      if (v > base && v <= 10000000000 && !suggestions.contains(v)) {
+        suggestions.add(v);
+      }
+      if (suggestions.length >= 3) break;
+    }
+
+    if (suggestions.isEmpty) return const SizedBox.shrink();
+
+    final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final chipColor =
+        isDark ? cs.onSurface.withOpacity(.5) : const Color(0xFF3F51B5);
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      child: SizedBox(
+        height: 36,
+        child: ListView.separated(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+          itemCount: suggestions.length,
+          separatorBuilder: (_, __) => const SizedBox(width: 10),
+          itemBuilder: (_, i) {
+            final v = suggestions[i];
+            return GestureDetector(
+              onTap: () => setState(() => amount = v.toString()),
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 18, vertical: 7),
+                decoration: BoxDecoration(
+                  color: Colors.transparent,
+                  borderRadius: BorderRadius.circular(999),
+                  border:
+                      Border.all(color: chipColor.withOpacity(.35), width: 1.2),
+                ),
+                child: Text(
+                  moneyFmt.format(v).replaceAll(',', '.'),
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: chipColor,
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
   Widget _buildAmountDisplay() {
     final cs = Theme.of(context).colorScheme;
     final isOut = type == FlowType.out;
     // hiển thị dãy biểu thức dạng 1.000 + 2.000
-    final formatted = amount.isEmpty ? '0' : _formatExpression(amount)
-      .replaceAll('*', ' × ').replaceAll('/', ' ÷ ').replaceAll('+', ' + ').replaceAll('-', ' - ');
+    final formatted = amount.isEmpty
+        ? '0'
+        : _formatExpression(amount)
+            .replaceAll('*', ' × ')
+            .replaceAll('/', ' ÷ ')
+            .replaceAll('+', ' + ')
+            .replaceAll('-', ' - ');
     final hasAmount = amount.isNotEmpty;
     const mint = Color(0xFF2EC4B6);
     final color =
@@ -1008,7 +1039,8 @@ class _NotePageState extends State<NotePage> {
                       ),
                     if (_noteText.isNotEmpty)
                       Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 24, vertical: 8),
                         child: Container(
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
@@ -1046,23 +1078,14 @@ class _NotePageState extends State<NotePage> {
               ),
             ),
             _buildSelectionList(),
-            const SizedBox(height: 16),
+            const SizedBox(height: 4),
+            _buildQuickAmountSuggestions(),
             // ── Keypad ──
             _KeypadBar(
-                currentAmount: amount,
-                onSug: (val) {
-                  setState(() {
-                    if (amount.isEmpty) {
-                      amount = val;
-                    } else if (RegExp(r'\d+$').hasMatch(amount)) {
-                      amount = amount.replaceFirst(RegExp(r'\d+$'), val);
-                    }
-                  });
-                },
                 onTap: _onKey,
                 onBack: _onBackspace,
                 onConfirm: _submit,
-                isVoiceMode: widget.autoVoice,
+                isConfirming: _submitting,
                 onVoice: _toggleListening),
           ],
         ),
@@ -1203,16 +1226,12 @@ class _KeypadBar extends StatelessWidget {
       {required this.onTap,
       required this.onBack,
       required this.onConfirm,
-      required this.currentAmount,
-      required this.onSug,
-      this.isVoiceMode = false,
+      required this.isConfirming,
       this.onVoice});
   final ValueChanged<String> onTap;
   final VoidCallback onBack;
   final VoidCallback onConfirm;
-  final String currentAmount;
-  final ValueChanged<String> onSug;
-  final bool isVoiceMode;
+  final bool isConfirming;
   final VoidCallback? onVoice;
 
   @override
@@ -1238,7 +1257,8 @@ class _KeypadBar extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.w500,
-                    color: textColor ?? (isDark ? Colors.white : Colors.black87),
+                    color:
+                        textColor ?? (isDark ? Colors.white : Colors.black87),
                   ),
                 ),
               ),
@@ -1248,7 +1268,8 @@ class _KeypadBar extends StatelessWidget {
       );
     }
 
-    Widget iconBtn(IconData icon, {Color? color, required VoidCallback action}) {
+    Widget iconBtn(IconData icon,
+        {Color? color, required VoidCallback action}) {
       return Expanded(
         child: Padding(
           padding: const EdgeInsets.all(4.0),
@@ -1267,96 +1288,62 @@ class _KeypadBar extends StatelessWidget {
       );
     }
 
-    final vi = NumberFormat.decimalPattern('vi_VN');
-
-    // Generate suggestions
-    List<int> suggestions = [];
-    if (currentAmount.isEmpty) {
-      suggestions = [100000, 200000, 500000];
-    } else {
-      final match = RegExp(r'\d+$').stringMatch(currentAmount);
-      if (match != null) {
-        final val = int.tryParse(match) ?? 0;
-        if (val > 0 && val < 500000000) {
-          suggestions = [val * 1000, val * 10000, val * 100000];
-        }
-      }
-    }
-
-    Widget suggestionBar = suggestions.isEmpty
-        ? const SizedBox.shrink()
-        : Container(
-            height: 48,
-            margin: const EdgeInsets.only(bottom: 8),
-            child: Row(
-              children: suggestions.map((s) {
-                return Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
-                    child: OutlinedButton(
-                      style: OutlinedButton.styleFrom(
-                        side: BorderSide(color: mint.withOpacity(0.5)),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                        padding: EdgeInsets.zero,
-                        backgroundColor: isDark ? const Color(0xFF2D2D2D) : Colors.white,
-                      ),
-                      onPressed: () => onSug(s.toString()),
-                      child: Text(
-                        vi.format(s),
-                        style: TextStyle(color: mint, fontWeight: FontWeight.bold, fontSize: 13),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ),
-                );
-              }).toList(),
-            ),
-          );
-
     return Container(
       color: bg,
-      padding: const EdgeInsets.fromLTRB(8, 12, 8, 16),
+      padding: const EdgeInsets.fromLTRB(8, 8, 8, 16),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          suggestionBar,
+          // Row 1: 7  8  9  ⌫
           SizedBox(
-            height: 64,
-            child: Row(
-              children: [
-                btn('7'), btn('8'), btn('9'),
-                iconBtn(Icons.backspace_outlined, action: onBack),
-              ],
-            ),
+            height: 56,
+            child: Row(children: [
+              btn('7'),
+              btn('8'),
+              btn('9'),
+              iconBtn(Icons.backspace_outlined, action: onBack),
+            ]),
           ),
+          // Rows 2-4: left(4-5-6 / 1-2-3 / 0) + right(✓ spanning all 3)
           SizedBox(
-            height: 192,
+            height: 168,
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                // Left 3 columns
                 Expanded(
                   flex: 3,
-                  child: Column(
-                    children: [
-                      Expanded(child: Row(children: [btn('4'), btn('5'), btn('6')])),
-                      Expanded(child: Row(children: [btn('1'), btn('2'), btn('3')])),
-                      Expanded(child: Row(children: [Expanded(flex: 3, child: btn('0', action: () => onTap('0')))])),
-                    ],
-                  ),
+                  child: Column(children: [
+                    Expanded(
+                        child: Row(children: [btn('4'), btn('5'), btn('6')])),
+                    Expanded(
+                        child: Row(children: [btn('1'), btn('2'), btn('3')])),
+                    Expanded(child: Row(children: [btn('0')])),
+                  ]),
                 ),
+                // Right col: ✓ spanning 3 rows
                 Expanded(
                   flex: 1,
                   child: Padding(
                     padding: const EdgeInsets.all(4.0),
                     child: Material(
-                      color: mint,
+                      color: isConfirming ? mint.withOpacity(.55) : mint,
                       borderRadius: BorderRadius.circular(10),
                       child: InkWell(
                         borderRadius: BorderRadius.circular(10),
-                        onTap: onConfirm,
-                        child: const Center(
-                          child: Icon(Icons.check_rounded, color: Colors.white, size: 36),
+                        onTap: isConfirming ? null : onConfirm,
+                        child: Center(
+                          child: isConfirming
+                              ? const SizedBox(
+                                  width: 28,
+                                  height: 28,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 3,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : const Icon(Icons.check_rounded,
+                                  color: Colors.white, size: 36),
                         ),
                       ),
                     ),

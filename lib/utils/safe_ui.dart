@@ -21,6 +21,58 @@ bool _isContextMounted(BuildContext context) {
 /// ================================
 /// SAFE SNACKBAR
 /// ================================
+SnackBar appSnackBar(
+  String message, {
+  IconData? icon,
+  bool isError = false,
+  Duration duration = const Duration(seconds: 3),
+}) {
+  final bg = isError ? const Color(0xFFB91C1C) : const Color(0xFF172033);
+  final accent = isError ? const Color(0xFFFEE2E2) : const Color(0xFFEAF5FF);
+  final fg = Colors.white;
+
+  return SnackBar(
+    behavior: SnackBarBehavior.floating,
+    margin: const EdgeInsets.fromLTRB(16, 0, 16, 18),
+    elevation: 8,
+    backgroundColor: bg,
+    duration: duration,
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+    content: Row(
+      children: [
+        Container(
+          width: 34,
+          height: 34,
+          decoration: BoxDecoration(
+            color: accent.withOpacity(.16),
+            borderRadius: BorderRadius.circular(11),
+          ),
+          child: Icon(
+            icon ??
+                (isError ? Icons.error_outline_rounded : Icons.check_rounded),
+            color: accent,
+            size: 19,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Text(
+            message,
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: fg,
+              fontSize: 13.5,
+              fontWeight: FontWeight.w700,
+              height: 1.25,
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
 void safeShowSnackBar(BuildContext context, SnackBar snackBar) {
   WidgetsBinding.instance.addPostFrameCallback((_) {
     if (!_isContextMounted(context)) return;
@@ -32,6 +84,18 @@ void safeShowSnackBar(BuildContext context, SnackBar snackBar) {
       ..hideCurrentSnackBar()
       ..showSnackBar(snackBar);
   });
+}
+
+void showAppSnackBar(
+  BuildContext context,
+  String message, {
+  IconData? icon,
+  bool isError = false,
+}) {
+  safeShowSnackBar(
+    context,
+    appSnackBar(message, icon: icon, isError: isError),
+  );
 }
 
 /// ================================
