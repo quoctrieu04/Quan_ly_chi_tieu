@@ -1,10 +1,11 @@
-import 'package:chitieu/api/real_estate/real_estate_provider.dart';
-import 'package:chitieu/widgets/create_investment_form.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 
 import 'package:chitieu/api/bankaccount/bank_account_provider.dart';
+import 'package:chitieu/api/real_estate/real_estate_provider.dart';
+import 'package:chitieu/widgets/create_investment_form.dart';
+import 'package:chitieu/widgets/investment/investment_form_fields.dart';
 
 class RealEstateInvestmentForm extends StatefulWidget {
   const RealEstateInvestmentForm({super.key});
@@ -26,6 +27,15 @@ class _RealEstateInvestmentFormState extends State<RealEstateInvestmentForm> {
   String? selectedAccount;
   DateTime buyDate = DateTime.now();
 
+  @override
+  void dispose() {
+    nameCtrl.dispose();
+    locationCtrl.dispose();
+    priceCtrl.dispose();
+    noteCtrl.dispose();
+    super.dispose();
+  }
+
   double _parseMoney(String input) {
     final cleaned = input.replaceAll('.', '').replaceAll(',', '');
     if (cleaned.isEmpty) return 0;
@@ -34,16 +44,16 @@ class _RealEstateInvestmentFormState extends State<RealEstateInvestmentForm> {
 
   double _getSelectedAccountBalance(BankAccountProvider bankProv) {
     if (selectedAccount == null) return 0;
-
     final acc = bankProv.items.firstWhere(
       (e) => e.id.toString() == selectedAccount,
     );
-
     return acc.balance;
   }
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final bankProv = context.watch<BankAccountProvider>();
     final reProv = context.watch<RealEstateProvider>();
 
@@ -51,89 +61,79 @@ class _RealEstateInvestmentFormState extends State<RealEstateInvestmentForm> {
       key: _formKey,
       child: Column(
         children: [
-          // =====================
-          // TÊN TÀI SẢN
-          // =====================
-          TextFormField(
+          InvestmentFormFields.textField(
             controller: nameCtrl,
-            decoration: const InputDecoration(labelText: 'Tên tài sản'),
+            label: 'Tên tài sản',
+            icon: Icons.home_work_outlined,
+            cs: cs,
+            isDark: isDark,
+            textInputAction: TextInputAction.next,
             validator: (v) =>
                 v == null || v.trim().isEmpty ? 'Không được để trống' : null,
           ),
-
-          // =====================
-          // LOẠI BĐS
-          // =====================
-          DropdownButtonFormField<String>(
+          const SizedBox(height: 12),
+          InvestmentFormFields.dropdown<String>(
             value: propertyType,
-            decoration: const InputDecoration(labelText: 'Loại BĐS'),
+            label: 'Loại BĐS',
+            icon: Icons.category_outlined,
+            cs: cs,
+            isDark: isDark,
             items: const [
               DropdownMenuItem(value: 'land', child: Text('Đất')),
               DropdownMenuItem(value: 'house', child: Text('Nhà')),
               DropdownMenuItem(value: 'apartment', child: Text('Chung cư')),
             ],
-            onChanged: (v) => setState(() => propertyType = v!),
+            onChanged: (v) => setState(() => propertyType = v ?? 'land'),
           ),
-
-          // =====================
-          // ĐỊA CHỈ (METADATA)
-          // =====================
-          TextFormField(
+          const SizedBox(height: 12),
+          InvestmentFormFields.textField(
             controller: locationCtrl,
-            decoration: const InputDecoration(labelText: 'Vị trí / Địa chỉ'),
+            label: 'Vị trí / Địa chỉ',
+            icon: Icons.location_on_outlined,
+            cs: cs,
+            isDark: isDark,
+            textInputAction: TextInputAction.next,
           ),
-
-          // =====================
-          // GIÁ MUA
-          // =====================
-          TextFormField(
+          const SizedBox(height: 12),
+          InvestmentFormFields.textField(
             controller: priceCtrl,
+            label: 'Giá mua',
+            icon: Icons.payments_outlined,
+            cs: cs,
+            isDark: isDark,
             keyboardType: TextInputType.number,
             inputFormatters: [MoneyInputFormatter()],
-            decoration: const InputDecoration(labelText: 'Giá mua (VNĐ)'),
+            suffixText: 'đ',
+            textInputAction: TextInputAction.next,
             onChanged: (_) {
               if (selectedAccount != null) {
                 _formKey.currentState?.validate();
               }
             },
             validator: (v) {
-              if (v == null || v.isEmpty) {
-                return 'Nhập giá mua';
-              }
-
+              if (v == null || v.isEmpty) return 'Nhập giá mua';
               final price = _parseMoney(v);
-
-              if (price <= 0) {
-                return 'Giá mua không hợp lệ';
-              }
-
-              if (selectedAccount == null) {
-                return null; // chưa chọn tài khoản → chưa check số dư
-              }
-
-              final balance = _getSelectedAccountBalance(bankProv);
-
-              if (price > balance) {
+              if (price <= 0) return 'Giá mua không hợp lệ';
+              if (selectedAccount == null) return null;
+              if (price > _getSelectedAccountBalance(bankProv)) {
                 return 'Số tiền vượt quá số dư tài khoản';
               }
-
               return null;
             },
           ),
-
-          // =====================
-          // TÀI KHOẢN NGUỒN
-          // =====================
-          DropdownButtonFormField<String>(
+          const SizedBox(height: 12),
+          InvestmentFormFields.dropdown<String>(
             value: selectedAccount,
-            decoration:
-                const InputDecoration(labelText: 'Tài khoản nguồn tiền'),
+            label: 'Tài khoản nguồn tiền',
+            icon: Icons.account_balance_wallet_outlined,
+            cs: cs,
+            isDark: isDark,
             validator: (v) => v == null ? 'Chọn tài khoản' : null,
             items: bankProv.items
                 .map(
                   (acc) => DropdownMenuItem(
                     value: acc.id.toString(),
-                    child: Text('${acc.name} – ${acc.bankname}'),
+                    child: Text('${acc.name} - ${acc.bankname ?? ''}'),
                   ),
                 )
                 .toList(),
@@ -142,41 +142,47 @@ class _RealEstateInvestmentFormState extends State<RealEstateInvestmentForm> {
               _formKey.currentState?.validate();
             },
           ),
-
-          // =====================
-          // NGÀY MUA
-          // =====================
-          ListTile(
-            title: const Text('Ngày mua'),
-            subtitle: Text(DateFormat('dd/MM/yyyy').format(buyDate)),
-            trailing: const Icon(Icons.calendar_today),
+          const SizedBox(height: 12),
+          InvestmentFormFields.dateField(
+            label: 'Ngày mua',
+            value: DateFormat('dd/MM/yyyy').format(buyDate),
+            cs: cs,
+            isDark: isDark,
             onTap: _pickDate,
           ),
-
-          // =====================
-          // GHI CHÚ
-          // =====================
-          TextFormField(
+          const SizedBox(height: 12),
+          InvestmentFormFields.textField(
             controller: noteCtrl,
-            decoration: const InputDecoration(labelText: 'Ghi chú'),
+            label: 'Ghi chú',
+            icon: Icons.notes_outlined,
+            cs: cs,
+            isDark: isDark,
+            textInputAction: TextInputAction.done,
           ),
-
-          const SizedBox(height: 16),
-
-          // =====================
-          // SUBMIT
-          // =====================
+          const SizedBox(height: 18),
           SizedBox(
             width: double.infinity,
+            height: 52,
             child: ElevatedButton(
               onPressed: reProv.loading ? null : _save,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: cs.primary,
+                foregroundColor: cs.onPrimary,
+                elevation: 2,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
               child: reProv.loading
                   ? const SizedBox(
                       width: 18,
                       height: 18,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
-                  : const Text('Lưu'),
+                  : const Text(
+                      'Lưu',
+                      style: TextStyle(fontWeight: FontWeight.w800),
+                    ),
             ),
           ),
         ],
@@ -184,37 +190,30 @@ class _RealEstateInvestmentFormState extends State<RealEstateInvestmentForm> {
     );
   }
 
-  // =====================
-  // SAVE
-  // =====================
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
 
-    final prov = context.read<RealEstateProvider>();
-
-    await prov.create(
-      name: nameCtrl.text.trim(),
-      propertyType: propertyType,
-      address: locationCtrl.text.trim(),
-      purchasePrice: _parseMoney(priceCtrl.text),
-      purchaseDate: buyDate,
-      accountSourceId: int.parse(selectedAccount!),
-      notes: noteCtrl.text.trim().isEmpty ? null : noteCtrl.text.trim(),
-    );
+    await context.read<RealEstateProvider>().create(
+          name: nameCtrl.text.trim(),
+          propertyType: propertyType,
+          address: locationCtrl.text.trim(),
+          purchasePrice: _parseMoney(priceCtrl.text),
+          purchaseDate: buyDate,
+          accountSourceId: int.parse(selectedAccount!),
+          notes: noteCtrl.text.trim().isEmpty ? null : noteCtrl.text.trim(),
+        );
 
     if (!mounted) return;
     Navigator.pop(context, true);
   }
 
-  // =====================
-  // DATE PICKER
-  // =====================
   Future<void> _pickDate() async {
-    final picked = await showDatePicker(
+    final picked = await InvestmentFormFields.pickDate(
       context: context,
       initialDate: buyDate,
       firstDate: DateTime(2000),
       lastDate: DateTime.now(),
+      helpText: 'CHỌN NGÀY',
     );
     if (picked != null) setState(() => buyDate = picked);
   }

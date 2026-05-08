@@ -14,6 +14,7 @@ import 'package:chitieu/pages/setting/settings_provider.dart';
 import 'package:chitieu/core/theme/app_colors.dart';
 import 'package:chitieu/widgets/app_page_header.dart';
 import 'package:chitieu/widgets/app_month_picker_sheet.dart';
+import 'package:chitieu/pages/note_page.dart';
 
 class AnalyticsPage extends StatefulWidget {
   const AnalyticsPage({super.key});
@@ -149,6 +150,8 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
         .map((e) => e.amount)
         .where((v) => v > 0)
         .fold<num>(0, (a, b) => a + b);
+    final hasTransactions = totalIncome > 0 || totalSpent > 0;
+    final hasBudgetPlan = totalAssigned > 0;
 
     final nf = NumberFormat.decimalPattern(locale);
     final monthLabel = DateFormat.yMMMM(locale).format(_ym);
@@ -192,7 +195,7 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
           await _fetchPrediction();
         },
         child: ListView(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
           children: [
             _SectionCard(
               title: "Dự báo & Cảnh báo",
@@ -202,7 +205,21 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
             _SectionCard(
               title: t.analyticsBudgetSplit,
               child: totalBudgetAmount <= 0
-                  ? const _Empty(text: 'Chưa có dữ liệu tháng này')
+                  ? _AnalyticsEmptyState(
+                      icon: Icons.pie_chart_outline_rounded,
+                      title: hasTransactions
+                          ? 'Chưa có kế hoạch theo danh mục'
+                          : 'Chưa có dữ liệu tháng này',
+                      message: hasTransactions
+                          ? 'Bạn đã có giao dịch, nhưng chưa đặt ngân sách cho danh mục. Hãy cấp ngân sách để biểu đồ phân bổ có ý nghĩa hơn.'
+                          : 'Nhập một vài giao dịch và đặt ngân sách để xem tiền được phân bổ theo từng danh mục.',
+                      actionText: 'Thêm giao dịch',
+                      onAction: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(builder: (_) => const NotePage()),
+                        );
+                      },
+                    )
                   : _BudgetPieChart(items: items, categories: categories),
             ),
             const SizedBox(height: 16),
@@ -214,6 +231,7 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
                 totalSpent: totalSpent,
                 monthRemaining: monthRemaining,
                 budgetRemaining: budgetRemaining,
+                hasBudgetPlan: hasBudgetPlan,
               ),
             ),
           ],
@@ -262,6 +280,20 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
     final mainPrediction = currentMonthPrediction > 0
         ? currentMonthPrediction
         : snapshotPrediction;
+    final hasPredictionData = !_isNoPredictionStatus(_predictionStatus) &&
+        (nextMonthPrediction > 0 ||
+            currentMonthPrediction > 0 ||
+            snapshotPrediction > 0 ||
+            warningLimit > 0);
+
+    if (!hasPredictionData) {
+      return _AnalyticsEmptyState(
+        icon: Icons.insights_rounded,
+        title: 'Chưa đủ dữ liệu để dự báo',
+        message:
+            'Hiện tại app chưa có đủ dữ liệu để dự đoán chi tiêu. Hãy tiếp tục ghi nhận giao dịch như bình thường; khi dữ liệu đạt đủ điều kiện theo mô hình AI, dự báo và cảnh báo sẽ tự động hoạt động.',
+      );
+    }
 
     final currentPredictionValue = mainPrediction;
     final progress = (_progressPercent.clamp(0, 100)) / 100.0;
@@ -588,6 +620,12 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
     if (picked == null) return null;
     return DateTime(picked.year, picked.month);
   }
+
+  bool _isNoPredictionStatus(String? status) {
+    return status == 'no_prediction' ||
+        status == 'no_data' ||
+        status == 'insufficient_data';
+  }
 }
 
 class _PredictionMiniCard extends StatelessWidget {
@@ -830,16 +868,108 @@ class _SectionCardState extends State<_SectionCard> {
   }
 }
 
-class _Empty extends StatelessWidget {
-  const _Empty({required this.text});
+class _AnalyticsEmptyState extends StatelessWidget {
+  const _AnalyticsEmptyState({
+    required this.icon,
+    required this.title,
+    required this.message,
+    this.actionText,
+    this.onAction,
+    this.secondaryText,
+  });
 
-  final String text;
+  final IconData icon;
+  final String title;
+  final String message;
+  final String? actionText;
+  final VoidCallback? onAction;
+  final String? secondaryText;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(24),
-      child: Center(child: Text(text)),
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFAFBFC),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFEFF2F6)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: AppColors.primaryDark, size: 28),
+          const SizedBox(height: 10),
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w900,
+              color: Color(0xFF1F2937),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            message,
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              height: 1.35,
+              color: Color(0xFF667085),
+            ),
+          ),
+          if (secondaryText != null) ...[
+            const SizedBox(height: 6),
+            Text(
+              secondaryText!,
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+                color: Color(0xFF475467),
+              ),
+            ),
+          ],
+          if (actionText != null && onAction != null) ...[
+            const SizedBox(height: 14),
+            _SmallActionButton(
+              icon: Icons.add_rounded,
+              label: actionText!,
+              onPressed: onAction!,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _SmallActionButton extends StatelessWidget {
+  const _SmallActionButton({
+    required this.icon,
+    required this.label,
+    required this.onPressed,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return FilledButton.icon(
+      onPressed: onPressed,
+      icon: Icon(icon, size: 17),
+      label: Text(label),
+      style: FilledButton.styleFrom(
+        backgroundColor: AppColors.primary,
+        foregroundColor: Colors.white,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        textStyle: const TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w800,
+        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
     );
   }
 }
@@ -1102,6 +1232,7 @@ class _SummaryBox extends StatelessWidget {
     required this.totalSpent,
     required this.monthRemaining,
     required this.budgetRemaining,
+    required this.hasBudgetPlan,
   });
 
   final num totalIncome;
@@ -1109,14 +1240,17 @@ class _SummaryBox extends StatelessWidget {
   final num totalSpent;
   final num monthRemaining;
   final num budgetRemaining;
+  final bool hasBudgetPlan;
 
   @override
   Widget build(BuildContext context) {
     final locale = Localizations.localeOf(context).toLanguageTag();
     final nf = NumberFormat.decimalPattern(locale)..maximumFractionDigits = 0;
-    final isBudgetOver = budgetRemaining < 0;
+    final isBudgetOver = hasBudgetPlan && budgetRemaining < 0;
     final isMonthNegative = monthRemaining < 0;
-    final planPrefix = isBudgetOver ? 'Vượt' : 'Còn';
+    final planValue = hasBudgetPlan
+        ? '${isBudgetOver ? 'Vượt' : 'Còn'} ${nf.format(budgetRemaining.abs())}'
+        : 'Chưa đặt';
 
     return GridView.count(
       crossAxisCount: 2,
@@ -1150,10 +1284,13 @@ class _SummaryBox extends StatelessWidget {
         ),
         _SummaryTile(
           label: "Kế hoạch",
-          value: '$planPrefix ${nf.format(budgetRemaining.abs())}',
+          value: planValue,
           icon: Icons.receipt_long_outlined,
-          color:
-              isBudgetOver ? const Color(0xFFEF4444) : const Color(0xFFDB2777),
+          color: !hasBudgetPlan
+              ? const Color(0xFF667085)
+              : isBudgetOver
+                  ? const Color(0xFFEF4444)
+                  : const Color(0xFFDB2777),
         ),
       ],
     );
@@ -1227,4 +1364,3 @@ class _SummaryTile extends StatelessWidget {
     );
   }
 }
-

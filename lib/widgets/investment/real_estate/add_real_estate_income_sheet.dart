@@ -1,6 +1,7 @@
 import 'package:chitieu/api/real_estate/real_estate_income_plan_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:intl/intl.dart';
 
 import 'package:chitieu/api/real_estate/real_estate_provider.dart';
 import 'package:chitieu/utils/money_input_formatter.dart';
@@ -47,11 +48,7 @@ class _AddRealEstateIncomePlanSheetState
             realEstateId: widget.realEstateId,
             bankAccountId: _accountId!, // 🔥 BẮT BUỘC
             monthlyAmount: _parseMoney(_amountCtrl.text).toDouble(),
-            startDate: DateTime(
-              _startMonth.year,
-              _startMonth.month,
-              1,
-            ),
+            startDate: _startMonth, // TRUYỀN ĐÚNG NGÀY TRONG THÁNG
           );
 
       if (mounted) Navigator.pop(context, true);
@@ -101,12 +98,12 @@ class _AddRealEstateIncomePlanSheetState
 
             const SizedBox(height: 12),
 
-            // ===== THÁNG BẮT ĐẦU =====
+            // ===== NGÀY BẮT ĐẦU =====
             ListTile(
               contentPadding: EdgeInsets.zero,
-              title: const Text('Tháng bắt đầu'),
-              subtitle: Text('${_startMonth.month}/${_startMonth.year}'),
-              trailing: const Icon(Icons.calendar_today),
+              title: const Text('Ngày bắt đầu kỳ thu'),
+              subtitle: Text(DateFormat('dd/MM/yyyy').format(_startMonth)),
+              trailing: const Icon(Icons.calendar_month, color: Colors.blue),
               onTap: () async {
                 final picked = await showDatePicker(
                   context: context,
@@ -117,7 +114,7 @@ class _AddRealEstateIncomePlanSheetState
 
                 if (picked != null) {
                   setState(() {
-                    _startMonth = DateTime(picked.year, picked.month);
+                    _startMonth = picked;
                   });
                 }
               },

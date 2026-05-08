@@ -7,14 +7,16 @@ import 'package:intl/intl.dart';
 import 'package:chitieu/core/money/widgets/money_text.dart';
 import 'package:chitieu/core/theme/app_colors.dart';
 import 'package:chitieu/api/category/category_model.dart';
+import 'package:chitieu/api/category/category_provider.dart';
+import 'package:chitieu/pages/budget_edit_page.dart';
 
 // Thêm provider để gọi BudgetsProvider
 import 'package:provider/provider.dart';
 import '../core/budget/budgets_provider.dart';
 
 class AllocateMoneyPage extends StatefulWidget {
-  final double available;                // Số tiền "Đang có"
-  final List<Category> categories;       // Danh mục đã tạo
+  final double available; // Số tiền "Đang có"
+  final List<Category> categories; // Danh mục đã tạo
   final Map<dynamic, num> initialAssigned;
 
   const AllocateMoneyPage({
@@ -30,6 +32,7 @@ class AllocateMoneyPage extends StatefulWidget {
 
 class _AllocateMoneyPageState extends State<AllocateMoneyPage> {
   /// categoryId -> amount (int)
+  late List<Category> _categories;
   late Map<int, int> _assigned;
   late final int _initialTotalAssigned;
 
@@ -51,7 +54,10 @@ class _AllocateMoneyPageState extends State<AllocateMoneyPage> {
     if (n.contains('sam') || n.contains('pet')) {
       return Icons.person_outline_rounded;
     }
-    if (n.contains('xe') || n.contains('đi') || n.contains('di') || n.contains('transport')) {
+    if (n.contains('xe') ||
+        n.contains('đi') ||
+        n.contains('di') ||
+        n.contains('transport')) {
       return Icons.directions_car_filled_outlined;
     }
     if (n.contains('mua') || n.contains('shopping')) {
@@ -63,12 +69,34 @@ class _AllocateMoneyPageState extends State<AllocateMoneyPage> {
   @override
   void initState() {
     super.initState();
+    _categories = List<Category>.from(widget.categories);
     // Khởi tạo từ initialAssigned, ép về int
     _assigned = {
-      for (final c in widget.categories)
+      for (final c in _categories)
         c.id: (widget.initialAssigned[c.id] ?? 0).round(),
     };
     _initialTotalAssigned = _assigned.values.fold<int>(0, (p, e) => p + e);
+  }
+
+  Future<void> _createCategoryInsidePlan() async {
+    final created = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => const BudgetEditPage(type: ''),
+      ),
+    );
+
+    if (!mounted || created != true) return;
+
+    final catProv = context.read<CategoryProvider>();
+    await catProv.refresh();
+    if (!mounted) return;
+
+    setState(() {
+      _categories = List<Category>.from(catProv.items);
+      for (final category in _categories) {
+        _assigned.putIfAbsent(category.id, () => 0);
+      }
+    });
   }
 
   /// Mở form chỉnh sửa kế hoạch và lưu giá trị mới cho danh mục.
@@ -79,15 +107,17 @@ class _AllocateMoneyPageState extends State<AllocateMoneyPage> {
     final int catId = int.parse(categoryId.toString());
     final current = _assigned[catId] ?? 0;
     var categoryName = '';
-    for (final c in widget.categories) {
+    for (final c in _categories) {
       if (c.id == catId) {
         categoryName = c.name;
         break;
       }
     }
 
-    final formatter = LocalizedThousandsInputFormatter(localeName, allowDecimal: false);
-    final controller = TextEditingController(text: formatter.formatNumber(current));
+    final formatter =
+        LocalizedThousandsInputFormatter(localeName, allowDecimal: false);
+    final controller =
+        TextEditingController(text: formatter.formatNumber(current));
 
     final amount = await showModalBottomSheet<num>(
       context: context,
@@ -269,7 +299,7 @@ class _AllocateMoneyPageState extends State<AllocateMoneyPage> {
     try {
       final provider = context.read<BudgetsProvider>();
       final now = DateTime.now();
-      final year  = provider.currentYear  ?? now.year;
+      final year = provider.currentYear ?? now.year;
       final month = provider.currentMonth ?? now.month;
 
       if (amount == current) return;
@@ -370,8 +400,8 @@ class _AllocateMoneyPageState extends State<AllocateMoneyPage> {
                   _remaining,
                   style: const TextStyle(
                     color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w800,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w900,
                   ),
                 ),
               ],
@@ -380,146 +410,170 @@ class _AllocateMoneyPageState extends State<AllocateMoneyPage> {
 
           // Danh mục
           Expanded(
-            child: ListView.builder(
+            child: ListView(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              itemCount: widget.categories.length,
-              itemBuilder: (ctx, i) {
-                final c = widget.categories[i];
-                final assigned = _assigned[c.id] ?? 0;
-
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
-                  child: Material(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(14),
-                    elevation: 0,
-                    shadowColor: Colors.black.withOpacity(.05),
-                    child: InkWell(
-                      onTap: () => _editAmount(c.id),
-                      borderRadius: BorderRadius.circular(14),
-                      child: Container(
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(14),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(.05),
-                              blurRadius: 14,
-                              offset: const Offset(0, 6),
-                            ),
-                          ],
-                        ),
-                        child: Padding(
-                    padding: const EdgeInsets.fromLTRB(14, 14, 12, 14),
-                    child: MediaQuery(
-                      data: MediaQuery.of(context).copyWith(textScaler: const TextScaler.linear(1.0)),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          Container(
-                            width: 38,
-                            height: 38,
-                            decoration: BoxDecoration(
-                              color: iconBg,
-                              borderRadius: BorderRadius.circular(9),
-                            ),
-                            child: Icon(
-                              _categoryIcon(c.name),
-                              color: primaryDark,
-                              size: 20,
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  c.name,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    color: Color(0xFF172033),
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w800,
-                                  ),
-                                ),
-                                const SizedBox(height: 3),
-                                Row(
-                                  children: [
-                                    Text(
-                                      'Kế hoạch: ',
-                                      style: TextStyle(
-                                        color: textMuted,
-                                        fontSize: 11,
-                                      ),
-                                    ),
-                                    Flexible(
-                                      child: MoneyText(
-                                        assigned,
-                                        style: TextStyle(
-                                          color: textMuted,
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ),
-
-                          const SizedBox(width: 8),
-
-                          // Nút +… tiền (sửa/lưu ngay)
-                          SizedBox(
-                            width: 98,
-                            height: 34,
-                            child: Align(
-                              alignment: Alignment.centerRight,
-                              child: FittedBox(
-                                fit: BoxFit.scaleDown,
-                                child: TextButton(
-                                  onPressed: () => _editAmount(c.id),
-                                  style: TextButton.styleFrom(
-                                    minimumSize: const Size(0, 34),
-                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                                    backgroundColor: chipBg,
-                                    foregroundColor: primaryDark,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(10),
-                                    ),
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      MoneyText(
-                                        assigned,
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.w800,
-                                          fontSize: 13,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: OutlinedButton.icon(
+                    onPressed: _createCategoryInsidePlan,
+                    icon: const Icon(Icons.add_chart_rounded, size: 18),
+                    label: const Text('Tạo danh mục'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: primaryDark,
+                      side: BorderSide(color: primary.withOpacity(.45)),
+                      padding: const EdgeInsets.symmetric(vertical: 13),
+                      textStyle: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
                       ),
-                    ),
-                        ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
                       ),
                     ),
                   ),
-                );
-              },
+                ),
+                ..._categories.map((c) {
+                  final assigned = _assigned[c.id] ?? 0;
+
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: Material(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(14),
+                      elevation: 0,
+                      shadowColor: Colors.black.withOpacity(.05),
+                      child: InkWell(
+                        onTap: () => _editAmount(c.id),
+                        borderRadius: BorderRadius.circular(14),
+                        child: Container(
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(14),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(.05),
+                                blurRadius: 14,
+                                offset: const Offset(0, 6),
+                              ),
+                            ],
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(14, 14, 12, 14),
+                            child: MediaQuery(
+                              data: MediaQuery.of(context).copyWith(
+                                  textScaler: const TextScaler.linear(1.0)),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.center,
+                                children: [
+                                  Container(
+                                    width: 38,
+                                    height: 38,
+                                    decoration: BoxDecoration(
+                                      color: iconBg,
+                                      borderRadius: BorderRadius.circular(9),
+                                    ),
+                                    child: Icon(
+                                      _categoryIcon(c.name),
+                                      color: primaryDark,
+                                      size: 20,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          c.name,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: const TextStyle(
+                                            color: Color(0xFF172033),
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w800,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 3),
+                                        Row(
+                                          children: [
+                                            Text(
+                                              'Kế hoạch: ',
+                                              style: TextStyle(
+                                                color: textMuted,
+                                                fontSize: 11,
+                                              ),
+                                            ),
+                                            Flexible(
+                                              child: MoneyText(
+                                                assigned,
+                                                style: TextStyle(
+                                                  color: textMuted,
+                                                  fontSize: 13,
+                                                  fontWeight: FontWeight.w800,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+
+                                  const SizedBox(width: 8),
+
+                                  // Nút +… tiền (sửa/lưu ngay)
+                                  SizedBox(
+                                    width: 98,
+                                    height: 34,
+                                    child: Align(
+                                      alignment: Alignment.centerRight,
+                                      child: FittedBox(
+                                        fit: BoxFit.scaleDown,
+                                        child: TextButton(
+                                          onPressed: () => _editAmount(c.id),
+                                          style: TextButton.styleFrom(
+                                            minimumSize: const Size(0, 34),
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 12, vertical: 7),
+                                            backgroundColor: chipBg,
+                                            foregroundColor: primaryDark,
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(10),
+                                            ),
+                                          ),
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              MoneyText(
+                                                assigned,
+                                                style: const TextStyle(
+                                                  fontWeight: FontWeight.w900,
+                                                  fontSize: 15,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                }),
+              ],
             ),
           ),
 
-          // Footer: hiển thị “Còn lại chưa phân bổ” + nút Tải lại (tuỳ chọn)
+          // Footer: hiển thị “Còn lại chưa phân bổ”
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
             child: Column(
@@ -544,40 +598,13 @@ class _AllocateMoneyPageState extends State<AllocateMoneyPage> {
                           _remaining,
                           style: const TextStyle(
                             color: primaryDark,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w800,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w900,
                           ),
                         ),
                       ],
                     ),
                   ),
-                Center(
-                  child: OutlinedButton.icon(
-                    onPressed: () async {
-                      // Chỉ tải lại dữ liệu tháng hiện tại
-                      final p = context.read<BudgetsProvider>();
-                      final now = DateTime.now();
-                      await p.loadForMonth(
-                        year: p.currentYear ?? now.year,
-                        month: p.currentMonth ?? now.month,
-                      );
-                    },
-                    icon: const Icon(Icons.refresh_rounded, size: 18),
-                    label: const Text('Tải lại'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: primary,
-                      side: BorderSide(color: primary.withOpacity(.35)),
-                      padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
-                      textStyle: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                    ),
-                  ),
-                ),
               ],
             ),
           ),
@@ -605,10 +632,12 @@ class LocalizedThousandsInputFormatter extends TextInputFormatter {
   }
 
   @override
-  TextEditingValue formatEditUpdate(TextEditingValue oldValue, TextEditingValue newValue) {
+  TextEditingValue formatEditUpdate(
+      TextEditingValue oldValue, TextEditingValue newValue) {
     final raw = _keepValidChars(newValue.text);
     if (raw.isEmpty) {
-      return const TextEditingValue(text: '', selection: TextSelection.collapsed(offset: 0));
+      return const TextEditingValue(
+          text: '', selection: TextSelection.collapsed(offset: 0));
     }
 
     String integerPart = raw;

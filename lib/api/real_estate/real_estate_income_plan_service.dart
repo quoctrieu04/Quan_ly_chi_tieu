@@ -11,20 +11,20 @@ class RealEstateIncomePlanService {
   // FETCH INCOME PLAN
   // =========================
   Future<RealEstateIncomePlan?> fetchIncomePlan(int realEstateId) async {
-  try {
-    final res = await dio.get(
-      "real-estates/$realEstateId/income-plan",
-    );
+    try {
+      final res = await dio.get(
+        "real-estates/$realEstateId/income-plan",
+      );
 
-    debugPrint("📥 FETCH INCOME PLAN RESPONSE: ${res.data}");
+      debugPrint("📥 FETCH INCOME PLAN RESPONSE: ${res.data}");
 
-    if (res.data['data'] == null) return null;
-    return RealEstateIncomePlan.fromJson(res.data['data']);
-  } catch (e) {
-    debugPrint("❌ FETCH INCOME PLAN ERROR: $e");
-    rethrow;
+      if (res.data['data'] == null) return null;
+      return RealEstateIncomePlan.fromJson(res.data['data']);
+    } catch (e) {
+      debugPrint("❌ FETCH INCOME PLAN ERROR: $e");
+      rethrow;
+    }
   }
-}
 
   // =========================
   // CREATE INCOME PLAN
@@ -58,22 +58,55 @@ class RealEstateIncomePlanService {
   // COLLECT INCOME PLAN
   // =========================
   Future<void> collectIncomePlan({
-  required int incomePlanId,
-}) async {
-  try {
-    final res = await dio.post(
-      "real-estate-income-plans/$incomePlanId/collect",
-    );
+    required int incomePlanId,
+    int? receiveAccountId,
+    DateTime? collectedAt,
+    bool early = false,
+    int months = 1,
+    double? partialAmount,
+    String? notes,
+  }) async {
+    try {
+      if (early) {
+        final Map<String, dynamic> data = {
+          if (receiveAccountId != null) 'receive_account_id': receiveAccountId,
+          'months': months,
+          if (partialAmount != null) 'amount': partialAmount,
+          if (notes != null && notes.isNotEmpty) 'note': notes,
+        };
 
-    debugPrint("✅ COLLECT RAW RESPONSE: ${res.data}");
-  } on DioException catch (e) {
-    debugPrint("❌ COLLECT DIO ERROR: ${e.response?.data}");
-    final msg = e.response?.data is Map<String, dynamic>
-        ? (e.response?.data['message'] ?? 'Không thể thu tiền')
-        : 'Không thể thu tiền';
-    throw Exception(msg);
+        final res = await dio.post(
+          "real-estate-income-plans/$incomePlanId/collect-early",
+          data: data,
+        );
+        debugPrint("✅ COLLECT EARLY RAW RESPONSE: ${res.data}");
+        return;
+      }
+
+      final Map<String, dynamic> data = {
+        if (receiveAccountId != null) 'receive_account_id': receiveAccountId,
+        if (collectedAt != null)
+          'collected_at': collectedAt.toIso8601String().substring(0, 10),
+        'months': months,
+        if (partialAmount != null) 'partial_amount': partialAmount,
+        if (notes != null && notes.isNotEmpty) 'notes': notes,
+      };
+
+      final res = await dio.post(
+        "real-estate-income-plans/$incomePlanId/collect",
+        data: data,
+      );
+
+      debugPrint("✅ COLLECT RAW RESPONSE: ${res.data}");
+    } on DioException catch (e) {
+      debugPrint("❌ COLLECT DIO ERROR: ${e.response?.data}");
+      final msg = e.response?.data is Map<String, dynamic>
+          ? (e.response?.data['message'] ?? 'Không thể thu tiền')
+          : 'Không thể thu tiền';
+      throw Exception(msg);
+    }
   }
-}
+
   // =========================
   // UPDATE INCOME PLAN (SỬA)
   // =========================

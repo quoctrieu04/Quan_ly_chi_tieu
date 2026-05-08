@@ -20,6 +20,17 @@ class RealEstateProvider extends ChangeNotifier {
   String? get error => _error;
   List<RealEstate> get items => _items;
 
+  // ===============================
+  // SUMMARY (UI)
+  // ===============================
+  double get totalInvested => _items
+      .where((e) => !e.isSold)
+      .fold(0.0, (sum, e) => sum + (e.totalCost > 0 ? e.totalCost : e.purchasePrice));
+
+  double get totalProfit => _items
+      .where((e) => !e.isSold)
+      .fold(0.0, (sum, e) => sum + e.profit);
+
   void _setLoading(bool v) {
     _loading = v;
     notifyListeners();

@@ -13,7 +13,9 @@ import 'package:chitieu/widgets/app_page_header.dart';
 import 'package:chitieu/l10n/app_localizations.dart';
 
 class SettingsPage extends StatelessWidget {
-  const SettingsPage({super.key});
+  const SettingsPage({super.key, this.onReplayGuide});
+
+  final VoidCallback? onReplayGuide;
 
   Future<void> _openProfileOrLogin(BuildContext context) async {
     final auth = context.read<AuthProvider>();
@@ -68,8 +70,7 @@ class SettingsPage extends StatelessWidget {
                 child: Column(
                   children: [
                     // ── Profile card ──
-                    _buildProfileCard(
-                        context, cs, isDark, auth, name, t),
+                    _buildProfileCard(context, cs, isDark, auth, name, t),
                     const SizedBox(height: 16),
 
                     // ── Appearance section ──
@@ -85,17 +86,13 @@ class SettingsPage extends StatelessWidget {
                           value: settings.locale,
                           items: const [
                             DropdownMenuItem(
-                                value: Locale('vi'),
-                                child: Text('Tiếng Việt')),
+                                value: Locale('vi'), child: Text('Tiếng Việt')),
                             DropdownMenuItem(
-                                value: Locale('en'),
-                                child: Text('English')),
+                                value: Locale('en'), child: Text('English')),
                           ],
                           onChanged: (v) {
                             if (v != null) {
-                              context
-                                  .read<SettingsProvider>()
-                                  .setLocale(v);
+                              context.read<SettingsProvider>().setLocale(v);
                             }
                           },
                           cs: cs,
@@ -142,7 +139,8 @@ class SettingsPage extends StatelessWidget {
                             context: context,
                             isScrollControlled: true,
                             backgroundColor: Colors.transparent,
-                            builder: (_) => _FontSizeSliderSheet(initialScale: settings.textScale),
+                            builder: (_) => _FontSizeSliderSheet(
+                                initialScale: settings.textScale),
                           );
                         },
                       ),
@@ -150,8 +148,7 @@ class SettingsPage extends StatelessWidget {
                     const SizedBox(height: 20),
 
                     // ── Theme colors ──
-                    _buildSectionTitle(
-                        t.color, Icons.color_lens_outlined, cs),
+                    _buildSectionTitle(t.color, Icons.color_lens_outlined, cs),
                     const SizedBox(height: 10),
                     _buildColorPicker(context, settings, cs, isDark),
                     const SizedBox(height: 20),
@@ -161,6 +158,13 @@ class SettingsPage extends StatelessWidget {
                         'Tài khoản', Icons.person_outline_rounded, cs),
                     const SizedBox(height: 10),
                     _buildSettingsCard(cs, isDark, [
+                      _buildActionRow(
+                        icon: Icons.help_outline_rounded,
+                        label: 'Xem lại hướng dẫn sử dụng',
+                        cs: cs,
+                        onTap: onReplayGuide,
+                      ),
+                      _thinDivider(cs, isDark),
                       _buildActionRow(
                         icon: Icons.lock_outline_rounded,
                         label: t.changePassword,
@@ -412,15 +416,14 @@ class SettingsPage extends StatelessWidget {
     required IconData icon,
     required String label,
     required ColorScheme cs,
-    required VoidCallback onTap,
+    VoidCallback? onTap,
   }) {
     return Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
         child: Padding(
-          padding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           child: Row(
             children: [
               Container(
@@ -474,11 +477,11 @@ class SettingsPage extends StatelessWidget {
       ColorScheme cs, bool isDark) {
     const colors = <Color>[
       AppColors.primary, // Mint (Mặc định)
-      Color(0xFF3F51B5), // Indigo
-      Color(0xFF1976D2), // Blue
-      Color(0xFF00897B), // Teal
-      Color(0xFF7B1FA2), // Purple
-      Color(0xFF388E3C), // Green
+      AppColors.primaryLight,
+      Color(0xFF7BB7F7),
+      Color(0xFF8FD8FF),
+      Color(0xFF7DD3C7),
+      Color(0xFF9FB7FF),
     ];
 
     return Container(
@@ -574,8 +577,7 @@ class SettingsPage extends StatelessWidget {
             fontWeight: FontWeight.w600,
             color: cs.primary,
           ),
-          icon: Icon(Icons.expand_more_rounded,
-              size: 18, color: cs.primary),
+          icon: Icon(Icons.expand_more_rounded, size: 18, color: cs.primary),
           borderRadius: BorderRadius.circular(14),
           isDense: true,
         ),
@@ -642,11 +644,11 @@ class _FontSizeSliderSheetState extends State<_FontSizeSliderSheet> {
           children: [
             Center(
               child: Container(
-                width: 40, height: 4,
+                width: 40,
+                height: 4,
                 decoration: BoxDecoration(
-                  color: isDark ? Colors.white24 : Colors.black12,
-                  borderRadius: BorderRadius.circular(2)
-                ),
+                    color: isDark ? Colors.white24 : Colors.black12,
+                    borderRadius: BorderRadius.circular(2)),
               ),
             ),
             const SizedBox(height: 24),
@@ -654,33 +656,41 @@ class _FontSizeSliderSheetState extends State<_FontSizeSliderSheet> {
               'Điều chỉnh cỡ chữ',
               textAlign: TextAlign.center,
               style: TextStyle(
-                fontSize: 18, 
-                fontWeight: FontWeight.w800, 
-                color: isDark ? Colors.white : const Color(0xFF1E293B)
-              ),
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  color: isDark ? Colors.white : const Color(0xFF1E293B)),
             ),
             const SizedBox(height: 8),
             Text(
               _getLabel(),
               textAlign: TextAlign.center,
               style: TextStyle(
-                fontSize: 14, 
-                fontWeight: FontWeight.w600, 
-                color: Theme.of(context).colorScheme.primary
-              ),
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: Theme.of(context).colorScheme.primary),
             ),
             const SizedBox(height: 24),
             Row(
               children: [
-                Text('A', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: isDark ? Colors.white54 : Colors.black54)),
+                Text('A',
+                    style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: isDark ? Colors.white54 : Colors.black54)),
                 const SizedBox(width: 8),
                 Expanded(
                   child: SliderTheme(
                     data: SliderThemeData(
                       activeTrackColor: Theme.of(context).colorScheme.primary,
-                      inactiveTrackColor: Theme.of(context).colorScheme.primary.withOpacity(0.2),
+                      inactiveTrackColor: Theme.of(context)
+                          .colorScheme
+                          .primary
+                          .withOpacity(0.2),
                       thumbColor: Theme.of(context).colorScheme.primary,
-                      overlayColor: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                      overlayColor: Theme.of(context)
+                          .colorScheme
+                          .primary
+                          .withOpacity(0.1),
                       trackHeight: 6,
                     ),
                     child: Slider(
@@ -695,16 +705,24 @@ class _FontSizeSliderSheetState extends State<_FontSizeSliderSheet> {
                   ),
                 ),
                 const SizedBox(width: 8),
-                Text('A', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
+                Text('A',
+                    style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                        color: isDark ? Colors.white : Colors.black87)),
               ],
             ),
             const SizedBox(height: 16),
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
+                color:
+                    isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: isDark ? Colors.white10 : Colors.black.withOpacity(0.05)),
+                border: Border.all(
+                    color: isDark
+                        ? Colors.white10
+                        : Colors.black.withOpacity(0.05)),
               ),
               child: Text(
                 'Đây là văn bản xem trước.\nBạn có thể kéo thanh trượt để thấy cỡ chữ thay đổi ngay lập tức.',
@@ -726,9 +744,14 @@ class _FontSizeSliderSheetState extends State<_FontSizeSliderSheet> {
               style: FilledButton.styleFrom(
                 backgroundColor: Theme.of(context).colorScheme.primary,
                 padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16)),
               ),
-              child: const Text('Lưu thay đổi', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white)),
+              child: const Text('Lưu thay đổi',
+                  style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white)),
             ),
           ],
         ),

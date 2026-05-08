@@ -9,6 +9,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:diacritic/diacritic.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:chitieu/l10n/app_localizations.dart';
 
@@ -41,7 +42,95 @@ class NotePage extends StatefulWidget {
   State<NotePage> createState() => _NotePageState();
 }
 
+class _NoteGuideStep {
+  const _NoteGuideStep({
+    required this.icon,
+    required this.title,
+    required this.message,
+  });
+
+  final IconData icon;
+  final String title;
+  final String message;
+}
+
+class _NoteGuideDialog extends StatelessWidget {
+  const _NoteGuideDialog({required this.step});
+
+  final _NoteGuideStep step;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
+    return Dialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 28),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 22, 20, 18),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 52,
+              height: 52,
+              decoration: BoxDecoration(
+                color: cs.primary.withOpacity(.12),
+                borderRadius: BorderRadius.circular(18),
+              ),
+              child: Icon(step.icon, color: cs.primary, size: 28),
+            ),
+            const SizedBox(height: 14),
+            Text(
+              step.title,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w900,
+                color: Color(0xFF111827),
+              ),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              step.message,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 14,
+                height: 1.4,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF667085),
+              ),
+            ),
+            const SizedBox(height: 20),
+            SizedBox(
+              width: double.infinity,
+              height: 46,
+              child: FilledButton(
+                onPressed: () => Navigator.of(context).pop(),
+                style: FilledButton.styleFrom(
+                  backgroundColor: cs.primary,
+                  foregroundColor: cs.onPrimary,
+                  textStyle: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w900,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
+                child: const Text('Đã hiểu'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _NotePageState extends State<NotePage> {
+  static const _noteGuideSeenKey = 'note_page_guide_seen_v1';
+
   FlowType type = FlowType.out;
   String amount = '';
 
@@ -89,17 +178,9 @@ class _NotePageState extends State<NotePage> {
     _stt.init();
     _tts.init();
 
-    if (widget.autoVoice) {
-      Future.delayed(const Duration(milliseconds: 400), () {
-        if (mounted) _toggleListening();
-      });
-    }
-
-    if (widget.autoCamera) {
-      Future.delayed(const Duration(milliseconds: 400), () {
-        if (mounted) _pickExpensePhoto();
-      });
-    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _showFirstUseGuideThenAutoAction();
+    });
 
     Future.microtask(() async {
       final cats = context.read<CategoryProvider>();
@@ -111,6 +192,61 @@ class _NotePageState extends State<NotePage> {
       final inc = context.read<IncomeProvider>();
       if (!inc.loading && inc.items.isEmpty) await inc.fetchAll();
     });
+  }
+
+  Future<void> _showFirstUseGuideThenAutoAction() async {
+    final prefs = await SharedPreferences.getInstance();
+    final seen = prefs.getBool(_noteGuideSeenKey) ?? false;
+
+    if (!seen && mounted) {
+      final steps = <_NoteGuideStep>[
+        const _NoteGuideStep(
+          icon: Icons.edit_note_rounded,
+          title: 'Nhập thường',
+          message:
+              'Chọn Thu hoặc Chi, nhập số tiền bằng bàn phím, ghi chú nội dung nếu cần rồi chọn danh mục và tài khoản trước khi lưu.',
+        ),
+        const _NoteGuideStep(
+          icon: Icons.mic_none_rounded,
+          title: 'Nhập bằng giọng nói',
+          message:
+              'Hãy nói đủ số tiền, nội dung, danh mục hoặc nguồn thu và tài khoản. Ví dụ: "Chi 40 nghìn ăn uống bằng tiền mặt" hoặc "Thu 5 triệu lương vào ngân hàng".',
+        ),
+        const _NoteGuideStep(
+          icon: Icons.camera_alt_outlined,
+          title: 'Chụp ảnh',
+          message:
+              'Chụp hóa đơn hoặc ảnh liên quan cho khoản chi. Ảnh sẽ được lưu kèm giao dịch; bạn vẫn cần kiểm tra số tiền, ghi chú, danh mục và tài khoản chi.',
+        ),
+        const _NoteGuideStep(
+          icon: Icons.account_balance_wallet_rounded,
+          title: 'Danh mục và tài khoản',
+          message:
+              'Với khoản chi, hãy chọn Danh mục và Tài khoản chi. Với khoản thu, hãy chọn Nguồn thu và Tài khoản nhận tiền. Nếu voice nhận diện chưa đúng, bạn có thể chọn lại thủ công.',
+        ),
+      ];
+
+      for (final step in steps) {
+        if (!mounted) return;
+        await showDialog<void>(
+          context: context,
+          barrierDismissible: false,
+          builder: (_) => _NoteGuideDialog(step: step),
+        );
+      }
+
+      await prefs.setBool(_noteGuideSeenKey, true);
+    }
+
+    if (!mounted) return;
+
+    if (widget.autoVoice) {
+      await Future<void>.delayed(const Duration(milliseconds: 250));
+      if (mounted) _toggleListening();
+    } else if (widget.autoCamera) {
+      await Future<void>.delayed(const Duration(milliseconds: 250));
+      if (mounted) _pickExpensePhoto();
+    }
   }
 
   @override

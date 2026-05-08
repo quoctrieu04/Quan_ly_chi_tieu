@@ -60,26 +60,39 @@ class RealEstateIncomePlanProvider extends ChangeNotifier {
   // ==========================
   // COLLECT (THU TIỀN)
   // ==========================
-  Future<void> collect() async {
-  if (plan == null || collecting) return;
+  Future<void> collect({
+    int? receiveAccountId,
+    DateTime? collectedAt,
+    bool early = false,
+    int months = 1,
+    double? partialAmount,
+    String? notes,
+  }) async {
+    if (plan == null || collecting) return;
 
-  final currentPlan = plan!;
+    final currentPlan = plan!;
 
-  collecting = true;
-  notifyListeners();
-
-  try {
-    await _service.collectIncomePlan(
-      incomePlanId: currentPlan.id,
-    );
-
-    plan = await _service.fetchIncomePlan(currentPlan.realEstateId);
-    debugPrint("✅ PLAN AFTER COLLECT FETCH: ${plan?.nextDueDate}");
-  } finally {
-    collecting = false;
+    collecting = true;
     notifyListeners();
+
+    try {
+      await _service.collectIncomePlan(
+        incomePlanId: currentPlan.id,
+        receiveAccountId: receiveAccountId,
+        collectedAt: collectedAt,
+        early: early,
+        months: months,
+        partialAmount: partialAmount,
+        notes: notes,
+      );
+
+      plan = await _service.fetchIncomePlan(currentPlan.realEstateId);
+      debugPrint("✅ PLAN AFTER COLLECT FETCH: ${plan?.nextDueDate}");
+    } finally {
+      collecting = false;
+      notifyListeners();
+    }
   }
-}
 
   // ==========================
   // UPDATE PLAN

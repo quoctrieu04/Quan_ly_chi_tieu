@@ -18,6 +18,7 @@ class Investment {
   // ✅ FIX: accountSource nên là int? (id tài khoản)
   final int? accountSource;
   final DateTime? closedAt;
+  final DateTime? lastInterestDate;
 
   Investment({
     this.id,
@@ -33,6 +34,7 @@ class Investment {
     required this.createdAt,
     this.accountSource,
     this.closedAt,
+    this.lastInterestDate,
   });
 
   // ===================================================
@@ -64,6 +66,9 @@ class Investment {
       accountSource: acc == null ? null : int.tryParse(acc.toString()),
       closedAt:
           json['closed_at'] != null ? DateTime.parse(json['closed_at']) : null,
+      lastInterestDate: json['last_interest_date'] != null
+          ? DateTime.parse(json['last_interest_date'])
+          : null,
     );
   }
 
@@ -97,6 +102,7 @@ class Investment {
     int? termMonths,
     int? accountSource,
     DateTime? closedAt,
+    DateTime? lastInterestDate,
   }) {
     return Investment(
       id: id,
@@ -112,6 +118,7 @@ class Investment {
       createdAt: createdAt,
       accountSource: accountSource ?? this.accountSource,
       closedAt: closedAt ?? this.closedAt,
+      lastInterestDate: lastInterestDate ?? this.lastInterestDate,
     );
   }
 
@@ -139,7 +146,21 @@ class Investment {
     if (interestRate == null || startDate == null || termMonths == null)
       return 0;
 
-    final months = termMonths!;
-    return totalInvested * (interestRate! / 100) * (months / 12);
+    final start = startDate!;
+    final lastDate = lastInterestDate ?? start;
+    
+    // Tính số tháng đã trôi qua kể từ ngày bắt đầu đến lần rút lãi cuối cùng
+    int monthsPassedTotal = 0;
+    DateTime temp = DateTime(start.year, start.month + 1, start.day);
+    while (temp.isBefore(lastDate) || temp.isAtSameMomentAs(lastDate)) {
+      monthsPassedTotal++;
+      temp = DateTime(temp.year, temp.month + 1, temp.day);
+    }
+
+    // Số tháng còn lại sẽ sinh lãi
+    int remainingMonths = termMonths! - monthsPassedTotal;
+    if (remainingMonths < 0) remainingMonths = 0;
+
+    return totalInvested * (interestRate! / 100) * (remainingMonths / 12);
   }
 }

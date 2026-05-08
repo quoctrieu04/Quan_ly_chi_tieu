@@ -80,8 +80,14 @@ class InvestmentService {
         return 'interest';
       case WithdrawType.all:
         return 'all';
+      case WithdrawType.earlyAll:
+        return 'early_all';
+      case WithdrawType.earlyPartial:
+        return 'early_partial';
       case WithdrawType.interestAndRenew:
         return 'interest_and_renew';
+      case WithdrawType.monthlyInterest:
+        return 'monthly_interest';
     }
   }
 
@@ -93,6 +99,7 @@ class InvestmentService {
     required int receiveAccountId,
     required WithdrawType withdrawType,
     double? amount,
+    double? overrideReceivedAmount,
   }) async {
     try {
       final Map<String, dynamic> data = {
@@ -102,6 +109,10 @@ class InvestmentService {
 
       if (amount != null) {
         data['amount'] = amount;
+      }
+      
+      if (overrideReceivedAmount != null) {
+        data['override_received_amount'] = overrideReceivedAmount;
       }
 
       final res = await dio.post(

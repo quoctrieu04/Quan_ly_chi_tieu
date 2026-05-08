@@ -388,31 +388,6 @@ class _RealEstateTile extends StatelessWidget {
                   ),
                   Expanded(
                     child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Loại',
-                          style: TextStyle(
-                            fontSize: 11.5,
-                            color: cs.onSurface.withOpacity(.4),
-                          ),
-                        ),
-                        const SizedBox(height: 3),
-                        Text(
-                          type.isEmpty ? 'BĐS' : type,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w800,
-                            color: cs.onSurface,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Expanded(
-                    child: Column(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
                         Text(

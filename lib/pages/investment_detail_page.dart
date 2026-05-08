@@ -39,24 +39,42 @@ class _InvestmentDetailPageState extends State<InvestmentDetailPage> {
     final moneyFmt = NumberFormat('#,###', 'vi_VN');
     final dateFmt = DateFormat('dd/MM/yyyy');
 
-    final profit = investment.profitLoss;
-    final totalAmount = investment.totalInvested + profit;
+    final termProfit = investment.profitLoss;
     final maturityDate =
         _maturityDate(investment.startDate, investment.termMonths);
 
     final bool isClosed = investment.closedAt != null;
-    final bool canWithdraw = investment.type == 'bank' &&
+    final bool isActiveBank = investment.type == 'bank' &&
         !isClosed &&
         investment.totalInvested > 0 &&
-        maturityDate != null &&
-        !DateTime.now().isBefore(_dateOnly(maturityDate));
+        maturityDate != null;
+    final bool isBeforeMaturity =
+        isActiveBank && DateTime.now().isBefore(_dateOnly(maturityDate));
+    final bool canWithdraw =
+        isActiveBank && !DateTime.now().isBefore(_dateOnly(maturityDate));
     final bool canWithdrawInterestAndRenew = canWithdraw;
+    final earlyProfit =
+        isBeforeMaturity ? _earlyWithdrawInterest() : termProfit;
+    final displayProfit = investment.type == 'bank' ? earlyProfit : termProfit;
+    final totalAmount = investment.totalInvested + displayProfit;
+
+    int withdrawableMonths = 0;
+    if (isActiveBank) {
+      final lastDate = investment.lastInterestDate ?? investment.startDate;
+      if (lastDate != null) {
+        final now = DateTime.now();
+        int monthsPassed = 0;
+        DateTime temp = DateTime(lastDate.year, lastDate.month + 1, lastDate.day);
+        while (temp.isBefore(now) || temp.isAtSameMomentAs(now)) {
+          monthsPassed++;
+          temp = DateTime(temp.year, temp.month + 1, temp.day);
+        }
+        withdrawableMonths = monthsPassed;
+      }
+    }
 
     String moneyText(num value) => moneyFmt.format(value).replaceAll(',', '.');
 
-    final contractCode = investment.id != null
-        ? 'HD-${investment.id!.toString().padLeft(6, '0')}'
-        : investment.name;
     final interestRateText =
         '${investment.interestRate?.toStringAsFixed(2) ?? '0'}% / năm';
 
@@ -128,7 +146,7 @@ class _InvestmentDetailPageState extends State<InvestmentDetailPage> {
               borderRadius: BorderRadius.circular(14),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.04),
+                  color: Colors.black.withValues(alpha: 0.04),
                   blurRadius: 14,
                   offset: const Offset(0, 6),
                 ),
@@ -136,20 +154,18 @@ class _InvestmentDetailPageState extends State<InvestmentDetailPage> {
             ),
             child: Column(
               children: [
-                _detailRow('Mã hợp đồng', contractCode),
-                _detailDivider(),
                 _detailRow(
                   'Gốc đầu tư',
                   '${moneyText(investment.totalInvested)} VND',
                 ),
                 _detailDivider(),
                 _detailRow(
-                  'Lãi hiện tại',
-                  '${moneyText(profit)} VND',
+                  isBeforeMaturity ? 'Lãi tạm tính trước hạn' : 'Lãi hiện tại',
+                  '${moneyText(displayProfit)} VND',
                   valueColor:
-                      profit >= 0 ? const Color(0xFF55B866) : Colors.red,
+                      displayProfit >= 0 ? const Color(0xFF55B866) : Colors.red,
                   trailing: investment.type == 'bank'
-                      ? _rateBadge(interestRateText)
+                      ? _rateBadge(isBeforeMaturity ? '0.1% / năm' : interestRateText)
                       : null,
                 ),
                 _detailDivider(),
@@ -170,12 +186,6 @@ class _InvestmentDetailPageState extends State<InvestmentDetailPage> {
                     leadingValueIcon: Icons.event_available_rounded,
                   ),
                 ],
-                _detailDivider(),
-                _detailRow(
-                  'Hình thức',
-                  isClosed ? 'Đã tất toán' : 'Gia hạn tự động',
-                  valueColor: isClosed ? Colors.red : null,
-                ),
               ],
             ),
           ),
@@ -184,6 +194,8 @@ class _InvestmentDetailPageState extends State<InvestmentDetailPage> {
       bottomNavigationBar: _actionBar(
         canWithdraw: canWithdraw,
         canWithdrawInterestAndRenew: canWithdrawInterestAndRenew,
+        isBeforeMaturity: isBeforeMaturity,
+        withdrawableMonths: withdrawableMonths,
       ),
     );
   }
@@ -277,6 +289,8 @@ class _InvestmentDetailPageState extends State<InvestmentDetailPage> {
   Widget _actionBar({
     required bool canWithdraw,
     required bool canWithdrawInterestAndRenew,
+    required bool isBeforeMaturity,
+    required int withdrawableMonths,
   }) {
     final canUsePrimaryActions = canWithdraw && !_busy;
     final canUseInterestRenew = canWithdrawInterestAndRenew && !_busy;
@@ -290,46 +304,201 @@ class _InvestmentDetailPageState extends State<InvestmentDetailPage> {
           borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.08),
+              color: Colors.black.withValues(alpha: 0.08),
               blurRadius: 18,
               offset: const Offset(0, -8),
             ),
           ],
         ),
-        child: Row(
-          children: [
-            Expanded(
-              child: _bottomActionButton(
-                icon: Icons.logout_rounded,
-                label: 'RÚT TOÀN BỘ',
-                onPressed: canUsePrimaryActions ? _openWithdrawSheet : null,
-                outlined: true,
+        child: isBeforeMaturity
+            ? Row(
+                children: [
+                  Expanded(
+                    child: _bottomActionButton(
+                      icon: Icons.warning_amber_rounded,
+                      label: 'RÚT TRƯỚC HẠN',
+                      onPressed: _busy ? null : _openEarlyWithdrawInfoSheet,
+                      outlined: true,
+                    ),
+                  ),
+                  if (withdrawableMonths >= 1) ...[
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _bottomActionButton(
+                        icon: Icons.payments_outlined,
+                        label: 'RÚT LÃI ĐỊNH KỲ\n($withdrawableMonths tháng)',
+                        onPressed: _busy ? null : () => _openMonthlyWithdrawInfoSheet(withdrawableMonths),
+                        backgroundColor: const Color(0xFF7CE5DF),
+                        foregroundColor: const Color(0xFF00646D),
+                      ),
+                    ),
+                  ],
+                ],
+              )
+            : Row(
+                children: [
+                  Expanded(
+                    child: _bottomActionButton(
+                      icon: Icons.logout_rounded,
+                      label: 'RÚT TOÀN BỘ',
+                      onPressed:
+                          canUsePrimaryActions ? _openWithdrawSheet : null,
+                      outlined: true,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _bottomActionButton(
+                      icon: Icons.account_balance_wallet_outlined,
+                      label: 'RÚT LÃI &\nGIA HẠN GỐC',
+                      onPressed: canUseInterestRenew
+                          ? _openWithdrawInterestAndRenewSheet
+                          : null,
+                      backgroundColor: const Color(0xFF7CE5DF),
+                      foregroundColor: const Color(0xFF00646D),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _bottomActionButton(
+                      icon: Icons.refresh_rounded,
+                      label: 'GIA HẠN',
+                      onPressed: canUsePrimaryActions ? _openRenewDialog : null,
+                      backgroundColor: const Color(0xFF004A55),
+                      foregroundColor: Colors.white,
+                    ),
+                  ),
+                ],
+              ),
+      ),
+    );
+  }
+
+  void _openMonthlyWithdrawInfoSheet(int months) {
+    final accounts = context.read<BankAccountProvider>().items;
+    int? receiveAccountId;
+    String? errorMsg;
+
+    final double interestAmount = investment.totalInvested * (investment.interestRate! / 100) * (months / 12);
+    final moneyFmt = NumberFormat('#,###', 'vi_VN');
+    final formattedInterest = moneyFmt.format(interestAmount.round()).replaceAll(',', '.');
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => StatefulBuilder(
+        builder: (ctx, setModalState) {
+          return Padding(
+            padding: EdgeInsets.only(
+              left: 16,
+              right: 16,
+              top: 16,
+              bottom: MediaQuery.of(ctx).viewInsets.bottom + 16,
+            ),
+            child: SafeArea(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const Text(
+                    'Rút lãi định kỳ',
+                    style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Bạn đang rút lãi của $months tháng đã gửi. Hệ thống sẽ cộng phần tiền lãi này vào tài khoản của bạn.',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(height: 1.35),
+                  ),
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF3F6F8),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'Số tiền lãi thực nhận:',
+                          style: TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF68727C)),
+                        ),
+                        Text(
+                          '$formattedInterest VND',
+                          style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: Color(0xFF1F9D55)),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  _accountDropdown(
+                    accounts,
+                    receiveAccountId,
+                    (value) => setModalState(() {
+                      receiveAccountId = value;
+                    }),
+                  ),
+                  const SizedBox(height: 14),
+                  if (errorMsg != null)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8.0),
+                      child: Text(
+                        errorMsg!,
+                        style: const TextStyle(
+                            color: Colors.red,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 13),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ElevatedButton(
+                    onPressed: receiveAccountId == null || _busy
+                        ? null
+                        : () async {
+                            Navigator.pop(ctx);
+                            setState(() => _busy = true);
+
+                            try {
+                              await context
+                                  .read<InvestmentProvider>()
+                                  .withdrawBank(
+                                    investment.id!,
+                                    receiveAccountId!,
+                                    withdrawType: WithdrawType.monthlyInterest,
+                                  );
+
+                              if (!mounted) return;
+                              _showSuccessSnackBar('Rút lãi định kỳ thành công');
+                              Navigator.pop(context, true);
+                            } catch (e) {
+                              if (!mounted) return;
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                    content: Text(e.toString()),
+                                    backgroundColor: Colors.red),
+                              );
+                            } finally {
+                              if (mounted) setState(() => _busy = false);
+                            }
+                          },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF004A55),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                    child: const Text('Xác nhận Rút lãi',
+                        style: TextStyle(fontWeight: FontWeight.bold)),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: _bottomActionButton(
-                icon: Icons.account_balance_wallet_outlined,
-                label: 'RÚT LÃI &\nGIA HẠN GỐC',
-                onPressed: canUseInterestRenew
-                    ? _openWithdrawInterestAndRenewSheet
-                    : null,
-                backgroundColor: const Color(0xFF7CE5DF),
-                foregroundColor: const Color(0xFF00646D),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: _bottomActionButton(
-                icon: Icons.refresh_rounded,
-                label: 'GIA HẠN',
-                onPressed: canUsePrimaryActions ? _openRenewDialog : null,
-                backgroundColor: const Color(0xFF004A55),
-                foregroundColor: Colors.white,
-              ),
-            ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }
@@ -411,7 +580,7 @@ class _InvestmentDetailPageState extends State<InvestmentDetailPage> {
                 width: 28,
                 height: 28,
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.18),
+                  color: Colors.white.withValues(alpha: 0.18),
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(
@@ -443,8 +612,12 @@ class _InvestmentDetailPageState extends State<InvestmentDetailPage> {
     ValueChanged<int?> onChanged,
   ) {
     return DropdownButtonFormField<int>(
-      value: selectedId,
-      decoration: const InputDecoration(labelText: 'Tài khoản nhận tiền'),
+      initialValue: selectedId,
+      decoration: InputDecoration(
+        labelText: 'Tài khoản nhận tiền',
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      ),
       items: accounts
           .where((account) => !account.isDeleted)
           .map(
@@ -459,6 +632,377 @@ class _InvestmentDetailPageState extends State<InvestmentDetailPage> {
           )
           .toList(),
       onChanged: onChanged,
+    );
+  }
+
+  double _earlyWithdrawInterest() {
+    const demandRate = 0.1;
+    if (investment.startDate == null) return 0;
+
+    final start = _dateOnly(investment.startDate!);
+    final today = _dateOnly(DateTime.now());
+    final holdingDays = today.difference(start).inDays.clamp(0, 36500);
+    return investment.totalInvested * (demandRate / 100) * (holdingDays / 365);
+  }
+
+  void _openEarlyWithdrawInfoSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.fromLTRB(18, 18, 18, 24),
+        child: SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text(
+                'Điều kiện rút trước hạn',
+                style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Khoản gửi chưa đến ngày đáo hạn. Nếu rút bây giờ, lãi kỳ hạn sẽ không được áp dụng như khi rút đúng hạn.',
+                style: TextStyle(height: 1.35),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Lãi dự kiến sẽ được tính lại theo lãi suất không kỳ hạn. Phần lãi kỳ hạn đang hiển thị chỉ là số tham khảo nếu giữ đến ngày đáo hạn.',
+                style: TextStyle(height: 1.35),
+              ),
+              const SizedBox(height: 24),
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  _openEarlyWithdrawSheet();
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF004A55),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+                child: const Text('Đã hiểu và Tiếp tục', style: TextStyle(fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _openEarlyWithdrawSheet() {
+    final accounts = context.read<BankAccountProvider>().items;
+    final moneyFmt = NumberFormat('#,###', 'vi_VN');
+    final maturityDate = _maturityDate(investment.startDate, investment.termMonths);
+    
+    int? receiveAccountId;
+    bool isPartialWithdraw = false;
+    
+    final partialAmountCtrl = TextEditingController();
+    final overrideAmountCtrl = TextEditingController();
+    final demandRateCtrl = TextEditingController(text: '0.1');
+
+    double calculateEarlyInterestFor(double amount, double rate) {
+      if (investment.startDate == null) return 0;
+      final start = _dateOnly(investment.startDate!);
+      final today = _dateOnly(DateTime.now());
+      final holdingDays = today.difference(start).inDays.clamp(0, 36500);
+      return amount * (rate / 100) * (holdingDays / 365);
+    }
+
+    final defaultEarlyInterest = calculateEarlyInterestFor(investment.totalInvested, 0.1);
+    final defaultTotal = investment.totalInvested + defaultEarlyInterest;
+    
+    String moneyText(num value) => moneyFmt.format(value).replaceAll(',', '.');
+    
+    overrideAmountCtrl.text = moneyText(defaultTotal.round());
+
+    String? errorMsg;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => StatefulBuilder(
+        builder: (ctx, setModalState) {
+          return Padding(
+            padding: EdgeInsets.only(
+              left: 16, right: 16, top: 16,
+              bottom: MediaQuery.of(ctx).viewInsets.bottom + 16,
+            ),
+            child: SafeArea(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const Text(
+                    'Rút trước hạn',
+                    style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    maturityDate == null
+                        ? 'Khoản gửi này chưa đủ thông tin ngày đáo hạn.'
+                        : 'Khoản gửi chưa đến ngày đáo hạn ${DateFormat('dd/MM/yyyy').format(maturityDate)}.',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(color: Color(0xFF68727C)),
+                  ),
+                  const SizedBox(height: 14),
+                  
+                  // Lựa chọn Hình thức rút
+                  Row(
+                    children: [
+                      Expanded(
+                        child: RadioListTile<bool>(
+                          title: const Text('Rút toàn bộ', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                          contentPadding: EdgeInsets.zero,
+                          value: false,
+                          groupValue: isPartialWithdraw,
+                          onChanged: (val) {
+                            setModalState(() {
+                              isPartialWithdraw = val!;
+                              final rate = double.tryParse(demandRateCtrl.text.replaceAll(',', '.')) ?? 0.1;
+                              final interest = calculateEarlyInterestFor(investment.totalInvested, rate);
+                              overrideAmountCtrl.text = moneyText((investment.totalInvested + interest).round());
+                            });
+                          },
+                        ),
+                      ),
+                      Expanded(
+                        child: RadioListTile<bool>(
+                          title: const Text('Rút 1 phần', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                          contentPadding: EdgeInsets.zero,
+                          value: true,
+                          groupValue: isPartialWithdraw,
+                          onChanged: (val) {
+                            setModalState(() {
+                              isPartialWithdraw = val!;
+                              partialAmountCtrl.clear();
+                              overrideAmountCtrl.clear();
+                            });
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  if (isPartialWithdraw) ...[
+                    const SizedBox(height: 8),
+                    TextFormField(
+                      controller: partialAmountCtrl,
+                      decoration: InputDecoration(
+                        labelText: 'Số tiền gốc muốn rút (VND)',
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                      ),
+                      keyboardType: TextInputType.number,
+                      onChanged: (val) {
+                        setModalState(() => errorMsg = null);
+                        final rawStr = val.replaceAll(RegExp(r'[^0-9]'), '');
+                        if (rawStr.isEmpty) {
+                          partialAmountCtrl.clear();
+                          overrideAmountCtrl.clear();
+                          return;
+                        }
+
+                        final amount = double.tryParse(rawStr) ?? 0;
+                        final formatted = moneyText(amount);
+
+                        partialAmountCtrl.value = TextEditingValue(
+                          text: formatted,
+                          selection: TextSelection.collapsed(offset: formatted.length),
+                        );
+
+                        final rate = double.tryParse(demandRateCtrl.text.replaceAll(',', '.')) ?? 0.1;
+                        final interest = calculateEarlyInterestFor(amount, rate);
+                        final totalFormatted = moneyText((amount + interest).round());
+                        overrideAmountCtrl.value = TextEditingValue(
+                          text: totalFormatted,
+                          selection: TextSelection.collapsed(offset: totalFormatted.length),
+                        );
+                      },
+                    ),
+                  ] else ...[
+                    TextFormField(
+                      initialValue: moneyText(investment.totalInvested),
+                      readOnly: true,
+                      decoration: InputDecoration(
+                        labelText: 'Gốc nhận lại (VND)',
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                      ),
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                  ],
+                  
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: demandRateCtrl,
+                    decoration: InputDecoration(
+                      labelText: 'Lãi suất không kỳ hạn (%/năm)',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                      suffixText: '%',
+                    ),
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    onChanged: (val) {
+                      final rateStr = val.replaceAll(',', '.');
+                      final rate = double.tryParse(rateStr) ?? 0;
+                      
+                      final amountRaw = isPartialWithdraw 
+                          ? partialAmountCtrl.text.replaceAll(RegExp(r'[^0-9]'), '')
+                          : investment.totalInvested.toString();
+                          
+                      final amount = double.tryParse(amountRaw) ?? 0;
+                      
+                      if (amount > 0) {
+                        final interest = calculateEarlyInterestFor(amount, rate);
+                        final totalFormatted = moneyText((amount + interest).round());
+                        overrideAmountCtrl.value = TextEditingValue(
+                          text: totalFormatted,
+                          selection: TextSelection.collapsed(offset: totalFormatted.length),
+                        );
+                      }
+                    },
+                  ),
+
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: overrideAmountCtrl,
+                    decoration: InputDecoration(
+                      labelText: 'Tổng tiền thực nhận (Ghi đè)',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                      helperText: 'Nhập chính xác số tiền NH trả để khớp số dư.',
+                      helperMaxLines: 2,
+                    ),
+                    keyboardType: TextInputType.number,
+                    style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF55B866)),
+                    onChanged: (val) {
+                      final rawStr = val.replaceAll(RegExp(r'[^0-9]'), '');
+                      if (rawStr.isEmpty) {
+                        overrideAmountCtrl.clear();
+                        return;
+                      }
+                      final amount = double.tryParse(rawStr) ?? 0;
+                      final formatted = moneyText(amount);
+                      
+                      overrideAmountCtrl.value = TextEditingValue(
+                        text: formatted,
+                        selection: TextSelection.collapsed(offset: formatted.length),
+                      );
+                    },
+                  ),
+
+                  const SizedBox(height: 12),
+                  _accountDropdown(
+                    accounts,
+                    receiveAccountId,
+                    (value) => setModalState(() {
+                      receiveAccountId = value;
+                    }),
+                  ),
+                  const SizedBox(height: 14),
+                  if (errorMsg != null)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8.0),
+                      child: Text(
+                        errorMsg!,
+                        style: const TextStyle(color: Colors.red, fontWeight: FontWeight.w600, fontSize: 13),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ElevatedButton(
+                    onPressed: receiveAccountId == null || _busy
+                        ? null
+                        : () async {
+                            final rawOverride = overrideAmountCtrl.text.replaceAll(RegExp(r'[^0-9]'), '');
+                            final rawPartial = partialAmountCtrl.text.replaceAll(RegExp(r'[^0-9]'), '');
+
+                            final overrideAmount = double.tryParse(rawOverride) ?? 0;
+                            final withdrawAmount = isPartialWithdraw 
+                                ? (double.tryParse(rawPartial) ?? 0)
+                                : investment.totalInvested;
+
+                            if (overrideAmount <= 0 || withdrawAmount <= 0) {
+                                setModalState(() => errorMsg = 'Vui lòng nhập số tiền lớn hơn 0');
+                                return;
+                            }
+                            
+                            if (withdrawAmount > investment.totalInvested) {
+                                setModalState(() => errorMsg = 'Số gốc muốn rút không được vượt quá số dư (${moneyText(investment.totalInvested)} VND)');
+                                return;
+                            }
+
+                            Navigator.pop(ctx);
+                            setState(() => _busy = true);
+
+                            try {
+                              await context
+                                  .read<InvestmentProvider>()
+                                  .withdrawBank(
+                                    investment.id!,
+                                    receiveAccountId!,
+                                    withdrawType: isPartialWithdraw ? WithdrawType.earlyPartial : WithdrawType.earlyAll,
+                                    amount: withdrawAmount,
+                                    overrideReceivedAmount: overrideAmount,
+                                  );
+
+                              if (!mounted) return;
+                              _showSuccessSnackBar('Rút trước hạn thành công');
+                              Navigator.pop(context, true);
+                            } catch (e) {
+                              if (!mounted) return;
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text(e.toString()), backgroundColor: Colors.red),
+                              );
+                            } finally {
+                              if (mounted) setState(() => _busy = false);
+                            }
+                          },
+                    child: const Text('Xác nhận rút trước hạn'),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _earlyWithdrawPreviewRow(
+    String label,
+    String value, {
+    Color? valueColor,
+    bool isStrong = false,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: TextStyle(
+                color: const Color(0xFF68727C),
+                fontWeight: isStrong ? FontWeight.w800 : FontWeight.w600,
+              ),
+            ),
+          ),
+          Text(
+            value,
+            style: TextStyle(
+              color: valueColor ?? const Color(0xFF1F2933),
+              fontWeight: isStrong ? FontWeight.w900 : FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -673,6 +1217,7 @@ class _InvestmentDetailPageState extends State<InvestmentDetailPage> {
 
     if (created == true && mounted) {
       await context.read<InvestmentProvider>().fetch();
+      if (!mounted) return;
       Navigator.pop(context, true);
     }
   }

@@ -10,6 +10,7 @@ import 'package:chitieu/core/theme/app_colors.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:dio/dio.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 // --- i18n (CUSTOM – CỦA BẠN) ---
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -421,16 +422,207 @@ class HomeScaffold extends StatefulWidget {
 }
 
 class _HomeScaffoldState extends State<HomeScaffold> {
-  int _currentIndex = 0;
+  static const _featureTourSeenKey = 'feature_tour_seen_v2';
+  static const _budgetIntroSeenKey = 'budget_intro_seen_v1';
+  static const _accountIntroSeenKey = 'account_intro_seen_v1';
 
-  final List<Widget> _pages = const [
-    BudgetsPage(),
-    AccountsPage(),
-    AnalyticsPage(),
-    SettingsPage(),
-  ];
+  int _currentIndex = 0;
+  bool _tourChecking = false;
+  bool _tourRunning = false;
 
   void _onTabSelected(int index) => setState(() => _currentIndex = index);
+
+  List<Widget> get _pages => [
+        const BudgetsPage(),
+        const AccountsPage(),
+        const AnalyticsPage(),
+        SettingsPage(onReplayGuide: _replayFeatureTour),
+      ];
+
+  void _maybeStartFeatureTour() {
+    if (_tourChecking || _tourRunning) return;
+
+    final accounts = context.read<BankAccountProvider>();
+    final incomes = context.read<IncomeProvider>();
+    final categories = context.read<CategoryProvider>();
+    final budgets = context.read<BudgetsProvider>();
+
+    final readyForTour = accounts.items.isNotEmpty &&
+        incomes.items.isNotEmpty &&
+        categories.items.isNotEmpty &&
+        budgets.totalAssigned > 0;
+
+    _tourChecking = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted || _tourRunning) return;
+
+      final prefs = await SharedPreferences.getInstance();
+      if (!mounted) {
+        _tourChecking = false;
+        return;
+      }
+
+      final budgetIntroSeen = prefs.getBool(_budgetIntroSeenKey) ?? false;
+      if (_currentIndex == 0 && !budgetIntroSeen) {
+        await _runTourSteps(_budgetIntroSteps);
+        await prefs.setBool(_budgetIntroSeenKey, true);
+        if (!mounted) return;
+        setState(() {
+          _tourChecking = false;
+          _tourRunning = false;
+        });
+        return;
+      }
+
+      final accountIntroSeen = prefs.getBool(_accountIntroSeenKey) ?? false;
+      if (_currentIndex == 1 && !accountIntroSeen) {
+        await _runTourSteps(_accountIntroSteps);
+        await prefs.setBool(_accountIntroSeenKey, true);
+        if (!mounted) return;
+        setState(() {
+          _tourChecking = false;
+          _tourRunning = false;
+        });
+        return;
+      }
+
+      final featureTourSeen = prefs.getBool(_featureTourSeenKey) ?? false;
+      if (readyForTour && accountIntroSeen && !featureTourSeen) {
+        await _runTourSteps(_featureTourSteps, endIndex: 0);
+        await prefs.setBool(_featureTourSeenKey, true);
+        if (!mounted) return;
+        setState(() {
+          _tourChecking = false;
+          _tourRunning = false;
+        });
+        return;
+      }
+
+      _tourChecking = false;
+    });
+  }
+
+  List<_FeatureTourStep> get _budgetIntroSteps => const [
+        _FeatureTourStep(
+          tabIndex: 0,
+          icon: Icons.wallet_rounded,
+          title: 'Ngân sách',
+          message:
+              'Đây là nơi bạn lên kế hoạch chi tiêu theo từng danh mục. Trước tiên app sẽ hướng dẫn bạn tạo dữ liệu cần thiết, sau đó bạn có thể đặt ngân sách cho tháng này.',
+        ),
+      ];
+
+  List<_FeatureTourStep> get _accountIntroSteps => const [
+        _FeatureTourStep(
+          tabIndex: 1,
+          icon: Icons.account_balance_rounded,
+          title: 'Tài khoản',
+          message:
+              'Màn này giúp bạn thiết lập nơi quản lý tiền và nguồn tiền. Hãy thêm tài khoản trước, sau đó thêm nguồn thu để app ghi nhận dữ liệu chính xác.',
+        ),
+        _FeatureTourStep(
+          tabIndex: 1,
+          icon: Icons.account_balance_wallet_rounded,
+          title: 'Tài khoản',
+          message:
+              'Tài khoản là nơi giữ tiền của bạn, ví dụ Tiền mặt, Ngân hàng hoặc Ví điện tử. Đây là bước đầu tiên để app biết bạn đang quản lý tiền ở đâu.',
+        ),
+        _FeatureTourStep(
+          tabIndex: 1,
+          icon: Icons.attach_money_rounded,
+          title: 'Nguồn tiền',
+          message:
+              'Nguồn tiền là nơi khai báo tiền đến từ đâu, ví dụ Lương, Phụ cấp hoặc Kinh doanh. Sau bước này, bạn có thể ghi nhận giao dịch thu chi rõ ràng hơn.',
+        ),
+      ];
+
+  List<_FeatureTourStep> get _featureTourSteps => const [
+        _FeatureTourStep(
+          tabIndex: 1,
+          icon: Icons.savings_rounded,
+          title: 'Tiết kiệm',
+          message:
+              'Chức năng Tiết kiệm giúp bạn tạo mục tiêu để dành tiền, theo dõi đã tiết kiệm được bao nhiêu và còn thiếu bao nhiêu để đạt mục tiêu.',
+        ),
+        _FeatureTourStep(
+          tabIndex: 1,
+          icon: Icons.trending_up_rounded,
+          title: 'Đầu tư',
+          message:
+              'Chức năng Đầu tư dùng để theo dõi các khoản đầu tư như gửi ngân hàng, cổ phiếu hoặc tài sản khác, giúp bạn tách phần đầu tư khỏi chi tiêu hằng ngày.',
+        ),
+        _FeatureTourStep(
+          tabIndex: 1,
+          icon: Icons.history_rounded,
+          title: 'Lịch sử',
+          message:
+              'Lịch sử lưu lại các giao dịch đã nhập trong tháng. Bạn có thể dùng mục này để kiểm tra lại khoản thu chi và đối chiếu khi cần.',
+        ),
+        _FeatureTourStep(
+          tabIndex: 2,
+          icon: Icons.insights_rounded,
+          title: 'Phân tích',
+          message:
+              'Khi dữ liệu đủ điều kiện, app sẽ tự hiển thị dự báo chi tiêu và cảnh báo để bạn kiểm soát ngân sách tốt hơn.',
+        ),
+      ];
+
+  List<_FeatureTourStep> get _fullGuideSteps => [
+        ..._budgetIntroSteps,
+        ..._accountIntroSteps,
+        ..._featureTourSteps,
+      ];
+
+  Future<void> _runTourSteps(
+    List<_FeatureTourStep> steps, {
+    int? endIndex,
+  }) async {
+    _tourRunning = true;
+
+    for (final step in steps) {
+      if (!mounted) return;
+      setState(() => _currentIndex = step.tabIndex);
+      await Future<void>.delayed(const Duration(milliseconds: 260));
+      if (!mounted) return;
+
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (dialogContext) => _FeatureTourDialog(step: step),
+      );
+    }
+
+    if (!mounted) return;
+    if (endIndex != null) {
+      setState(() => _currentIndex = endIndex);
+    }
+  }
+
+  Future<void> _replayFeatureTour() async {
+    if (_tourRunning) return;
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_budgetIntroSeenKey);
+    await prefs.remove(_accountIntroSeenKey);
+    await prefs.remove(_featureTourSeenKey);
+    if (!mounted) return;
+
+    setState(() {
+      _tourRunning = true;
+      _currentIndex = 0;
+    });
+
+    await _runTourSteps(_fullGuideSteps, endIndex: 0);
+    if (!mounted) return;
+    await prefs.setBool(_budgetIntroSeenKey, true);
+    await prefs.setBool(_accountIntroSeenKey, true);
+    await prefs.setBool(_featureTourSeenKey, true);
+    setState(() {
+      _currentIndex = 0;
+      _tourRunning = false;
+      _tourChecking = false;
+    });
+  }
 
   void _onFabPressed() {
     showGeneralDialog(
@@ -451,6 +643,11 @@ class _HomeScaffoldState extends State<HomeScaffold> {
   @override
   Widget build(BuildContext context) {
     final t = AppLocalizations.of(context)!;
+    context.watch<BankAccountProvider>();
+    context.watch<IncomeProvider>();
+    context.watch<CategoryProvider>();
+    context.watch<BudgetsProvider>();
+    _maybeStartFeatureTour();
 
     final cs = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -634,6 +831,96 @@ class _ModernBottomNav extends StatelessWidget {
 // ═══════════════════════════════════════
 //  Arc Menu Overlay
 // ═══════════════════════════════════════
+class _FeatureTourStep {
+  const _FeatureTourStep({
+    required this.tabIndex,
+    required this.icon,
+    required this.title,
+    required this.message,
+  });
+
+  final int tabIndex;
+  final IconData icon;
+  final String title;
+  final String message;
+}
+
+class _FeatureTourDialog extends StatelessWidget {
+  const _FeatureTourDialog({required this.step});
+
+  final _FeatureTourStep step;
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 28),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 22, 20, 18),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 52,
+              height: 52,
+              decoration: BoxDecoration(
+                color: AppColors.primary.withOpacity(.12),
+                borderRadius: BorderRadius.circular(18),
+              ),
+              child: Icon(
+                step.icon,
+                color: AppColors.primaryDark,
+                size: 28,
+              ),
+            ),
+            const SizedBox(height: 14),
+            Text(
+              step.title,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w900,
+                color: Color(0xFF111827),
+              ),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              step.message,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 14,
+                height: 1.4,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF667085),
+              ),
+            ),
+            const SizedBox(height: 20),
+            SizedBox(
+              width: double.infinity,
+              height: 46,
+              child: FilledButton(
+                onPressed: () => Navigator.of(context).pop(),
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                  textStyle: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w900,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
+                child: const Text('Đã hiểu'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _ActionMenuOverlay extends StatelessWidget {
   final VoidCallback onClose;
   const _ActionMenuOverlay({required this.onClose});
@@ -760,7 +1047,7 @@ class _ActionBtn extends StatelessWidget {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        GestureDetector(
+        GestureDetector( 
           onTap: onTap,
           child: Container(
             width: 48,
@@ -802,3 +1089,4 @@ class _ActionBtn extends StatelessWidget {
     );
   }
 }
+  

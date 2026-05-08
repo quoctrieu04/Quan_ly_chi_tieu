@@ -240,8 +240,24 @@ class _RealEstateDetailPageState extends State<RealEstateDetailPage> {
 
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                      content:
-                          Text('Đã bán. Lãi/Lỗ: ${profit.toStringAsFixed(0)}')),
+                    content: Row(
+                      children: [
+                        const Icon(Icons.check_circle_outline, color: Colors.white),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            'Đã bán. Lãi/Lỗ: ${profit.toStringAsFixed(0)}',
+                            style: const TextStyle(color: Colors.white),
+                          ),
+                        ),
+                      ],
+                    ),
+                    backgroundColor: Colors.green.shade600,
+                    behavior: SnackBarBehavior.floating,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10)),
+                    margin: const EdgeInsets.all(16),
+                  ),
                 );
 
                 // index() chỉ show whereNull(sold_at) -> quay lại list

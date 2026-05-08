@@ -16,6 +16,7 @@ import 'package:chitieu/widgets/spending_trend_card.dart';
 import 'package:chitieu/widgets/app_page_header.dart';
 import 'package:chitieu/widgets/app_month_picker_sheet.dart';
 import 'package:chitieu/core/theme/app_colors.dart';
+import 'package:chitieu/widgets/onboarding_next_step_card.dart';
 
 import 'package:chitieu/l10n/app_localizations.dart';
 import 'package:chitieu/core/money/money_formatter.dart';
@@ -24,6 +25,7 @@ import 'package:chitieu/core/money/money_settings_provider.dart';
 // Tháng/Năm dùng chung
 import 'package:chitieu/core/date/year_month_provider.dart';
 import 'package:chitieu/pages/setting/settings_provider.dart';
+import 'package:chitieu/pages/note_page.dart';
 
 // Form khoản thu
 import 'package:chitieu/widgets/create_income_form.dart';
@@ -300,6 +302,47 @@ class _AccountsPageState extends State<AccountsPage> {
     }
   }
 
+  Future<void> _openCreateAccount() async {
+    final prov = context.read<BankAccountProvider>();
+    if (prov.loading) return;
+
+    final created = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (_) => const CreateBankAccountForm(),
+    );
+
+    if (created == true && mounted) {
+      await prov.fetch();
+      await _fetchCurrentYm();
+    }
+  }
+
+  Future<void> _openCreateIncome() async {
+    final prov = context.read<IncomeProvider>();
+
+    final created = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (_) => const CreateIncomeForm(),
+    );
+
+    if (created == true && mounted) {
+      final ym = context.read<YearMonthProvider>().ym;
+      await prov.fetch(year: ym.year, month: ym.month);
+      await _fetchCurrentYm();
+    }
+  }
+
+  Future<void> _openFirstTransaction() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const NotePage()),
+    );
+    if (mounted) await _fetchCurrentYm();
+  }
+
   @override
   Widget build(BuildContext context) {
     // Ép AccountsPage luôn build lại khi thay đổi màu chủ đạo ở SettingsProvider
@@ -326,6 +369,8 @@ class _AccountsPageState extends State<AccountsPage> {
     final num totalIncome = ftProv.totalIncome;
     final num totalSpent = ftProv.totalExpense;
     final num combinedRemaining = totalBalance - totalSpent;
+    final hasAccounts = walletProv.items.isNotEmpty;
+    final hasTransactions = totalIncome > 0 || totalSpent > 0;
 
     final bool overSpent =
         !(walletProv.loading || ftProv.loading) && combinedRemaining < 0;
@@ -341,6 +386,8 @@ class _AccountsPageState extends State<AccountsPage> {
 
     final incomesToShow =
         incomes.where((c) => (c.title ?? '').trim().isNotEmpty).toList();
+    final showOnboardingGuide =
+        !hasAccounts || incomesToShow.isEmpty || !hasTransactions;
     final savingProv = context.watch<SavingProvider>();
     final totalSaved =
         savingProv.items.fold<double>(0, (sum, s) => sum + s.currentAmount);
@@ -396,102 +443,138 @@ class _AccountsPageState extends State<AccountsPage> {
                 ),
                 const SizedBox(height: 16),
 
-                FeatureHorizontalMenu(
-                  items: [
-                    FeatureItem(
-                      icon: Icons.account_balance_wallet_rounded,
-                      label: 'Tài khoản',
-                      onTap: () async {
-                        final prov = context.read<BankAccountProvider>();
+                if (!hasAccounts) ...[
+                  OnboardingNextStepCard(
+                    stepLabel: 'Bước 1/5',
+                    title: 'Thêm tài khoản đầu tiên',
+                    message:
+                        'Tạo một tài khoản như Tiền mặt, Ngân hàng hoặc Ví điện tử để app biết bạn đang quản lý tiền ở đâu.',
+                    buttonLabel: 'Thêm tài khoản',
+                    icon: Icons.account_balance_wallet_rounded,
+                    onPressed: _openCreateAccount,
+                  ),
+                  const SizedBox(height: 16),
+                ] else if (incomesToShow.isEmpty) ...[
+                  OnboardingNextStepCard(
+                    stepLabel: 'Bước 2/5',
+                    title: 'Thêm nguồn thu',
+                    message:
+                        'Cho app biết tiền của bạn đến từ đâu, ví dụ Lương, Phụ cấp hoặc Kinh doanh.',
+                    buttonLabel: 'Thêm nguồn thu',
+                    icon: Icons.attach_money_rounded,
+                    onPressed: _openCreateIncome,
+                  ),
+                  const SizedBox(height: 16),
+                ] else if (!hasTransactions) ...[
+                  OnboardingNextStepCard(
+                    stepLabel: 'Bước 5/5',
+                    title: 'Thêm giao dịch đầu tiên',
+                    message:
+                        'Ghi lại khoản thu hoặc chi đầu tiên. Từ đây app sẽ bắt đầu thống kê cho bạn.',
+                    buttonLabel: 'Thêm giao dịch',
+                    icon: Icons.edit_note_rounded,
+                    onPressed: _openFirstTransaction,
+                  ),
+                  const SizedBox(height: 16),
+                ],
 
-                        if (prov.loading) return;
+                if (!showOnboardingGuide)
+                  FeatureHorizontalMenu(
+                    items: [
+                      FeatureItem(
+                        icon: Icons.account_balance_wallet_rounded,
+                        label: 'Tài khoản',
+                        onTap: () async {
+                          final prov = context.read<BankAccountProvider>();
 
-                        // ✅ Delay 1 frame để thoát gesture
-                        await Future.delayed(Duration.zero);
+                          if (prov.loading) return;
 
-                        if (!context.mounted) return;
+                          // ✅ Delay 1 frame để thoát gesture
+                          await Future.delayed(Duration.zero);
 
-                        if (prov.items.isEmpty) {
-                          final created = await showModalBottomSheet<bool>(
-                            context: context,
-                            isScrollControlled: true,
-                            useSafeArea: true,
-                            builder: (_) => const CreateBankAccountForm(),
-                          );
+                          if (!context.mounted) return;
 
-                          if (created == true && context.mounted) {
-                            await prov.fetch();
+                          if (prov.items.isEmpty) {
+                            final created = await showModalBottomSheet<bool>(
+                              context: context,
+                              isScrollControlled: true,
+                              useSafeArea: true,
+                              builder: (_) => const CreateBankAccountForm(),
+                            );
+
+                            if (created == true && context.mounted) {
+                              await prov.fetch();
+                            }
+                          } else {
+                            Navigator.pushNamed(context, '/accounts');
                           }
-                        } else {
-                          Navigator.pushNamed(context, '/accounts');
-                        }
-                      },
-                    ),
-                    FeatureItem(
-                      icon: Icons.attach_money_rounded,
-                      label: 'Nguồn tiền',
-                      onTap: () async {
-                        final prov = context.read<IncomeProvider>();
+                        },
+                      ),
+                      FeatureItem(
+                        icon: Icons.attach_money_rounded,
+                        label: 'Nguồn tiền',
+                        onTap: () async {
+                          final prov = context.read<IncomeProvider>();
 
-                        if (prov.items.isEmpty) {
-                          final created = await showModalBottomSheet<bool>(
-                            context: context,
-                            isScrollControlled: true,
-                            useSafeArea: true,
-                            builder: (_) => const CreateIncomeForm(),
-                          );
-                          if (created == true && context.mounted) {
-                            final ym = context.read<YearMonthProvider>().ym;
-                            await prov.fetch(year: ym.year, month: ym.month);
+                          if (prov.items.isEmpty) {
+                            final created = await showModalBottomSheet<bool>(
+                              context: context,
+                              isScrollControlled: true,
+                              useSafeArea: true,
+                              builder: (_) => const CreateIncomeForm(),
+                            );
+                            if (created == true && context.mounted) {
+                              final ym = context.read<YearMonthProvider>().ym;
+                              await prov.fetch(year: ym.year, month: ym.month);
+                            }
+                          } else {
+                            Navigator.pushNamed(context, '/income');
                           }
-                        } else {
-                          Navigator.pushNamed(context, '/income');
-                        }
-                      },
-                    ),
-                    FeatureItem(
-                      icon: Icons.savings_rounded,
-                      label: 'Tiết kiệm',
-                      onTap: () async {
-                        final prov = context.read<SavingProvider>();
-                        final ym = context.read<YearMonthProvider>().ym;
+                        },
+                      ),
+                      FeatureItem(
+                        icon: Icons.savings_rounded,
+                        label: 'Tiết kiệm',
+                        onTap: () async {
+                          final prov = context.read<SavingProvider>();
+                          final ym = context.read<YearMonthProvider>().ym;
 
-                        if (prov.items.isEmpty) {
-                          final created = await showModalBottomSheet<bool>(
-                            context: context,
-                            isScrollControlled: true,
-                            useSafeArea: true,
-                            builder: (_) => const CreateSavingForm(),
-                          );
-                          if (created == true && context.mounted) {
-                            await prov.fetch(year: ym.year, month: ym.month);
+                          if (prov.items.isEmpty) {
+                            final created = await showModalBottomSheet<bool>(
+                              context: context,
+                              isScrollControlled: true,
+                              useSafeArea: true,
+                              builder: (_) => const CreateSavingForm(),
+                            );
+                            if (created == true && context.mounted) {
+                              await prov.fetch(year: ym.year, month: ym.month);
+                            }
+                          } else {
+                            Navigator.pushNamed(context, '/saving');
                           }
-                        } else {
-                          Navigator.pushNamed(context, '/saving');
-                        }
-                      },
-                    ),
-                    FeatureItem(
-                      icon: Icons.trending_up_rounded,
-                      label: 'Đầu tư',
-                      onTap: () {
-                        Navigator.pushNamed(context, '/investment');
-                      },
-                    ),
-                    FeatureItem(
-                      icon: Icons.history_rounded,
-                      label: 'Lịch sử',
-                      onTap: () {
-                        Navigator.pushNamed(
-                          context,
-                          '/transactions',
-                          arguments: {'year': ym.year, 'month': ym.month},
-                        );
-                      },
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 20),
+                        },
+                      ),
+                      FeatureItem(
+                        icon: Icons.trending_up_rounded,
+                        label: 'Đầu tư',
+                        onTap: () {
+                          Navigator.pushNamed(context, '/investment');
+                        },
+                      ),
+                      FeatureItem(
+                        icon: Icons.history_rounded,
+                        label: 'Lịch sử',
+                        onTap: () {
+                          Navigator.pushNamed(
+                            context,
+                            '/transactions',
+                            arguments: {'year': ym.year, 'month': ym.month},
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                if (!showOnboardingGuide) const SizedBox(height: 20),
 
 // ===== TỔNG THU / TỔNG CHI =====
                 MonthSummaryCard(
@@ -698,8 +781,8 @@ class HeaderCard extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         color: textColor,
-                        fontSize: 35,
-                        fontWeight: FontWeight.w800,
+                        fontSize: 30,
+                        fontWeight: FontWeight.w700,
                         height: 1,
                         letterSpacing: 0,
                       ),
@@ -1254,7 +1337,7 @@ class _SummaryItem extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
 
     return Container(
-      
+      constraints: const BoxConstraints(minHeight: 96),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: isDark ? cs.surfaceContainerHigh : Colors.white,

@@ -9,8 +9,7 @@ class CreateInvestmentSheet extends StatefulWidget {
   const CreateInvestmentSheet({super.key});
 
   @override
-  State<CreateInvestmentSheet> createState() =>
-      _CreateInvestmentSheetState();
+  State<CreateInvestmentSheet> createState() => _CreateInvestmentSheetState();
 }
 
 class _CreateInvestmentSheetState extends State<CreateInvestmentSheet> {
@@ -47,16 +46,15 @@ class _CreateInvestmentSheetState extends State<CreateInvestmentSheet> {
     return Container(
       decoration: BoxDecoration(
         color: bgColor,
-        borderRadius:
-            const BorderRadius.vertical(top: Radius.circular(24)),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
       ),
       child: SafeArea(
         top: false,
         child: AnimatedPadding(
           duration: const Duration(milliseconds: 200),
           curve: Curves.easeOut,
-          padding: EdgeInsets.only(
-              bottom: MediaQuery.of(context).viewInsets.bottom),
+          padding:
+              EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
           child: SingleChildScrollView(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
@@ -97,8 +95,7 @@ class _CreateInvestmentSheetState extends State<CreateInvestmentSheet> {
                       const SizedBox(width: 14),
                       Expanded(
                         child: Column(
-                          crossAxisAlignment:
-                              CrossAxisAlignment.start,
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
                               'Thêm đầu tư',
@@ -113,8 +110,7 @@ class _CreateInvestmentSheetState extends State<CreateInvestmentSheet> {
                               'Ngân hàng, cổ phiếu, bất động sản',
                               style: TextStyle(
                                 fontSize: 12.5,
-                                color:
-                                    cs.onSurface.withOpacity(.4),
+                                color: cs.onSurface.withOpacity(.4),
                                 fontWeight: FontWeight.w500,
                               ),
                             ),
@@ -130,13 +126,8 @@ class _CreateInvestmentSheetState extends State<CreateInvestmentSheet> {
                     decoration: BoxDecoration(
                       color: isDark
                           ? cs.surfaceContainerHigh
-                          : Colors.white,
+                          : const Color(0xFFF4F7FB),
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color: isDark
-                            ? cs.outlineVariant.withOpacity(.08)
-                            : const Color(0xFFECEDF2),
-                      ),
                     ),
                     padding: const EdgeInsets.all(6),
                     child: Row(
@@ -145,8 +136,7 @@ class _CreateInvestmentSheetState extends State<CreateInvestmentSheet> {
                         const SizedBox(width: 4),
                         _typeChip('stock', 'Cổ phiếu', cs, isDark),
                         const SizedBox(width: 4),
-                        _typeChip(
-                            'real_estate', 'BĐS', cs, isDark),
+                        _typeChip('real_estate', 'BĐS', cs, isDark),
                       ],
                     ),
                   ),
@@ -155,8 +145,7 @@ class _CreateInvestmentSheetState extends State<CreateInvestmentSheet> {
                   // ── Form content ──
                   if (type == 'bank') const BankInvestmentForm(),
                   if (type == 'stock') const StockInvestmentForm(),
-                  if (type == 'real_estate')
-                    const RealEstateInvestmentForm(),
+                  if (type == 'real_estate') const RealEstateInvestmentForm(),
                 ],
               ),
             ),
@@ -166,8 +155,7 @@ class _CreateInvestmentSheetState extends State<CreateInvestmentSheet> {
     );
   }
 
-  Widget _typeChip(
-      String value, String label, ColorScheme cs, bool isDark) {
+  Widget _typeChip(String value, String label, ColorScheme cs, bool isDark) {
     final selected = type == value;
     final color = _typeColor(value);
 
@@ -176,17 +164,10 @@ class _CreateInvestmentSheetState extends State<CreateInvestmentSheet> {
         onTap: () => setState(() => type = value),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
-          padding:
-              const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
           decoration: BoxDecoration(
-            color: selected
-                ? color.withOpacity(.1)
-                : Colors.transparent,
+            color: selected ? color.withOpacity(.1) : Colors.transparent,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color:
-                  selected ? color.withOpacity(.3) : Colors.transparent,
-            ),
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -194,9 +175,7 @@ class _CreateInvestmentSheetState extends State<CreateInvestmentSheet> {
               Icon(
                 _typeIcon(value),
                 size: 16,
-                color: selected
-                    ? color
-                    : cs.onSurface.withOpacity(.35),
+                color: selected ? color : cs.onSurface.withOpacity(.35),
               ),
               const SizedBox(width: 6),
               Flexible(
@@ -206,11 +185,8 @@ class _CreateInvestmentSheetState extends State<CreateInvestmentSheet> {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontSize: 12.5,
-                    fontWeight:
-                        selected ? FontWeight.w700 : FontWeight.w500,
-                    color: selected
-                        ? color
-                        : cs.onSurface.withOpacity(.45),
+                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                    color: selected ? color : cs.onSurface.withOpacity(.45),
                   ),
                 ),
               ),

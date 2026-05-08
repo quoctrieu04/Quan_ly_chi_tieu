@@ -31,10 +31,9 @@ class InvestmentItemTile extends StatelessWidget {
     final dotColor = isBank ? cs.primary : const Color(0xFF3B82F6);
 
     // Subtitle: Bank/type info
-    final subtitle = [
-      if (investment.bankName?.isNotEmpty == true) investment.bankName!,
-      isBank ? 'Tiền gửi' : 'Cổ phiếu',
-    ].join(' • ');
+    final subtitle = investment.bankName?.isNotEmpty == true
+        ? investment.bankName!
+        : (isBank ? '' : 'Cổ phiếu');
 
     return Opacity(
       opacity: isClosed ? 0.45 : 1,
@@ -75,7 +74,7 @@ class InvestmentItemTile extends StatelessWidget {
                 },
           onLongPress: isClosed ? () => _confirmDelete(context, cs) : null,
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+            padding: const EdgeInsets.fromLTRB(12, 9, 12, 9),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -83,15 +82,15 @@ class InvestmentItemTile extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Container(
-                      width: 8,
-                      height: 8,
-                      margin: const EdgeInsets.only(top: 6),
+                      width: 3,
+                      height: 22,
+                      margin: const EdgeInsets.only(top: 2),
                       decoration: BoxDecoration(
                         color: isClosed ? Colors.grey : dotColor,
-                        shape: BoxShape.circle,
+                        borderRadius: BorderRadius.circular(99),
                       ),
                     ),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 9),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -106,25 +105,27 @@ class InvestmentItemTile extends StatelessWidget {
                               color: cs.onSurface,
                             ),
                           ),
-                          const SizedBox(height: 1),
-                          Text(
-                            subtitle,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: cs.onSurface.withOpacity(.4),
+                          if (subtitle.isNotEmpty) ...[
+                            const SizedBox(height: 1),
+                            Text(
+                              subtitle,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: cs.onSurface.withOpacity(.4),
+                              ),
                             ),
-                          ),
+                          ],
                         ],
                       ),
                     ),
-                    if (!isClosed)
+                    if (!isClosed && !isBank)
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
                           Text(
-                            '${isGreen ? "+" : ""}${money(profit)}',
+                            (profit > 0 ? '+' : '') + money(profit),
                             style: TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.w800,
@@ -159,28 +160,9 @@ class InvestmentItemTile extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _amountStat(
-                        label: 'Vốn',
-                        value: money(investment.totalInvested),
-                        color: cs.onSurface,
-                        isDark: isDark,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: _amountStat(
-                        label: 'Hiện tại',
-                        value: money(investment.totalInvested + profit),
-                        color: valueColor,
-                        labelColor: profitColor,
-                        isDark: isDark,
-                        alignEnd: true,
-                      ),
-                    ),
-                  ],
+                _inlineStats(
+                  context,
+                  principal: money(investment.totalInvested),
                 ),
               ],
             ),
@@ -190,42 +172,24 @@ class InvestmentItemTile extends StatelessWidget {
     );
   }
 
-  Widget _amountStat({
-    required String label,
-    required String value,
-    required Color color,
-    required bool isDark,
-    Color? labelColor,
-    bool alignEnd = false,
+  Widget _inlineStats(
+    BuildContext context, {
+    required String principal,
   }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
-      decoration: BoxDecoration(
-        color: isDark ? Colors.white.withOpacity(.03) : const Color(0xFFF8FAFB),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Column(
-        crossAxisAlignment:
-            alignEnd ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+    final cs = Theme.of(context).colorScheme;
+    final muted = cs.onSurface.withOpacity(.45);
+    final strong = cs.onSurface;
+
+    return Text.rich(
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      TextSpan(
+        style: TextStyle(fontSize: 12, color: muted, height: 1.15),
         children: [
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 10.5,
-              color: (labelColor ?? color).withOpacity(.52),
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            value,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontSize: 13,
-              color: color,
-              fontWeight: FontWeight.w800,
-            ),
+          const TextSpan(text: 'Vốn đầu tư: '),
+          TextSpan(
+            text: principal,
+            style: TextStyle(color: strong, fontWeight: FontWeight.w800),
           ),
         ],
       ),

@@ -38,6 +38,8 @@ import 'package:chitieu/core/budget/widgets/budget_category_tile.dart';
 import 'package:chitieu/core/date/year_month_provider.dart';
 import 'package:chitieu/widgets/app_page_header.dart';
 import 'package:chitieu/widgets/app_month_picker_sheet.dart';
+import 'package:chitieu/widgets/create_bank_account_form.dart';
+import 'package:chitieu/widgets/onboarding_next_step_card.dart';
 
 class BudgetsPage extends StatefulWidget {
   const BudgetsPage({super.key});
@@ -143,19 +145,27 @@ class _BudgetsPageState extends State<BudgetsPage> {
     return authedNow;
   }
 
-  Future<void> _openCreateCategory() async {
+  Future<void> _openCreateAccount() async {
     final ok = await _ensureAuthed(context);
     if (!ok || !mounted) return;
 
-    final created = await Navigator.of(context).push<bool>(
-      MaterialPageRoute(
-          builder: (_) => const BudgetEditPage(
-                type: '',
-              )),
+    final created = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (_) => const CreateBankAccountForm(),
     );
 
     if (created == true && mounted) {
-      await context.read<CategoryProvider>().refresh();
+      final ym = context.read<YearMonthProvider>().ym;
+      await context.read<BankAccountProvider>().fetch(
+            year: ym.year,
+            month: ym.month,
+          );
+      await context
+          .read<BudgetsProvider>()
+          .loadForMonth(year: ym.year, month: ym.month);
+      setState(() {});
     }
   }
 
@@ -241,7 +251,21 @@ class _BudgetsPageState extends State<BudgetsPage> {
 
     final catProv = context.read<CategoryProvider>();
     await catProv.refresh();
-    final categories = catProv.items;
+    var categories = catProv.items;
+
+    if (categories.isEmpty) {
+      final created = await Navigator.of(context).push<bool>(
+        MaterialPageRoute(
+          builder: (_) => const BudgetEditPage(type: ''),
+        ),
+      );
+
+      if (!mounted || created != true) return;
+
+      await catProv.refresh();
+      categories = catProv.items;
+      if (categories.isEmpty) return;
+    }
 
     final budProv = context.read<BudgetsProvider>();
     await budProv.loadForMonth(year: ym.year, month: ym.month);
@@ -321,9 +345,18 @@ class _BudgetsPageState extends State<BudgetsPage> {
         context.select<BankAccountProvider, num>((w) => w.totalBalance);
     final totalAssigned =
         context.select<BudgetsProvider, num>((b) => b.totalAssigned);
+    final walletItems = context.watch<BankAccountProvider>().items;
+    final categoryProv = context.watch<CategoryProvider>();
 
     final unassigned = totalBalance - totalAssigned;
     final authed = context.select<AuthProvider, bool>((a) => a.isAuthenticated);
+    final hasAccounts = walletItems.isNotEmpty;
+    final hasCategories = categoryProv.items.isNotEmpty;
+    final categoryLoading = categoryProv.loading;
+    final showOnboardingGuide = authed &&
+        (!hasAccounts ||
+            (!categoryLoading && !hasCategories) ||
+            (hasCategories && totalAssigned <= 0));
 
     final cs = Theme.of(context).colorScheme;
     final ym = context.watch<YearMonthProvider>().ym;
@@ -340,7 +373,7 @@ class _BudgetsPageState extends State<BudgetsPage> {
     }
 
     return Scaffold(
-      backgroundColor: const Color(0xFFFBFDFF),
+      backgroundColor: AppColors.background,
       appBar: AppPageHeaderBar(
         icon: Icons.wallet_rounded,
         title: t.tabBudgets,
@@ -375,9 +408,51 @@ class _BudgetsPageState extends State<BudgetsPage> {
                         onAssignPressed: () => _openAllocateMoney(
                           unassigned > 0 ? unassigned : 0,
                         ),
-                        onCreateCategoryPressed: _openCreateCategory,
+                        showActions: !showOnboardingGuide,
                       ),
                       const SizedBox(height: _vGap),
+                      if (authed && !hasAccounts) ...[
+                        OnboardingNextStepCard(
+                          stepLabel: 'Bước 1/5',
+                          title: 'Thêm tài khoản đầu tiên',
+                          message:
+                              'Tạo một tài khoản như Tiền mặt, Ngân hàng hoặc Ví điện tử trước khi lên kế hoạch chi tiêu.',
+                          buttonLabel: 'Thêm tài khoản',
+                          icon: Icons.account_balance_wallet_rounded,
+                          onPressed: _openCreateAccount,
+                        ),
+                        const SizedBox(height: _vGap),
+                      ] else if (authed &&
+                          !categoryLoading &&
+                          !hasCategories) ...[
+                        OnboardingNextStepCard(
+                          stepLabel: 'Bước 3/5',
+                          title: 'Lên kế hoạch chi tiêu',
+                          message:
+                              'Bạn sẽ tạo danh mục chi tiêu trước, sau đó đặt số tiền dự kiến cho từng danh mục.',
+                          buttonLabel: 'Lên kế hoạch',
+                          icon: Icons.assignment_rounded,
+                          onPressed: () => _openAllocateMoney(
+                            unassigned > 0 ? unassigned : 0,
+                          ),
+                        ),
+                        const SizedBox(height: _vGap),
+                      ] else if (authed &&
+                          hasCategories &&
+                          totalAssigned <= 0) ...[
+                        OnboardingNextStepCard(
+                          stepLabel: 'Bước 4/5',
+                          title: 'Lên kế hoạch tháng này',
+                          message:
+                              'Đặt số tiền dự kiến cho từng danh mục để app theo dõi còn lại và cảnh báo khi gần vượt mức.',
+                          buttonLabel: 'Lên kế hoạch',
+                          icon: Icons.assignment_rounded,
+                          onPressed: () => _openAllocateMoney(
+                            unassigned > 0 ? unassigned : 0,
+                          ),
+                        ),
+                        const SizedBox(height: _vGap),
+                      ],
                       if (authed)
                         _categorySection(context, t, ym)
                       else
@@ -399,7 +474,7 @@ class _BudgetsPageState extends State<BudgetsPage> {
     num assigned,
     num unassigned, {
     required VoidCallback onAssignPressed,
-    required VoidCallback onCreateCategoryPressed,
+    bool showActions = true,
   }) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final cs = Theme.of(context).colorScheme;
@@ -603,67 +678,42 @@ class _BudgetsPageState extends State<BudgetsPage> {
               ),
             ),
 
-            const SizedBox(height: 14),
-
-            Row(
-              children: [
-                Expanded(
-                  child: SizedBox(
-                    height: 42,
-                    child: FilledButton.icon(
-                      onPressed: onAssignPressed,
-                      icon: const Icon(
-                        Icons.account_balance_wallet_outlined,
-                        size: 18,
-                      ),
-                      label: Text(
-                        'Lên kế hoạch',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      style: FilledButton.styleFrom(
-                        backgroundColor: actionColor,
-                        foregroundColor: cs.onPrimary,
-                        textStyle: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w800,
+            if (showActions) ...[
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  Expanded(
+                    child: SizedBox(
+                      height: 42,
+                      child: FilledButton.icon(
+                        onPressed: onAssignPressed,
+                        icon: const Icon(
+                          Icons.account_balance_wallet_outlined,
+                          size: 18,
                         ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(999),
+                        label: Text(
+                          'Lên kế hoạch',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                        elevation: 0,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: SizedBox(
-                    height: 42,
-                    child: OutlinedButton.icon(
-                      onPressed: onCreateCategoryPressed,
-                      icon: const Icon(Icons.add_chart_rounded, size: 18),
-                      label: Text(
-                        t.createMyOwn,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: actionColor,
-                        side: BorderSide(color: actionColor.withOpacity(.55)),
-                        textStyle: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w800,
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(999),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: actionColor,
+                          foregroundColor: cs.onPrimary,
+                          textStyle: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w800,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          elevation: 0,
                         ),
                       ),
                     ),
                   ),
-                ),
-              ],
-            ),
+                ],
+              ),
+            ],
           ],
         ),
 
@@ -732,8 +782,6 @@ class _BudgetsPageState extends State<BudgetsPage> {
 
   Widget _categorySection(
       BuildContext context, AppLocalizations t, DateTime ym) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
     final cat = context.watch<CategoryProvider>();
 
     if (cat.loading) {
@@ -744,46 +792,7 @@ class _BudgetsPageState extends State<BudgetsPage> {
     }
 
     if (cat.items.isEmpty) {
-      return Card(
-        color: cs.secondaryContainer.withOpacity(.3),
-        elevation: 0.5,
-        shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(_radius)),
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            children: [
-              Text(
-                t.createCategoryTitle,
-                textAlign: TextAlign.center,
-                style: theme.textTheme.titleMedium
-                    ?.copyWith(fontWeight: FontWeight.w800),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                t.createCategoryDescription,
-                textAlign: TextAlign.center,
-                style: theme.textTheme.bodyMedium,
-              ),
-              const SizedBox(height: 20),
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton(
-                  onPressed: _openCreateCategory,
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    side: BorderSide(color: cs.outlineVariant),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  child: Text(t.createMyOwn),
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
+      return const SizedBox.shrink();
     }
 
     return Column(

@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
+import 'package:chitieu/api/real_estate/real_estate_provider.dart';
+
 class InvestmentSummaryCard extends StatelessWidget {
   const InvestmentSummaryCard({super.key});
 
@@ -11,12 +13,12 @@ class InvestmentSummaryCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final cs = Theme.of(context).colorScheme;
-    final provider = context.watch<InvestmentProvider>();
+    final invProv = context.watch<InvestmentProvider>();
+    final reProv = context.watch<RealEstateProvider>();
 
-    final totalInvested = provider.totalInvested;
-    final profit = provider.totalProfit;
-    final percent =
-        totalInvested == 0 ? 0.0 : provider.totalProfitPercent.toDouble();
+    final totalInvested = invProv.totalInvested + reProv.totalInvested;
+    final profit = invProv.totalProfit + reProv.totalProfit;
+    final percent = totalInvested == 0 ? 0.0 : (profit / totalInvested * 100);
     final totalCurrent = totalInvested + profit;
     final isProfit = profit >= 0;
     final profitColor = isProfit ? AppColors.primaryDark : AppColors.danger;

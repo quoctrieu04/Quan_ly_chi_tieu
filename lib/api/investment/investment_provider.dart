@@ -8,7 +8,10 @@ import '../bankaccount/bank_account_model.dart';
 enum WithdrawType {
   interest, // rút lãi
   all, // rút toàn bộ (vốn + lãi)
+  earlyAll, // tất toán trước hạn toàn bộ
+  earlyPartial, // tất toán trước hạn 1 phần
   interestAndRenew, // rút lãi + gia hạn lại gốc
+  monthlyInterest, // rút lãi định kỳ hàng tháng
 }
 
 class InvestmentProvider extends ChangeNotifier {
@@ -47,15 +50,13 @@ class InvestmentProvider extends ChangeNotifier {
 
     try {
       final raw = await api.fetch();
-      if (raw is List) {
-        _items
-          ..clear()
-          ..addAll(
-            raw
-                .map((e) => Investment.fromJson(e))
-                .where((i) => i.closedAt == null),
-          );
-      }
+      _items
+        ..clear()
+        ..addAll(
+          raw
+              .map((e) => Investment.fromJson(e))
+              .where((i) => i.closedAt == null),
+        );
     } catch (e) {
       debugPrint('❌ fetch investments error: $e');
     } finally {
@@ -70,12 +71,10 @@ class InvestmentProvider extends ChangeNotifier {
   Future<void> fetchBankAccounts() async {
     try {
       final raw = await api.fetchBankAccounts();
-      if (raw is List) {
-        _bankAccounts
-          ..clear()
-          ..addAll(raw.map((e) => BankAccount.fromJson(e)));
-        notifyListeners();
-      }
+      _bankAccounts
+        ..clear()
+        ..addAll(raw.map((e) => BankAccount.fromJson(e)));
+      notifyListeners();
     } catch (e) {
       debugPrint('❌ fetch bank accounts error: $e');
     }
@@ -128,6 +127,7 @@ class InvestmentProvider extends ChangeNotifier {
     int receiveAccountId, {
     required WithdrawType withdrawType,
     double? amount,
+    double? overrideReceivedAmount,
   }) async {
     try {
       await api.withdrawBank(
@@ -135,6 +135,7 @@ class InvestmentProvider extends ChangeNotifier {
         receiveAccountId: receiveAccountId,
         withdrawType: withdrawType,
         amount: amount,
+        overrideReceivedAmount: overrideReceivedAmount,
       );
 
       await fetch();

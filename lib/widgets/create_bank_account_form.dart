@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:chitieu/api/bankaccount/bank_account_provider.dart';
+import 'package:chitieu/core/theme/app_colors.dart';
 
 /// =======================
 /// FORMAT NHẬP TIỀN
@@ -77,207 +78,218 @@ class _CreateBankAccountFormState extends State<CreateBankAccountForm> {
     final cs = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
-    final bgColor = isDark ? cs.surface : const Color(0xFFFAFBFE);
+    final screenHeight = MediaQuery.sizeOf(context).height;
+    final bgColor = isDark ? cs.surface : AppColors.background;
 
-    return Container(
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      child: SafeArea(
-        top: false,
-        child: GestureDetector(
-          onTap: () => FocusScope.of(context).unfocus(),
-          child: SingleChildScrollView(
-            padding: EdgeInsets.fromLTRB(20, 12, 20, bottomInset + 24),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // ── Handle bar ──
-                  Container(
-                    width: 40,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: cs.onSurface.withOpacity(.12),
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                  const SizedBox(height: 18),
-
-                  // ── Header ──
-                  Row(
+    return AnimatedPadding(
+      duration: const Duration(milliseconds: 180),
+      curve: Curves.easeOut,
+      padding: EdgeInsets.only(bottom: bottomInset),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: screenHeight - bottomInset - 12,
+        ),
+        child: Container(
+          decoration: BoxDecoration(
+            color: bgColor,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: SafeArea(
+            top: false,
+            child: GestureDetector(
+              onTap: () => FocusScope.of(context).unfocus(),
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
+                      // ── Handle bar ──
                       Container(
-                        padding: const EdgeInsets.all(10),
+                        width: 40,
+                        height: 4,
                         decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [
-                              cs.primary.withOpacity(.12),
-                              cs.primary.withOpacity(.04),
-                            ],
+                          color: cs.onSurface.withOpacity(.12),
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+
+                      // ── Header ──
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [
+                                  cs.primary.withOpacity(.12),
+                                  cs.primary.withOpacity(.04),
+                                ],
+                              ),
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(
+                                color: cs.primary.withOpacity(.1),
+                              ),
+                            ),
+                            child: Icon(Icons.account_balance_rounded,
+                                color: cs.primary, size: 22),
                           ),
-                          borderRadius: BorderRadius.circular(14),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Thêm tài khoản',
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w800,
+                                    color: cs.onSurface,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  'Ngân hàng, ví điện tử, tiền mặt',
+                                  style: TextStyle(
+                                    fontSize: 12.5,
+                                    color: cs.onSurface.withOpacity(.4),
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 22),
+
+                      // ── Tên tài khoản ──
+                      _buildField(
+                        controller: _titleCtrl,
+                        label: 'Tên tài khoản',
+                        icon: Icons.badge_outlined,
+                        cs: cs,
+                        isDark: isDark,
+                        textInputAction: TextInputAction.next,
+                        validator: (v) => (v == null || v.trim().isEmpty)
+                            ? 'Vui lòng nhập tên tài khoản'
+                            : null,
+                      ),
+                      const SizedBox(height: 12),
+
+                      // ── Ngân hàng / ví ──
+                      _buildField(
+                        controller: _bankNameCtrl,
+                        label: 'Tên ngân hàng / ví',
+                        icon: Icons.account_balance_outlined,
+                        cs: cs,
+                        isDark: isDark,
+                        textInputAction: TextInputAction.next,
+                      ),
+                      const SizedBox(height: 12),
+
+                      // ── Số tài khoản ──
+                      _buildField(
+                        controller: _bankNumberCtrl,
+                        label: 'Số tài khoản',
+                        icon: Icons.credit_card_rounded,
+                        cs: cs,
+                        isDark: isDark,
+                        textInputAction: TextInputAction.next,
+                        keyboardType: TextInputType.number,
+                      ),
+                      const SizedBox(height: 12),
+
+                      // ── Số dư ban đầu ──
+                      _buildField(
+                        controller: _initAmountCtrl,
+                        label: 'Số dư ban đầu',
+                        icon: Icons.account_balance_wallet_outlined,
+                        cs: cs,
+                        isDark: isDark,
+                        suffixText: 'đ',
+                        textInputAction: TextInputAction.done,
+                        keyboardType: TextInputType.number,
+                        inputFormatters: [_MoneyInputFormatter()],
+                        validator: (v) {
+                          if (v == null || v.trim().isEmpty) {
+                            return 'Vui lòng nhập số dư ban đầu';
+                          }
+                          final parsed = _parseMoney(v);
+                          if (parsed <= 0) {
+                            return 'Số dư ban đầu phải lớn hơn 0';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 12),
+
+                      // ── Loại tiền ──
+                      Container(
+                        decoration: BoxDecoration(
+                          color:
+                              isDark ? cs.surfaceContainerHigh : Colors.white,
+                          borderRadius: BorderRadius.circular(16),
                           border: Border.all(
-                            color: cs.primary.withOpacity(.1),
+                            color: isDark
+                                ? cs.outlineVariant.withOpacity(.08)
+                                : const Color(0xFFECEDF2),
                           ),
                         ),
-                        child: Icon(Icons.account_balance_rounded,
-                            color: cs.primary, size: 22),
-                      ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Thêm tài khoản',
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w800,
-                                color: cs.onSurface,
-                              ),
+                        child: DropdownButtonFormField<String>(
+                          value: _currency,
+                          decoration: InputDecoration(
+                            labelText: 'Loại tiền',
+                            floatingLabelBehavior: FloatingLabelBehavior.never,
+                            labelStyle: TextStyle(
+                              color: cs.primary.withOpacity(.7),
+                              fontWeight: FontWeight.w600,
+                              fontSize: 14,
                             ),
-                            const SizedBox(height: 2),
-                            Text(
-                              'Ngân hàng, ví điện tử, tiền mặt',
-                              style: TextStyle(
-                                fontSize: 12.5,
-                                color: cs.onSurface.withOpacity(.4),
-                                fontWeight: FontWeight.w500,
-                              ),
+                            filled: true,
+                            fillColor: Colors.transparent,
+                            contentPadding:
+                                const EdgeInsets.fromLTRB(18, 16, 14, 16),
+                            prefixIcon: Padding(
+                              padding:
+                                  const EdgeInsets.only(left: 14, right: 10),
+                              child: Icon(Icons.currency_exchange_rounded,
+                                  color: cs.primary, size: 22),
                             ),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(16),
+                              borderSide: BorderSide.none,
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(16),
+                              borderSide: BorderSide.none,
+                            ),
+                          ),
+                          icon: Icon(Icons.expand_more_rounded,
+                              color: cs.onSurface.withOpacity(.4)),
+                          borderRadius: BorderRadius.circular(14),
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                            color: cs.onSurface,
+                          ),
+                          items: const [
+                            DropdownMenuItem(value: 'VND', child: Text('VND')),
+                            DropdownMenuItem(value: 'USD', child: Text('USD')),
                           ],
+                          onChanged: (v) =>
+                              setState(() => _currency = v ?? 'VND'),
                         ),
                       ),
+                      const SizedBox(height: 24),
+
+                      // ── Save button ──
+                      _buildSaveButton(cs),
                     ],
                   ),
-                  const SizedBox(height: 22),
-
-                  // ── Tên tài khoản ──
-                  _buildField(
-                    controller: _titleCtrl,
-                    label: 'Tên tài khoản',
-                    icon: Icons.badge_outlined,
-                    cs: cs,
-                    isDark: isDark,
-                    textInputAction: TextInputAction.next,
-                    validator: (v) => (v == null || v.trim().isEmpty)
-                        ? 'Vui lòng nhập tên tài khoản'
-                        : null,
-                  ),
-                  const SizedBox(height: 12),
-
-                  // ── Ngân hàng / ví ──
-                  _buildField(
-                    controller: _bankNameCtrl,
-                    label: 'Tên ngân hàng / ví',
-                    icon: Icons.account_balance_outlined,
-                    cs: cs,
-                    isDark: isDark,
-                    textInputAction: TextInputAction.next,
-                  ),
-                  const SizedBox(height: 12),
-
-                  // ── Số tài khoản ──
-                  _buildField(
-                    controller: _bankNumberCtrl,
-                    label: 'Số tài khoản',
-                    icon: Icons.credit_card_rounded,
-                    cs: cs,
-                    isDark: isDark,
-                    textInputAction: TextInputAction.next,
-                    keyboardType: TextInputType.number,
-                  ),
-                  const SizedBox(height: 12),
-
-                  // ── Số dư ban đầu ──
-                  _buildField(
-                    controller: _initAmountCtrl,
-                    label: 'Số dư ban đầu',
-                    icon: Icons.account_balance_wallet_outlined,
-                    cs: cs,
-                    isDark: isDark,
-                    suffixText: 'đ',
-                    textInputAction: TextInputAction.done,
-                    keyboardType: TextInputType.number,
-                    inputFormatters: [_MoneyInputFormatter()],
-                    validator: (v) {
-                      if (v == null || v.trim().isEmpty) {
-                        return 'Vui lòng nhập số dư ban đầu';
-                      }
-                      final parsed = _parseMoney(v);
-                      if (parsed <= 0) {
-                        return 'Số dư ban đầu phải lớn hơn 0';
-                      }
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 12),
-
-                  // ── Loại tiền ──
-                  Container(
-                    decoration: BoxDecoration(
-                      color: isDark
-                          ? cs.surfaceContainerHigh
-                          : Colors.white,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color: isDark
-                            ? cs.outlineVariant.withOpacity(.08)
-                            : const Color(0xFFECEDF2),
-                      ),
-                    ),
-                    child: DropdownButtonFormField<String>(
-                      value: _currency,
-                      decoration: InputDecoration(
-                        labelText: 'Loại tiền',
-                        labelStyle: TextStyle(
-                          color: cs.primary.withOpacity(.7),
-                          fontWeight: FontWeight.w600,
-                          fontSize: 14,
-                        ),
-                        filled: true,
-                        fillColor: Colors.transparent,
-                        contentPadding:
-                            const EdgeInsets.fromLTRB(18, 16, 14, 16),
-                        prefixIcon: Padding(
-                          padding:
-                              const EdgeInsets.only(left: 14, right: 10),
-                          child: Icon(Icons.currency_exchange_rounded,
-                              color: cs.primary, size: 22),
-                        ),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(16),
-                          borderSide: BorderSide.none,
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(16),
-                          borderSide: BorderSide.none,
-                        ),
-                      ),
-                      icon: Icon(Icons.expand_more_rounded,
-                          color: cs.onSurface.withOpacity(.4)),
-                      borderRadius: BorderRadius.circular(14),
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                        color: cs.onSurface,
-                      ),
-                      items: const [
-                        DropdownMenuItem(value: 'VND', child: Text('VND')),
-                        DropdownMenuItem(value: 'USD', child: Text('USD')),
-                      ],
-                      onChanged: (v) =>
-                          setState(() => _currency = v ?? 'VND'),
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-
-                  // ── Save button ──
-                  _buildSaveButton(cs),
-                ],
+                ),
               ),
             ),
           ),
@@ -301,77 +313,67 @@ class _CreateBankAccountFormState extends State<CreateBankAccountForm> {
     List<TextInputFormatter>? inputFormatters,
     String? Function(String?)? validator,
   }) {
-    return Container(
-      decoration: BoxDecoration(
-        color: isDark ? cs.surfaceContainerHigh : Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: isDark
-              ? cs.outlineVariant.withOpacity(.08)
-              : const Color(0xFFECEDF2),
-        ),
-        boxShadow: [
-          if (!isDark)
-            BoxShadow(
-              color: Colors.black.withOpacity(.015),
-              blurRadius: 6,
-              offset: const Offset(0, 2),
-            ),
-        ],
+    return TextFormField(
+      controller: controller,
+      textInputAction: textInputAction,
+      keyboardType: keyboardType,
+      inputFormatters: inputFormatters,
+      style: TextStyle(
+        fontSize: 15,
+        fontWeight: FontWeight.w600,
+        color: cs.onSurface,
       ),
-      child: TextFormField(
-        controller: controller,
-        textInputAction: textInputAction,
-        keyboardType: keyboardType,
-        inputFormatters: inputFormatters,
-        style: TextStyle(
-          fontSize: 15,
+      decoration: InputDecoration(
+        labelText: label,
+        floatingLabelBehavior: FloatingLabelBehavior.never,
+        labelStyle: TextStyle(
+          color: cs.primary.withOpacity(.7),
           fontWeight: FontWeight.w600,
-          color: cs.onSurface,
+          fontSize: 14,
         ),
-        decoration: InputDecoration(
-          labelText: label,
-          labelStyle: TextStyle(
-            color: cs.primary.withOpacity(.7),
-            fontWeight: FontWeight.w600,
-            fontSize: 14,
-          ),
-          suffixText: suffixText,
-          suffixStyle: TextStyle(
-            color: cs.onSurface.withOpacity(.5),
-            fontWeight: FontWeight.w700,
-            fontSize: 15,
-          ),
-          filled: true,
-          fillColor: Colors.transparent,
-          contentPadding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
-          prefixIcon: Padding(
-            padding: const EdgeInsets.only(left: 14, right: 10),
-            child: Icon(icon, color: cs.primary, size: 22),
-          ),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: BorderSide.none,
-          ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: BorderSide.none,
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: BorderSide(color: cs.primary, width: 2),
-          ),
-          errorBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: BorderSide(color: cs.error, width: 1.5),
-          ),
-          focusedErrorBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: BorderSide(color: cs.error, width: 2),
+        suffixText: suffixText,
+        suffixStyle: TextStyle(
+          color: cs.onSurface.withOpacity(.5),
+          fontWeight: FontWeight.w700,
+          fontSize: 15,
+        ),
+        filled: true,
+        fillColor: isDark ? cs.surfaceContainerHigh : Colors.white,
+        contentPadding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
+        prefixIcon: Padding(
+          padding: const EdgeInsets.only(left: 14, right: 10),
+          child: Icon(icon, color: cs.primary, size: 22),
+        ),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(
+            color: isDark
+                ? cs.outlineVariant.withOpacity(.08)
+                : const Color(0xFFECEDF2),
           ),
         ),
-        validator: validator,
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(
+            color: isDark
+                ? cs.outlineVariant.withOpacity(.08)
+                : const Color(0xFFECEDF2),
+          ),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(color: cs.primary, width: 2),
+        ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(color: cs.error, width: 1.5),
+        ),
+        focusedErrorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(color: cs.error, width: 2),
+        ),
       ),
+      validator: validator,
     );
   }
 
