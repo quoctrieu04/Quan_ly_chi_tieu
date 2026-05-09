@@ -19,6 +19,10 @@ class Investment {
   final int? accountSource;
   final DateTime? closedAt;
   final DateTime? lastInterestDate;
+  
+  // Bank new fields
+  final String? interestPaymentMethod;
+  final String? rolloverMethod;
 
   Investment({
     this.id,
@@ -35,6 +39,8 @@ class Investment {
     this.accountSource,
     this.closedAt,
     this.lastInterestDate,
+    this.interestPaymentMethod,
+    this.rolloverMethod,
   });
 
   // ===================================================
@@ -69,6 +75,8 @@ class Investment {
       lastInterestDate: json['last_interest_date'] != null
           ? DateTime.parse(json['last_interest_date'])
           : null,
+      interestPaymentMethod: json['interest_payment_method']?.toString(),
+      rolloverMethod: json['rollover_method']?.toString(),
     );
   }
 
@@ -83,6 +91,8 @@ class Investment {
       'start_date': startDate?.toIso8601String(),
       'bank_name': bankName,
       'term_months': termMonths,
+      'interest_payment_method': interestPaymentMethod,
+      'rollover_method': rolloverMethod,
 
       // ✅ FIX: gửi int
       'accountSource': accountSource,
@@ -103,6 +113,8 @@ class Investment {
     int? accountSource,
     DateTime? closedAt,
     DateTime? lastInterestDate,
+    String? interestPaymentMethod,
+    String? rolloverMethod,
   }) {
     return Investment(
       id: id,
@@ -119,6 +131,8 @@ class Investment {
       accountSource: accountSource ?? this.accountSource,
       closedAt: closedAt ?? this.closedAt,
       lastInterestDate: lastInterestDate ?? this.lastInterestDate,
+      interestPaymentMethod: interestPaymentMethod ?? this.interestPaymentMethod,
+      rolloverMethod: rolloverMethod ?? this.rolloverMethod,
     );
   }
 

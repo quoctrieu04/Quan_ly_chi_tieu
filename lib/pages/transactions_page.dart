@@ -45,13 +45,15 @@ class _TransactionsPageState extends State<TransactionsPage> {
     final now = DateTime.now();
     _year = now.year;
     _month = now.month;
-    _day = null;
+    _day = now.day;
 
     final args = ModalRoute.of(context)?.settings.arguments;
     if (args is Map) {
       _year = (args['year'] as int?) ?? _year;
       _month = (args['month'] as int?) ?? _month;
-      _day = args['day'] as int?;
+      if (args.containsKey('day')) {
+        _day = args['day'] as int?;
+      }
     }
     _baseYear = _year;
     _baseMonth = _month;

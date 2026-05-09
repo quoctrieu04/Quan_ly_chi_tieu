@@ -25,8 +25,22 @@ class _BankInvestmentFormState extends State<BankInvestmentForm> {
 
   String bankName = 'VCB';
   int termMonths = 12;
-  final List<int> termOptions = const [1, 3, 6, 12];
+  final List<int> termOptions = List.generate(36, (i) => i + 1); // 1 đến 36 tháng
   DateTime startDate = DateTime.now();
+
+  String interestPaymentMethod = 'Trả lãi cuối kỳ';
+  final List<String> interestPaymentOptions = const [
+    'Trả lãi cuối kỳ',
+    'Trả lãi hàng tháng',
+    'Trả lãi trước'
+  ];
+
+  String rolloverMethod = 'Tất toán vào tài khoản';
+  final List<String> rolloverOptions = const [
+    'Tất toán vào tài khoản',
+    'Tự động quay vòng gốc',
+    'Tự động quay vòng gốc và lãi',
+  ];
 
   String? selectedAccount;
   String? _amountError;
@@ -136,6 +150,9 @@ class _BankInvestmentFormState extends State<BankInvestmentForm> {
                 .toList(),
             onChanged: (v) => setState(() => termMonths = v ?? 12),
           ),
+          const SizedBox(height: 12),
+          _buildInterestMethodSelector(cs, isDark),
+
           const SizedBox(height: 12),
           _buildTextField(
             controller: rateCtrl,
@@ -323,6 +340,85 @@ class _BankInvestmentFormState extends State<BankInvestmentForm> {
     );
   }
 
+  Widget _buildInterestMethodSelector(ColorScheme cs, bool isDark) {
+    return Material(
+      color: isDark ? cs.surfaceContainerHigh : Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(
+          color: isDark ? cs.outlineVariant.withOpacity(0.08) : const Color(0xFFECEDF2),
+        ),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(left: 16, top: 12, bottom: 4),
+            child: Text(
+              'Chọn phương thức trả lãi',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: cs.onSurface.withOpacity(0.6),
+              ),
+            ),
+          ),
+          ...interestPaymentOptions.asMap().entries.map((entry) {
+            final int index = entry.key;
+            final String option = entry.value;
+            final bool isLast = index == interestPaymentOptions.length - 1;
+            
+            return Column(
+              children: [
+                _buildRadioRow(option, cs, isDark),
+                if (!isLast)
+                  Divider(
+                    height: 1,
+                    thickness: 1,
+                    indent: 16,
+                    endIndent: 16,
+                    color: isDark ? cs.outlineVariant.withOpacity(0.1) : const Color(0xFFF0F0F0),
+                  ),
+              ],
+            );
+          }).toList(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRadioRow(String value, ColorScheme cs, bool isDark) {
+    final isSelected = interestPaymentMethod == value;
+
+    return InkWell(
+      onTap: () => setState(() => interestPaymentMethod = value),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        child: Row(
+          children: [
+            Icon(
+              isSelected ? Icons.check_circle_rounded : Icons.radio_button_off_rounded,
+              color: isSelected ? cs.primary : cs.onSurface.withOpacity(0.4),
+              size: 22,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                value,
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                  color: isSelected ? cs.onSurface : cs.onSurface.withOpacity(0.7),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _save() async {
     setState(() => _amountError = null);
 
@@ -349,6 +445,8 @@ class _BankInvestmentFormState extends State<BankInvestmentForm> {
       'term_months': termMonths,
       'start_date': startDate.toIso8601String(),
       'bank_name': bankName,
+      'interest_payment_method': interestPaymentMethod,
+      'rollover_method': rolloverMethod,
     });
 
     if (!mounted) return;

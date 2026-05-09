@@ -321,7 +321,7 @@ class _InvestmentDetailPageState extends State<InvestmentDetailPage> {
                       outlined: true,
                     ),
                   ),
-                  if (withdrawableMonths >= 1) ...[
+                  if (withdrawableMonths >= 1 && investment.interestPaymentMethod == 'Trả lãi hàng tháng') ...[
                     const SizedBox(width: 8),
                     Expanded(
                       child: _bottomActionButton(
