@@ -472,4 +472,102 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get editCategories => 'Edit categories';
+
+  @override
+  String get plannedUpperCase => 'PLANNED';
+
+  @override
+  String get remainingUpperCase => 'REMAINING';
+
+  @override
+  String get safeToSave => 'Safe to reserve';
+
+  @override
+  String get deficit => 'Deficit!';
+
+  @override
+  String get fundingSource => 'Funding source';
+
+  @override
+  String get savings => 'Savings';
+
+  @override
+  String get investment => 'Investment';
+
+  @override
+  String get overview => 'Overview';
+
+  @override
+  String get income => 'Income';
+
+  @override
+  String get expense => 'Expense';
+
+  @override
+  String get incomeExpenseFluctuation => 'Income/Expense Fluctuation';
+
+  @override
+  String get incomeLabel => 'Income';
+
+  @override
+  String get expenseLabel => 'Expense';
+
+  @override
+  String get interfaceSettings => 'Interface';
+
+  @override
+  String get moneyFormat => 'Money format';
+
+  @override
+  String get accountSettings => 'Account';
+
+  @override
+  String get loggedIn => 'Logged in';
+
+  @override
+  String get predictionAndWarning => 'Prediction & Warning';
+
+  @override
+  String get notEnoughDataTitle => 'Not enough data for prediction';
+
+  @override
+  String get notEnoughDataDesc => 'The app does not have enough data to predict your spending yet. Keep recording your transactions normally; predictions and warnings will activate automatically once there is enough data for the AI model.';
+
+  @override
+  String get totalSpentPieChart => 'Total spent';
+
+  @override
+  String get incomeCollected => 'Collected';
+
+  @override
+  String get planLabel => 'Plan';
+
+  @override
+  String get overLabel => 'Over';
+
+  @override
+  String get notSetLabel => 'Not set';
+
+  @override
+  String get guideReview => 'Review User Guide';
+
+  @override
+  String get notAssignedBudget => 'Not assigned';
+
+  @override
+  String get approachingPlan => 'Approaching plan';
+
+  @override
+  String get overPlan => 'Over plan';
+
+  @override
+  String get overspentWarningTitle => '💸 Oops! Overspending warning!';
+
+  @override
+  String overspentWarningMessage(Object category) {
+    return 'You have overspent the budget for category \"$category\". Tighten your belt for the rest of the month!';
+  }
+
+  @override
+  String get gotIt => 'Got it!';
 }

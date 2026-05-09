@@ -1,9 +1,11 @@
+import 'package:chitieu/core/theme/app_colors.dart';
 import 'package:flutter/material.dart';
+import 'package:chitieu/l10n/app_localizations.dart';
 import 'models/monthly_cashflow.dart';
 
-const _kMint = Color(0xFF2EC4B6);
-const _kWarning = Color(0xFFF59E0B);
-const _kDanger  = Color(0xFFEF4444);
+const _kMint = AppColors.primary;
+const _kWarning = AppColors.warning;
+const _kDanger = AppColors.danger;
 
 class SpendingTrendCard extends StatelessWidget {
   final List<MonthlyCashFlow> data;
@@ -28,6 +30,7 @@ class SpendingTrendCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final cs = Theme.of(context).colorScheme;
     final maxVal = _maxValue();
@@ -44,7 +47,7 @@ class SpendingTrendCard extends StatelessWidget {
         Row(
           children: [
             Text(
-              'Biến động thu/chi',
+              t.incomeExpenseFluctuation,
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w800,
@@ -57,14 +60,17 @@ class SpendingTrendCard extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
-                color: (isDown ? _kMint : _kDanger).withOpacity(isDark ? .15 : .08),
+                color: (isDown ? _kMint : _kDanger)
+                    .withOpacity(isDark ? .15 : .08),
                 borderRadius: BorderRadius.circular(20),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(
-                    isDown ? Icons.trending_down_rounded : Icons.trending_up_rounded,
+                    isDown
+                        ? Icons.trending_down_rounded
+                        : Icons.trending_up_rounded,
                     color: isDown ? _kMint : _kDanger,
                     size: 14,
                   ),
@@ -94,8 +100,10 @@ class SpendingTrendCard extends StatelessWidget {
               final m = entry.value;
               final isLast = entry.key == data.length - 1;
 
-              final double incomeH = maxVal == 0 ? 0 : ((m.income / maxVal) * 90).toDouble();
-              final double expenseH = maxVal == 0 ? 0 : ((m.expense / maxVal) * 90).toDouble();
+              final double incomeH =
+                  maxVal == 0 ? 0 : ((m.income / maxVal) * 90).toDouble();
+              final double expenseH =
+                  maxVal == 0 ? 0 : ((m.expense / maxVal) * 90).toDouble();
 
               return TweenAnimationBuilder<double>(
                 duration: Duration(milliseconds: 500 + (entry.key * 80)),
@@ -120,7 +128,9 @@ class SpendingTrendCard extends StatelessWidget {
                           width: 10,
                           height: incomeH.clamp(4, 90),
                           decoration: BoxDecoration(
-                            color: isLast ? incomeColor : incomeColor.withOpacity(isDark ? .3 : .2),
+                            color: isLast
+                                ? incomeColor
+                                : incomeColor.withOpacity(isDark ? .3 : .2),
                             borderRadius: BorderRadius.circular(50),
                           ),
                         ),
@@ -130,7 +140,9 @@ class SpendingTrendCard extends StatelessWidget {
                           width: 10,
                           height: expenseH.clamp(4, 90),
                           decoration: BoxDecoration(
-                            color: isLast ? expenseColor : expenseColor.withOpacity(isDark ? .3 : .2),
+                            color: isLast
+                                ? expenseColor
+                                : expenseColor.withOpacity(isDark ? .3 : .2),
                             borderRadius: BorderRadius.circular(50),
                           ),
                         ),
@@ -142,7 +154,9 @@ class SpendingTrendCard extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: isLast ? FontWeight.w700 : FontWeight.w500,
-                        color: isLast ? cs.onSurface : cs.onSurface.withOpacity(.4),
+                        color: isLast
+                            ? cs.onSurface
+                            : cs.onSurface.withOpacity(.4),
                       ),
                     ),
                   ],
@@ -156,9 +170,9 @@ class SpendingTrendCard extends StatelessWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            _Legend(color: incomeColor, label: 'Thu nhập'),
+            _Legend(color: incomeColor, label: t.incomeLabel),
             const SizedBox(width: 16),
-            _Legend(color: expenseColor, label: 'Chi tiêu'),
+            _Legend(color: expenseColor, label: t.expenseLabel),
           ],
         ),
       ],
@@ -176,16 +190,19 @@ class _Legend extends StatelessWidget {
     return Row(
       children: [
         Container(
-          width: 8, height: 8,
+          width: 8,
+          height: 8,
           decoration: BoxDecoration(
-            color: color, shape: BoxShape.circle,
+            color: color,
+            shape: BoxShape.circle,
           ),
         ),
         const SizedBox(width: 6),
         Text(
           label,
           style: TextStyle(
-            fontSize: 12, fontWeight: FontWeight.w500,
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
             color: Theme.of(context).colorScheme.onSurface.withOpacity(.5),
           ),
         ),

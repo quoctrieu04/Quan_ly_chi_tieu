@@ -534,7 +534,7 @@ class _BudgetsPageState extends State<BudgetsPage> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'ĐÃ CÓ KẾ HOẠCH',
+                                t.plannedUpperCase,
                                 style: TextStyle(
                                   color: textMuted,
                                   fontSize: 11,
@@ -608,7 +608,7 @@ class _BudgetsPageState extends State<BudgetsPage> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'CÒN LẠI',
+                                t.remainingUpperCase,
                                 style: TextStyle(
                                   color: textMuted,
                                   fontSize: 11,
@@ -656,8 +656,8 @@ class _BudgetsPageState extends State<BudgetsPage> {
                               Expanded(
                                 child: Text(
                                   unassigned < 0
-                                      ? 'Thâm hụt!'
-                                      : 'An toàn dự trữ',
+                                      ? t.deficit
+                                      : t.safeToSave,
                                   style: TextStyle(
                                     color: unassigned < 0
                                         ? const Color(0xFFDC2626)
@@ -693,7 +693,7 @@ class _BudgetsPageState extends State<BudgetsPage> {
                           size: 18,
                         ),
                         label: Text(
-                          'Lên kế hoạch',
+                          t.assignMoneyCta,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),

@@ -3,6 +3,7 @@ import 'package:chitieu/core/theme/app_colors.dart';
 import 'package:chitieu/core/money/widgets/money_text.dart';
 import 'package:chitieu/core/budget/budget_model.dart';
 import 'package:chitieu/api/category/category_model.dart';
+import 'package:chitieu/l10n/app_localizations.dart';
 
 const double kWarn1 = 0.80;
 
@@ -88,6 +89,7 @@ class BudgetCategoryTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
     final status = _statusFor(item.amount, item.spent);
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
@@ -211,7 +213,7 @@ class BudgetCategoryTile extends StatelessWidget {
                                     Row(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
-                                        Text('Kế hoạch: ',
+                                        Text('${t.planLabel}: ',
                                             style: TextStyle(
                                                 color: textMuted,
                                                 fontSize: 12)),
@@ -228,7 +230,7 @@ class BudgetCategoryTile extends StatelessWidget {
                                       ],
                                     )
                                   else
-                                    Text('Chưa cấp ngân sách',
+                                    Text(t.notAssignedBudget,
                                         style: TextStyle(
                                             color: textMuted,
                                             fontSize: 12,
@@ -242,7 +244,7 @@ class BudgetCategoryTile extends StatelessWidget {
                               Row(
                                 mainAxisAlignment: MainAxisAlignment.end,
                                 children: [
-                                  Text('Đã chi: ',
+                                  Text('${t.spent}: ',
                                       style: TextStyle(
                                           color: textMuted, fontSize: 12)),
                                   MoneyText(
@@ -268,7 +270,7 @@ class BudgetCategoryTile extends StatelessWidget {
                                           size: 16, color: orangeTextColor),
                                       const SizedBox(width: 4),
                                       Text(
-                                        'Sắp chạm kế hoạch',
+                                        t.approachingPlan,
                                         style: const TextStyle(
                                           color: orangeTextColor,
                                           fontSize: 12,
@@ -286,16 +288,14 @@ class BudgetCategoryTile extends StatelessWidget {
                                       showDialog(
                                         context: context,
                                         builder: (ctx) => AlertDialog(
-                                          title: const Text(
-                                              '💸 Ui chao! Cảnh báo lạm chi!'),
+                                          title: Text(t.overspentWarningTitle),
                                           content: Text(
-                                              'Bạn lại lỡ tay vung quá trán cho khoản "${_capFirst(category.name)}" mất rồi!\nĐừng để rỗng túi nhé, từ giờ tới cuối tháng hãy "thắt lưng buộc bụng" nha.'),
+                                              t.overspentWarningMessage(_capFirst(category.name))),
                                           actions: [
                                             TextButton(
                                               onPressed: () =>
                                                   Navigator.pop(ctx),
-                                              child: const Text(
-                                                  'Biết rồi khổ lắm nói mãi!'),
+                                              child: Text(t.gotIt),
                                             ),
                                           ],
                                         ),
@@ -310,7 +310,7 @@ class BudgetCategoryTile extends StatelessWidget {
                                           Icon(Icons.warning_amber_rounded,
                                               size: 16, color: redTextColor),
                                           const SizedBox(width: 4),
-                                          Text('Đã vượt Kế hoạch ',
+                                          Text('${t.overPlan} ',
                                               style: TextStyle(
                                                   color: redTextColor,
                                                   fontSize: 12,

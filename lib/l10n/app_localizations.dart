@@ -1000,6 +1000,198 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Edit categories'**
   String get editCategories;
+
+  /// No description provided for @plannedUpperCase.
+  ///
+  /// In en, this message translates to:
+  /// **'PLANNED'**
+  String get plannedUpperCase;
+
+  /// No description provided for @remainingUpperCase.
+  ///
+  /// In en, this message translates to:
+  /// **'REMAINING'**
+  String get remainingUpperCase;
+
+  /// No description provided for @safeToSave.
+  ///
+  /// In en, this message translates to:
+  /// **'Safe to reserve'**
+  String get safeToSave;
+
+  /// No description provided for @deficit.
+  ///
+  /// In en, this message translates to:
+  /// **'Deficit!'**
+  String get deficit;
+
+  /// No description provided for @fundingSource.
+  ///
+  /// In en, this message translates to:
+  /// **'Funding source'**
+  String get fundingSource;
+
+  /// No description provided for @savings.
+  ///
+  /// In en, this message translates to:
+  /// **'Savings'**
+  String get savings;
+
+  /// No description provided for @investment.
+  ///
+  /// In en, this message translates to:
+  /// **'Investment'**
+  String get investment;
+
+  /// No description provided for @overview.
+  ///
+  /// In en, this message translates to:
+  /// **'Overview'**
+  String get overview;
+
+  /// No description provided for @income.
+  ///
+  /// In en, this message translates to:
+  /// **'Income'**
+  String get income;
+
+  /// No description provided for @expense.
+  ///
+  /// In en, this message translates to:
+  /// **'Expense'**
+  String get expense;
+
+  /// No description provided for @incomeExpenseFluctuation.
+  ///
+  /// In en, this message translates to:
+  /// **'Income/Expense Fluctuation'**
+  String get incomeExpenseFluctuation;
+
+  /// No description provided for @incomeLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Income'**
+  String get incomeLabel;
+
+  /// No description provided for @expenseLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Expense'**
+  String get expenseLabel;
+
+  /// No description provided for @interfaceSettings.
+  ///
+  /// In en, this message translates to:
+  /// **'Interface'**
+  String get interfaceSettings;
+
+  /// No description provided for @moneyFormat.
+  ///
+  /// In en, this message translates to:
+  /// **'Money format'**
+  String get moneyFormat;
+
+  /// No description provided for @accountSettings.
+  ///
+  /// In en, this message translates to:
+  /// **'Account'**
+  String get accountSettings;
+
+  /// No description provided for @loggedIn.
+  ///
+  /// In en, this message translates to:
+  /// **'Logged in'**
+  String get loggedIn;
+
+  /// No description provided for @predictionAndWarning.
+  ///
+  /// In en, this message translates to:
+  /// **'Prediction & Warning'**
+  String get predictionAndWarning;
+
+  /// No description provided for @notEnoughDataTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Not enough data for prediction'**
+  String get notEnoughDataTitle;
+
+  /// No description provided for @notEnoughDataDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'The app does not have enough data to predict your spending yet. Keep recording your transactions normally; predictions and warnings will activate automatically once there is enough data for the AI model.'**
+  String get notEnoughDataDesc;
+
+  /// No description provided for @totalSpentPieChart.
+  ///
+  /// In en, this message translates to:
+  /// **'Total spent'**
+  String get totalSpentPieChart;
+
+  /// No description provided for @incomeCollected.
+  ///
+  /// In en, this message translates to:
+  /// **'Collected'**
+  String get incomeCollected;
+
+  /// No description provided for @planLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Plan'**
+  String get planLabel;
+
+  /// No description provided for @overLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Over'**
+  String get overLabel;
+
+  /// No description provided for @notSetLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Not set'**
+  String get notSetLabel;
+
+  /// No description provided for @guideReview.
+  ///
+  /// In en, this message translates to:
+  /// **'Review User Guide'**
+  String get guideReview;
+
+  /// No description provided for @notAssignedBudget.
+  ///
+  /// In en, this message translates to:
+  /// **'Not assigned'**
+  String get notAssignedBudget;
+
+  /// No description provided for @approachingPlan.
+  ///
+  /// In en, this message translates to:
+  /// **'Approaching plan'**
+  String get approachingPlan;
+
+  /// No description provided for @overPlan.
+  ///
+  /// In en, this message translates to:
+  /// **'Over plan'**
+  String get overPlan;
+
+  /// No description provided for @overspentWarningTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'💸 Oops! Overspending warning!'**
+  String get overspentWarningTitle;
+
+  /// No description provided for @overspentWarningMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'You have overspent the budget for category \"{category}\". Tighten your belt for the rest of the month!'**
+  String overspentWarningMessage(Object category);
+
+  /// No description provided for @gotIt.
+  ///
+  /// In en, this message translates to:
+  /// **'Got it!'**
+  String get gotIt;
 }
 
 class _AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> {

@@ -603,7 +603,7 @@ class _NotePageState extends State<NotePage> {
                           inc.title,
                           style: const TextStyle(fontWeight: FontWeight.w700),
                         ),
-                        subtitle: Text('Số tiền: ${_vi.format(inc.balance)}'),
+                        subtitle: Text('Số tiền: \${_vi.format(inc.balance)}'),
                         trailing: (inc.id == selectedIncome?.id)
                             ? const Icon(Icons.check, color: Colors.green)
                             : null,
@@ -666,7 +666,7 @@ class _NotePageState extends State<NotePage> {
         final store = VoiceSynonymStore();
         await store.load();
         await store.learnFromUtterance(textToLearn, picked.name);
-        debugPrint('🧠 Đã học: "$textToLearn" -> "${picked.name}"');
+        debugPrint('🧠 Đã học: "\$textToLearn" -> "\${picked.name}"');
       }
     }
   }
@@ -1144,4 +1144,3 @@ class _NotePageState extends State<NotePage> {
     );
   }
 }
-

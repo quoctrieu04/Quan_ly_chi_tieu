@@ -134,7 +134,7 @@ class _StockInvestmentFormState extends State<StockInvestmentForm> {
 
     final price = _parseMoney(priceCtrl.text);
     final qty = int.parse(qtyCtrl.text);
-
+    
     await context.read<InvestmentProvider>().addRaw({
       'name': nameCtrl.text,
       'type': 'stock',

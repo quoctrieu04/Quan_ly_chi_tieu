@@ -137,6 +137,12 @@ class _BankInvestmentFormState extends State<BankInvestmentForm> {
             suffixText: 'd',
             errorText: _amountError,
             textInputAction: TextInputAction.next,
+            validator: (v) {
+              if (v == null || v.trim().isEmpty) return 'Nhập số tiền';
+              final amount = _parseNumber(v);
+              if (amount <= 0) return 'Số tiền không hợp lệ';
+              return null;
+            },
           ),
           const SizedBox(height: 12),
           _buildDropdownField<int>(
@@ -162,6 +168,8 @@ class _BankInvestmentFormState extends State<BankInvestmentForm> {
             isDark: isDark,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             textInputAction: TextInputAction.done,
+            validator: (v) =>
+                v == null || v.trim().isEmpty ? 'Nhập lãi suất' : null,
           ),
           const SizedBox(height: 12),
           _buildDateField(cs: cs, isDark: isDark),

@@ -497,7 +497,7 @@ class _AllocateMoneyPageState extends State<AllocateMoneyPage> {
                                         Row(
                                           children: [
                                             Text(
-                                              'Kế hoạch: ',
+                                              '${t.planLabel}: ',
                                               style: TextStyle(
                                                 color: textMuted,
                                                 fontSize: 11,

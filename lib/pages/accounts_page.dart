@@ -482,7 +482,7 @@ class _AccountsPageState extends State<AccountsPage> {
                     items: [
                       FeatureItem(
                         icon: Icons.account_balance_wallet_rounded,
-                        label: 'Tài khoản',
+                        label: t.tabAccounts,
                         onTap: () async {
                           final prov = context.read<BankAccountProvider>();
 
@@ -511,7 +511,7 @@ class _AccountsPageState extends State<AccountsPage> {
                       ),
                       FeatureItem(
                         icon: Icons.attach_money_rounded,
-                        label: 'Nguồn tiền',
+                        label: t.fundingSource,
                         onTap: () async {
                           final prov = context.read<IncomeProvider>();
 
@@ -533,7 +533,7 @@ class _AccountsPageState extends State<AccountsPage> {
                       ),
                       FeatureItem(
                         icon: Icons.savings_rounded,
-                        label: 'Tiết kiệm',
+                        label: t.savings,
                         onTap: () async {
                           final prov = context.read<SavingProvider>();
                           final ym = context.read<YearMonthProvider>().ym;
@@ -555,14 +555,14 @@ class _AccountsPageState extends State<AccountsPage> {
                       ),
                       FeatureItem(
                         icon: Icons.trending_up_rounded,
-                        label: 'Đầu tư',
+                        label: t.investment,
                         onTap: () {
                           Navigator.pushNamed(context, '/investment');
                         },
                       ),
                       FeatureItem(
                         icon: Icons.history_rounded,
-                        label: 'Lịch sử',
+                        label: t.transactionHistory,
                         onTap: () {
                           Navigator.pushNamed(
                             context,
@@ -1258,6 +1258,7 @@ class MonthSummaryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
     final cs = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final moneySettings = context.watch<MoneySettingsProvider>().settings;
@@ -1271,7 +1272,7 @@ class MonthSummaryCard extends StatelessWidget {
         Padding(
           padding: const EdgeInsets.only(left: 2, bottom: 10),
           child: Text(
-            'Tổng quan',
+            t.overview,
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w800,
@@ -1284,7 +1285,7 @@ class MonthSummaryCard extends StatelessWidget {
             Expanded(
               child: _SummaryItem(
                 icon: Icons.arrow_downward_rounded,
-                label: 'Thu vào',
+                label: t.income,
                 value: fmt(totalIncome),
                 color: const Color(0xFF12805C),
                 bg: const Color(0xFFE9F7EF),
@@ -1295,7 +1296,7 @@ class MonthSummaryCard extends StatelessWidget {
             Expanded(
               child: _SummaryItem(
                 icon: Icons.arrow_upward_rounded,
-                label: 'Chi ra',
+                label: t.expense,
                 value: fmt(totalExpense),
                 color: const Color(0xFFD13B3B),
                 bg: const Color(0xFFFFEFEF),

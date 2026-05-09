@@ -204,12 +204,37 @@
   "categoryNameRequired": "Tên danh mục không được để trống",
   "genericFailedMessage": "Thao tác thất bại",
   "loginRequiredMessage": "Vui lòng đăng nhập để tiếp tục",
-  "editCategories": "Chỉnh sửa danh mục"
-
-
-
-  
-
-
-
+  "editCategories": "Chỉnh sửa danh mục",
+  "plannedUpperCase": "ĐÃ CÓ KẾ HOẠCH",
+  "remainingUpperCase": "CÒN LẠI",
+  "safeToSave": "An toàn dự trữ",
+  "deficit": "Thâm hụt!",
+  "fundingSource": "Nguồn tiền",
+  "savings": "Tiết kiệm",
+  "investment": "Đầu tư",
+  "overview": "Tổng quan",
+  "income": "Thu vào",
+  "expense": "Chi ra",
+  "incomeExpenseFluctuation": "Biến động thu/chi",
+  "incomeLabel": "Thu nhập",
+  "expenseLabel": "Chi tiêu",
+  "interfaceSettings": "Giao diện",
+  "moneyFormat": "Định dạng tiền",
+  "accountSettings": "Tài khoản",
+  "loggedIn": "Đã đăng nhập",
+  "predictionAndWarning": "Dự báo & Cảnh báo",
+  "notEnoughDataTitle": "Chưa đủ dữ liệu để dự báo",
+  "notEnoughDataDesc": "Hiện tại app chưa có đủ dữ liệu để dự đoán chi tiêu. Hãy tiếp tục ghi nhận giao dịch như bình thường; khi dữ liệu đạt đủ điều kiện theo mô hình AI, dự báo và cảnh báo sẽ tự động hoạt động.",
+  "totalSpentPieChart": "Tổng chi",
+  "incomeCollected": "Đã thu",
+  "planLabel": "Kế hoạch",
+  "overLabel": "Vượt",
+  "notSetLabel": "Chưa đặt",
+  "guideReview": "Xem lại hướng dẫn sử dụng",
+  "notAssignedBudget": "Chưa cấp ngân sách",
+  "approachingPlan": "Sắp chạm kế hoạch",
+  "overPlan": "Đã vượt Kế hoạch",
+  "overspentWarningTitle": "💸 Ui chao! Cảnh báo lạm chi!",
+  "overspentWarningMessage": "Bạn lại lỡ tay vung quá trán cho khoản \"{category}\" mất rồi! Đừng để rỗng túi nhé, từ giờ tới cuối tháng hãy \"thắt lưng buộc bụng\" nha.",
+  "gotIt": "Biết rồi khổ lắm nói mãi!"
 }

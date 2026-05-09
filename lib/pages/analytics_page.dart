@@ -201,8 +201,8 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
           children: [
             _SectionCard(
-              title: "Dự báo & Cảnh báo",
-              child: _buildPredictionInsightCard(nf),
+              title: t.predictionAndWarning,
+              child: _buildPredictionInsightCard(nf, t),
             ),
             const SizedBox(height: 16),
             _SectionCard(
@@ -245,7 +245,7 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
 
   bool get _showLegacyPredictionCard => false;
 
-  Widget _buildPredictionInsightCard(NumberFormat nf) {
+  Widget _buildPredictionInsightCard(NumberFormat nf, AppLocalizations t) {
     if (_loadingAI) {
       return const Padding(
         padding: EdgeInsets.all(16),
@@ -292,9 +292,8 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
     if (!hasPredictionData) {
       return _AnalyticsEmptyState(
         icon: Icons.insights_rounded,
-        title: 'Chưa đủ dữ liệu để dự báo',
-        message:
-            'Hiện tại app chưa có đủ dữ liệu để dự đoán chi tiêu. Hãy tiếp tục ghi nhận giao dịch như bình thường; khi dữ liệu đạt đủ điều kiện theo mô hình AI, dự báo và cảnh báo sẽ tự động hoạt động.',
+        title: t.notEnoughDataTitle,
+        message: t.notEnoughDataDesc,
       );
     }
 
@@ -1009,6 +1008,7 @@ class _BudgetPieChart extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     
     final data = items.where((e) => e.amount > 0).toList();
@@ -1100,7 +1100,7 @@ class _BudgetPieChart extends StatelessWidget {
               ),
               const SizedBox(height: 1),
               Text(
-                'Tổng chi',
+                t.totalSpentPieChart,
                 style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w600,
@@ -1262,13 +1262,14 @@ class _SummaryBox extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
     final locale = Localizations.localeOf(context).toLanguageTag();
     final nf = NumberFormat.decimalPattern(locale)..maximumFractionDigits = 0;
     final isBudgetOver = hasBudgetPlan && budgetRemaining < 0;
     final isMonthNegative = monthRemaining < 0;
     final planValue = hasBudgetPlan
-        ? '${isBudgetOver ? 'Vượt' : 'Còn'} ${nf.format(budgetRemaining.abs())}'
-        : 'Chưa đặt';
+        ? '${isBudgetOver ? t.overLabel : t.remaining} ${nf.format(budgetRemaining.abs())}'
+        : t.notSetLabel;
 
     return GridView.count(
       crossAxisCount: 2,
@@ -1279,19 +1280,19 @@ class _SummaryBox extends StatelessWidget {
       crossAxisSpacing: 10,
       children: [
         _SummaryTile(
-          label: "Đã thu",
+          label: t.incomeCollected,
           value: nf.format(totalIncome),
           icon: Icons.add_circle_outline_rounded,
           color: const Color(0xFF16A34A),
         ),
         _SummaryTile(
-          label: "Đã tiêu",
+          label: t.spent,
           value: nf.format(totalSpent),
           icon: Icons.remove_circle_outline_rounded,
           color: const Color(0xFFE8A838),
         ),
         _SummaryTile(
-          label: "Còn lại",
+          label: t.remaining,
           value:
               '${isMonthNegative ? '-' : ''}${nf.format(monthRemaining.abs())}',
           icon: isMonthNegative
@@ -1301,7 +1302,7 @@ class _SummaryBox extends StatelessWidget {
               isMonthNegative ? const Color(0xFFEF4444) : AppColors.primaryDark,
         ),
         _SummaryTile(
-          label: "Kế hoạch",
+          label: t.planLabel,
           value: planValue,
           icon: Icons.receipt_long_outlined,
           color: !hasBudgetPlan

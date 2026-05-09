@@ -62,7 +62,7 @@ class SettingsPage extends StatelessWidget {
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
             // ── Header ──
-            SliverToBoxAdapter(child: _buildHeader(context, cs, isDark)),
+            SliverToBoxAdapter(child: _buildHeader(context, cs, isDark, t)),
             // ── Body ──
             SliverPadding(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
@@ -74,7 +74,7 @@ class SettingsPage extends StatelessWidget {
                     const SizedBox(height: 16),
 
                     // ── Appearance section ──
-                    _buildSectionTitle('Giao diện', Icons.palette_outlined, cs),
+                    _buildSectionTitle(t.interfaceSettings, Icons.palette_outlined, cs),
                     const SizedBox(height: 10),
                     _buildSettingsCard(cs, isDark, [
                       // Language
@@ -102,7 +102,7 @@ class SettingsPage extends StatelessWidget {
                       _thinDivider(cs, isDark),
                       _buildActionRow(
                         icon: Icons.payments_outlined,
-                        label: 'Định dạng tiền',
+                        label: t.moneyFormat,
                         cs: cs,
                         onTap: () {
                           Navigator.of(context).push(
@@ -155,12 +155,12 @@ class SettingsPage extends StatelessWidget {
 
                     // ── Account section ──
                     _buildSectionTitle(
-                        'Tài khoản', Icons.person_outline_rounded, cs),
+                        t.accountSettings, Icons.person_outline_rounded, cs),
                     const SizedBox(height: 10),
                     _buildSettingsCard(cs, isDark, [
                       _buildActionRow(
                         icon: Icons.help_outline_rounded,
-                        label: 'Xem lại hướng dẫn sử dụng',
+                        label: t.guideReview,
                         cs: cs,
                         onTap: onReplayGuide,
                       ),
@@ -197,14 +197,14 @@ class SettingsPage extends StatelessWidget {
   // ═══════════════════════════
   //  HEADER
   // ═══════════════════════════
-  Widget _buildHeader(BuildContext context, ColorScheme cs, bool isDark) {
+  Widget _buildHeader(BuildContext context, ColorScheme cs, bool isDark, AppLocalizations t) {
     return AppPageHeader(
       icon: Icons.settings_rounded,
-      title: 'Cài đặt',
+      title: t.tabSettings,
       actions: [
         HeaderIconButton(
           icon: Icons.person_outline_rounded,
-          tooltip: 'Tài khoản',
+          tooltip: t.accountSettings,
           onPressed: () => _openProfileOrLogin(context),
         ),
       ],
@@ -291,7 +291,7 @@ class SettingsPage extends StatelessWidget {
                       ),
                       child: Text(
                         auth.isAuthenticated
-                            ? 'Đã đăng nhập'
+                            ? t.loggedIn
                             : 'Chưa đăng nhập',
                         style: TextStyle(
                           color: Colors.white.withOpacity(.9),

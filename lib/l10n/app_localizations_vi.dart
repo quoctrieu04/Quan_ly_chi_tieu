@@ -198,7 +198,7 @@ class AppLocalizationsVi extends AppLocalizations {
   String get cancel => 'Huỷ';
 
   @override
-  String get noData => 'Chưa có dữ liệu';
+  String get noData => 'No data available';
 
   @override
   String get somethingWrong => 'Đã có lỗi xảy ra, vui lòng thử lại';
@@ -472,4 +472,102 @@ class AppLocalizationsVi extends AppLocalizations {
 
   @override
   String get editCategories => 'Chỉnh sửa danh mục';
+
+  @override
+  String get plannedUpperCase => 'ĐÃ CÓ KẾ HOẠCH';
+
+  @override
+  String get remainingUpperCase => 'CÒN LẠI';
+
+  @override
+  String get safeToSave => 'An toàn dự trữ';
+
+  @override
+  String get deficit => 'Thâm hụt!';
+
+  @override
+  String get fundingSource => 'Nguồn tiền';
+
+  @override
+  String get savings => 'Tiết kiệm';
+
+  @override
+  String get investment => 'Đầu tư';
+
+  @override
+  String get overview => 'Tổng quan';
+
+  @override
+  String get income => 'Thu vào';
+
+  @override
+  String get expense => 'Chi ra';
+
+  @override
+  String get incomeExpenseFluctuation => 'Biến động thu/chi';
+
+  @override
+  String get incomeLabel => 'Thu nhập';
+
+  @override
+  String get expenseLabel => 'Chi tiêu';
+
+  @override
+  String get interfaceSettings => 'Giao diện';
+
+  @override
+  String get moneyFormat => 'Định dạng tiền';
+
+  @override
+  String get accountSettings => 'Tài khoản';
+
+  @override
+  String get loggedIn => 'Đã đăng nhập';
+
+  @override
+  String get predictionAndWarning => 'Dự báo & Cảnh báo';
+
+  @override
+  String get notEnoughDataTitle => 'Chưa đủ dữ liệu để dự báo';
+
+  @override
+  String get notEnoughDataDesc => 'Hiện tại app chưa có đủ dữ liệu để dự đoán chi tiêu. Hãy tiếp tục ghi nhận giao dịch như bình thường; khi dữ liệu đạt đủ điều kiện theo mô hình AI, dự báo và cảnh báo sẽ tự động hoạt động.';
+
+  @override
+  String get totalSpentPieChart => 'Tổng chi';
+
+  @override
+  String get incomeCollected => 'Đã thu';
+
+  @override
+  String get planLabel => 'Kế hoạch';
+
+  @override
+  String get overLabel => 'Vượt';
+
+  @override
+  String get notSetLabel => 'Chưa đặt';
+
+  @override
+  String get guideReview => 'Xem lại hướng dẫn sử dụng';
+
+  @override
+  String get notAssignedBudget => 'Chưa cấp ngân sách';
+
+  @override
+  String get approachingPlan => 'Sắp chạm kế hoạch';
+
+  @override
+  String get overPlan => 'Đã vượt Kế hoạch';
+
+  @override
+  String get overspentWarningTitle => '💸 Ui chao! Cảnh báo lạm chi!';
+
+  @override
+  String overspentWarningMessage(Object category) {
+    return 'Bạn lại lỡ tay vung quá trán cho khoản \"$category\" mất rồi! Đừng để rỗng túi nhé, từ giờ tới cuối tháng hãy \"thắt lưng buộc bụng\" nha.';
+  }
+
+  @override
+  String get gotIt => 'Biết rồi khổ lắm nói mãi!';
 }
