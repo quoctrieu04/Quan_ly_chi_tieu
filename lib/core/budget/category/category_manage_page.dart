@@ -30,10 +30,7 @@ class _CategoryManagePageState extends State<CategoryManagePage> {
     if (created == true) {
       await _refresh();
       if (mounted) {
-        safeShowSnackBar(
-          context,
-          const SnackBar(content: Text('Đã tạo danh mục')),
-        );
+        showAppSnackBar(context, 'Đã tạo danh mục', icon: Icons.check_circle_rounded);
       }
     }
   }
@@ -48,10 +45,7 @@ class _CategoryManagePageState extends State<CategoryManagePage> {
     if (changed == true) {
       await _refresh();
       if (mounted) {
-        safeShowSnackBar(
-          context,
-          const SnackBar(content: Text('Đã cập nhật danh mục')),
-        );
+        showAppSnackBar(context, 'Đã cập nhật danh mục', icon: Icons.check_circle_rounded);
       }
     }
   }
@@ -78,17 +72,11 @@ class _CategoryManagePageState extends State<CategoryManagePage> {
       await context.read<CategoryProvider>().delete(id: c.id);
       await _refresh();
       if (mounted) {
-        safeShowSnackBar(
-          context,
-          const SnackBar(content: Text('Đã xoá danh mục')),
-        );
+        showAppSnackBar(context, 'Đã xoá danh mục', icon: Icons.delete_rounded);
       }
     } catch (e) {
       if (!mounted) return;
-      safeShowSnackBar(
-        context,
-        SnackBar(content: Text('Xoá thất bại: $e')),
-      );
+      showAppSnackBar(context, 'Xoá thất bại: $e', isError: true);
     }
   }
 

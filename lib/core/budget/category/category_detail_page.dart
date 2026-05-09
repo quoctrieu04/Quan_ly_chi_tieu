@@ -7,6 +7,7 @@ import 'package:chitieu/api/category/category_model.dart';
 import 'package:chitieu/api/category/category_provider.dart';
 import 'package:chitieu/core/budget/budgets_provider.dart';
 import 'package:chitieu/l10n/app_localizations.dart';
+import 'package:chitieu/utils/safe_ui.dart';
 
 /// Formatter để format số tiền theo kiểu 1.000.000
 class VNDThousandsFormatter extends TextInputFormatter {
@@ -155,12 +156,10 @@ class _CategoryDetailPageState extends State<CategoryDetailPage>
 
       final limit = _parseMoney(_limitCtl.text);
 
-      await context.read<BudgetsProvider>().service.setOne(
+      await context.read<BudgetsProvider>().assignMany(
         year: widget.year,
         month: widget.month,
-        categoryId: widget.category.id.toInt(),
-        amount: limit,
-        mode: 'set',
+        allocations: {widget.category.id.toInt(): limit.toDouble()},
       );
 
       await context.read<BudgetsProvider>().loadForMonth(
@@ -169,13 +168,11 @@ class _CategoryDetailPageState extends State<CategoryDetailPage>
           );
 
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(t.saved)));
+      showAppSnackBar(context, t.saved, icon: Icons.check_circle_rounded);
       Navigator.pop(context, true);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(t.errorGeneric)));
+      showAppSnackBar(context, t.errorGeneric, isError: true);
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -252,8 +249,7 @@ class _CategoryDetailPageState extends State<CategoryDetailPage>
       Navigator.pop(context, true);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(t.errorGeneric)));
+      showAppSnackBar(context, t.errorGeneric, isError: true);
     } finally {
       if (mounted) setState(() => _busy = false);
     }

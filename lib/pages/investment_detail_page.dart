@@ -7,6 +7,8 @@ import 'package:chitieu/widgets/investment/bank/bank_renew_form.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import 'package:chitieu/utils/error_handler.dart';
+import 'package:chitieu/utils/safe_ui.dart';
 
 class InvestmentDetailPage extends StatefulWidget {
   final Investment investment;
@@ -78,10 +80,12 @@ class _InvestmentDetailPageState extends State<InvestmentDetailPage> {
     final interestRateText =
         '${investment.interestRate?.toStringAsFixed(2) ?? '0'}% / năm';
 
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: isDark ? const Color(0xFF0F172A) : AppColors.background,
       appBar: AppBar(
-        backgroundColor: AppColors.background,
+        backgroundColor: Colors.transparent,
         elevation: 0,
         foregroundColor: const Color(0xFF00323D),
         titleSpacing: 0,
@@ -470,15 +474,11 @@ class _InvestmentDetailPageState extends State<InvestmentDetailPage> {
                                   );
 
                               if (!mounted) return;
-                              _showSuccessSnackBar('Rút lãi định kỳ thành công');
+                              showAppSnackBar(context, 'Rút lãi định kỳ thành công', icon: Icons.check_circle_rounded);
                               Navigator.pop(context, true);
                             } catch (e) {
                               if (!mounted) return;
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                    content: Text(e.toString()),
-                                    backgroundColor: Colors.red),
-                              );
+                              showAppSnackBar(context, getFriendlyError(e), isError: true);
                             } finally {
                               if (mounted) setState(() => _busy = false);
                             }
@@ -562,48 +562,7 @@ class _InvestmentDetailPageState extends State<InvestmentDetailPage> {
   }
 
   void _showSuccessSnackBar(String message) {
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          behavior: SnackBarBehavior.floating,
-          elevation: 8,
-          backgroundColor: const Color(0xFF1F9D55),
-          duration: const Duration(seconds: 2),
-          margin: const EdgeInsets.fromLTRB(18, 0, 18, 18),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
-          ),
-          content: Row(
-            children: [
-              Container(
-                width: 28,
-                height: 28,
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.18),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.check_rounded,
-                  color: Colors.white,
-                  size: 18,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  message,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
+    showAppSnackBar(context, message, icon: Icons.check_circle_rounded);
   }
 
   Widget _accountDropdown(
@@ -953,13 +912,11 @@ class _InvestmentDetailPageState extends State<InvestmentDetailPage> {
                                   );
 
                               if (!mounted) return;
-                              _showSuccessSnackBar('Rút trước hạn thành công');
+                              showAppSnackBar(context, 'Rút trước hạn thành công', icon: Icons.check_circle_rounded);
                               Navigator.pop(context, true);
                             } catch (e) {
                               if (!mounted) return;
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text(e.toString()), backgroundColor: Colors.red),
-                              );
+                              showAppSnackBar(context, getFriendlyError(e), isError: true);
                             } finally {
                               if (mounted) setState(() => _busy = false);
                             }
@@ -1058,18 +1015,13 @@ class _InvestmentDetailPageState extends State<InvestmentDetailPage> {
 
                               if (!mounted) return;
 
-                              _showSuccessSnackBar('Rút tiền thành công');
+                              showAppSnackBar(context, 'Rút tiền thành công', icon: Icons.check_circle_rounded);
 
                               Navigator.pop(context, true);
                             } catch (e) {
                               if (!mounted) return;
 
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(e.toString()),
-                                  backgroundColor: Colors.red,
-                                ),
-                              );
+                              showAppSnackBar(context, getFriendlyError(e), isError: true);
                             } finally {
                               if (mounted) {
                                 setState(() => _busy = false);
@@ -1174,20 +1126,13 @@ class _InvestmentDetailPageState extends State<InvestmentDetailPage> {
 
                               if (!mounted) return;
 
-                              _showSuccessSnackBar(
-                                'Rút lãi và gia hạn gốc thành công',
-                              );
+                              showAppSnackBar(context, 'Rút lãi và gia hạn gốc thành công', icon: Icons.check_circle_rounded);
 
                               Navigator.pop(context, true);
                             } catch (e) {
                               if (!mounted) return;
 
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(e.toString()),
-                                  backgroundColor: Colors.red,
-                                ),
-                              );
+                              showAppSnackBar(context, getFriendlyError(e), isError: true);
                             } finally {
                               if (mounted) {
                                 setState(() => _busy = false);

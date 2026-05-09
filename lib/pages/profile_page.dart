@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../auth/auth_provider.dart';
 import '../auth/login.dart';
+import '../core/theme/app_colors.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -46,8 +47,7 @@ class _ProfilePageState extends State<ProfilePage> {
   Future<void> _saveName() async {
     final newName = _nameCtrl.text.trim();
     if (newName.isEmpty) {
-      safeShowSnackBar(
-          context, const SnackBar(content: Text('Tên không được để trống')));
+      showAppSnackBar(context, 'Tên không được để trống', isError: true);
       _nameFocus.requestFocus();
       return;
     }
@@ -57,12 +57,10 @@ class _ProfilePageState extends State<ProfilePage> {
         final ok = await context.read<AuthProvider>().updateName(newName);
         if (ok) {
           if (!mounted) return;
-          safeShowSnackBar(context,
-              const SnackBar(content: Text('Cập nhật tên thành công')));
+          showAppSnackBar(context, 'Cập nhật tên thành công', icon: Icons.check_circle_rounded);
         } else {
           if (!mounted) return;
-          safeShowSnackBar(
-              context, const SnackBar(content: Text('Không thể cập nhật tên')));
+          showAppSnackBar(context, 'Không thể cập nhật tên', isError: true);
         }
       });
     } finally {
@@ -104,7 +102,7 @@ class _ProfilePageState extends State<ProfilePage> {
     await context.read<AuthProvider>().logout();
     if (!mounted) return;
     Navigator.pop(context); // quay lại trang trước (Settings)
-    safeShowSnackBar(context, const SnackBar(content: Text('Đã đăng xuất')));
+    showAppSnackBar(context, 'Đã đăng xuất', icon: Icons.logout_rounded);
   }
 
   @override
@@ -115,7 +113,7 @@ class _ProfilePageState extends State<ProfilePage> {
 
     if (!auth.isAuthenticated) {
       return Scaffold(
-        backgroundColor: isDark ? const Color(0xFF0F172A) : const Color(0xFFFAFBFE),
+        backgroundColor: isDark ? const Color(0xFF0F172A) : AppColors.background,
         appBar: AppBar(
           title: const Text('Thông tin tài khoản', style: TextStyle(fontWeight: FontWeight.w700)),
           backgroundColor: Colors.transparent,
@@ -141,7 +139,7 @@ class _ProfilePageState extends State<ProfilePage> {
     final email = user['email'] ?? '';
 
     return Scaffold(
-      backgroundColor: isDark ? const Color(0xFF0F172A) : const Color(0xFFFAFBFE),
+      backgroundColor: isDark ? const Color(0xFF0F172A) : AppColors.background,
       appBar: AppBar(
         title: Text('Thông tin tài khoản', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18, color: isDark ? Colors.white : const Color(0xFF1E293B))),
         backgroundColor: Colors.transparent,
@@ -349,8 +347,7 @@ class _ChangePasswordSheetState extends State<_ChangePasswordSheet> {
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
     if (_new.text.trim() != _confirm.text.trim()) {
-      safeShowSnackBar(context,
-          const SnackBar(content: Text('Xác nhận mật khẩu không khớp')));
+      showAppSnackBar(context, 'Xác nhận mật khẩu không khớp', isError: true);
       return;
     }
     setState(() => _submitting = true);
@@ -362,11 +359,9 @@ class _ChangePasswordSheetState extends State<_ChangePasswordSheet> {
       if (!mounted) return;
       if (ok) {
         Navigator.pop(context);
-        safeShowSnackBar(
-            context, const SnackBar(content: Text('Đổi mật khẩu thành công')));
+        showAppSnackBar(context, 'Đổi mật khẩu thành công', icon: Icons.check_circle_rounded);
       } else {
-        safeShowSnackBar(
-            context, const SnackBar(content: Text('Đổi mật khẩu thất bại')));
+        showAppSnackBar(context, 'Đổi mật khẩu thất bại', isError: true);
       }
     } finally {
       if (mounted) setState(() => _submitting = false);

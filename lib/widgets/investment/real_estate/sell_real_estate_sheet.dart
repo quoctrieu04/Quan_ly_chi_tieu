@@ -2,6 +2,7 @@ import 'package:chitieu/api/bankaccount/bank_account_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import 'package:chitieu/utils/safe_ui.dart';
 
 class SellRealEstateSheet extends StatefulWidget {
   final int realEstateId;
@@ -202,18 +203,12 @@ class _SellRealEstateSheetState extends State<SellRealEstateSheet> {
                     : () async {
                         final sellPrice = _parseMoney(_priceCtl.text);
                         if (sellPrice <= 0) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                                content: Text('Nhập giá bán hợp lệ')),
-                          );
+                          showAppSnackBar(context, 'Nhập giá bán hợp lệ', isError: true);
                           return;
                         }
                         final accountId = _accountTargetId ?? 0;
                         if (accountId <= 0) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                                content: Text('Chọn tài khoản nhận tiền')),
-                          );
+                          showAppSnackBar(context, 'Chọn tài khoản nhận tiền', isError: true);
                           return;
                         }
 

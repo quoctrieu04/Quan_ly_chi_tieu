@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:chitieu/utils/safe_ui.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -174,9 +175,7 @@ class _TransactionsPageState extends State<TransactionsPage> {
     if (date == null) {
       if (showError) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Nhap ngay theo dang 28, 28/04 hoac 28/04/2026'),
-          ),
+          appSnackBar('Nhập ngày theo dạng 28, 28/04 hoặc 28/04/2026', isError: true),
         );
       }
       return;
@@ -313,7 +312,7 @@ class _TransactionsPageState extends State<TransactionsPage> {
           color: cs.onSurface,
         ),
         decoration: InputDecoration(
-          hintText: 'Loc theo ngay: 28/04/2026',
+          hintText: 'Lọc theo ngày: 28/04/2026',
           hintStyle: TextStyle(
             color: cs.onSurface.withOpacity(.38),
             fontWeight: FontWeight.w500,
@@ -328,7 +327,7 @@ class _TransactionsPageState extends State<TransactionsPage> {
                   icon: Icon(Icons.close_rounded,
                       color: cs.onSurface.withOpacity(.45), size: 20),
                   onPressed: _clearDateFilter,
-                  tooltip: 'Bo loc ngay',
+                  tooltip: 'Bỏ lọc ngày',
                 ),
             ],
           ),

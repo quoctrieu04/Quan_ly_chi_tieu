@@ -1,6 +1,7 @@
 import 'package:chitieu/auth/auth_provider.dart';
 import 'package:chitieu/auth/login.dart';
 import 'package:chitieu/core/budget/budget_model.dart';
+import 'package:chitieu/utils/safe_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -325,9 +326,7 @@ class _BudgetsPageState extends State<BudgetsPage> {
         setState(() {});
       } catch (e) {
         final t = AppLocalizations.of(context)!;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${t.errorGeneric}: $e')),
-        );
+        showAppSnackBar(context, '${t.errorGeneric}: $e', isError: true);
       }
     }
   }
@@ -372,8 +371,10 @@ class _BudgetsPageState extends State<BudgetsPage> {
       }
     }
 
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: isDark ? const Color(0xFF0F172A) : AppColors.background,
       appBar: AppPageHeaderBar(
         icon: Icons.wallet_rounded,
         title: t.tabBudgets,

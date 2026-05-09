@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import 'package:chitieu/api/real_estate/real_estate_income_plan_provider.dart';
 import 'package:chitieu/api/bankaccount/bank_account_provider.dart';
+import 'package:chitieu/utils/safe_ui.dart';
 
 class RealEstateIncomePlanDetailPage extends StatefulWidget {
   final dynamic realEstate;
@@ -202,22 +203,7 @@ class _RealEstateIncomePlanDetailPageState
               await incomeProv.deletePlan();
 
               if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: const Row(
-                      children: [
-                        Icon(Icons.check_circle_outline, color: Colors.white),
-                        SizedBox(width: 12),
-                        Text('Đã xóa khoản thu thành công'),
-                      ],
-                    ),
-                    backgroundColor: Colors.green.shade600,
-                    behavior: SnackBarBehavior.floating,
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10)),
-                    margin: const EdgeInsets.all(16),
-                  ),
-                );
+                showAppSnackBar(context, 'Đã xóa khoản thu thành công', icon: Icons.check_circle_rounded);
                 // Thoát khỏi trang chi tiết khoản thu
                 Navigator.pop(context, true);
               }
@@ -415,11 +401,7 @@ class _RealEstateIncomePlanDetailPageState
                             } catch (e) {
                               if (!mounted) return;
 
-                              messenger.showSnackBar(
-                                SnackBar(
-                                  content: Text(e.toString().replaceFirst('Exception: ', '')),
-                                ),
-                              );
+                              showAppSnackBar(context, e.toString().replaceFirst('Exception: ', ''), isError: true);
                             }
                           },
                     child: Text(isEarly ? 'Xác nhận thu trước' : 'Xác nhận thu tiền'),
@@ -434,48 +416,7 @@ class _RealEstateIncomePlanDetailPageState
   }
 
   void _showSuccessSnackBar(String message) {
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          behavior: SnackBarBehavior.floating,
-          elevation: 8,
-          backgroundColor: const Color(0xFF1F9D55),
-          duration: const Duration(seconds: 2),
-          margin: const EdgeInsets.fromLTRB(18, 0, 18, 18),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
-          ),
-          content: Row(
-            children: [
-              Container(
-                width: 28,
-                height: 28,
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.18),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.check_rounded,
-                  color: Colors.white,
-                  size: 18,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  message,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
+    showAppSnackBar(context, message, icon: Icons.check_circle_rounded);
   }
 
   void _showSuccessDialog(String title, double amount, DateTime newDueDate) {

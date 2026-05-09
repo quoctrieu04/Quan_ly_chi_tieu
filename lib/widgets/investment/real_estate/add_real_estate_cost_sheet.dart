@@ -2,6 +2,7 @@ import 'package:chitieu/api/real_estate/real_estate_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:chitieu/utils/money_input_formatter.dart';
+import 'package:chitieu/utils/safe_ui.dart';
 
 class AddRealEstateCostSheet extends StatefulWidget {
   final int realEstateId;
@@ -133,8 +134,6 @@ class _AddRealEstateCostSheetState extends State<AddRealEstateCostSheet> {
   }
 
   void _toast(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg)),
-    );
+    showAppSnackBar(context, msg, isError: true);
   }
 }

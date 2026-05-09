@@ -1,5 +1,6 @@
 // lib/pages/allocate_money_page.dart
 import 'package:chitieu/l10n/app_localizations.dart';
+import 'package:chitieu/utils/safe_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
@@ -321,15 +322,11 @@ class _AllocateMoneyPageState extends State<AllocateMoneyPage> {
       await provider.loadForMonth(year: year, month: month);
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Đã lưu phân bổ')),
-        );
+        showAppSnackBar(context, 'Đã lưu phân bổ', icon: Icons.check_circle_rounded);
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Lưu phân bổ thất bại: $e')),
-        );
+        showAppSnackBar(context, 'Lưu phân bổ thất bại: $e', isError: true);
       }
     }
   }
@@ -342,9 +339,10 @@ class _AllocateMoneyPageState extends State<AllocateMoneyPage> {
     const iconBg = Color(0xFFE4F3F0);
     const chipBg = Color(0xFFEAF8F5);
     final textMuted = Colors.black.withOpacity(.58);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: isDark ? const Color(0xFF0F172A) : AppColors.background,
       appBar: AppBar(
         titleSpacing: 0,
         title: Text(

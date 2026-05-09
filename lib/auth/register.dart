@@ -1,3 +1,4 @@
+import 'package:chitieu/core/theme/app_colors.dart';
 import 'package:chitieu/utils/safe_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -15,8 +16,8 @@ class _RegisterPageState extends State<RegisterPage> {
   final _email = TextEditingController();
   final _pass = TextEditingController();
 
-  static const _mint = Color(0xFF2EC4B6);
-  static const _tealEdge = Color(0xFF14B8A6);
+  static const _mint = AppColors.primary;
+  static const _tealEdge = AppColors.primaryLight;
 
   @override
   Widget build(BuildContext context) {
@@ -24,7 +25,7 @@ class _RegisterPageState extends State<RegisterPage> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
-      backgroundColor: isDark ? const Color(0xFF0F172A) : const Color(0xFFFAFBFE),
+      backgroundColor: isDark ? AppColors.darkBackground : AppColors.background,
       appBar: AppBar(
         elevation: 0,
         backgroundColor: Colors.transparent,
@@ -39,7 +40,8 @@ class _RegisterPageState extends State<RegisterPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const Icon(Icons.person_add_alt_1_rounded, size: 80, color: _mint),
+                const Icon(Icons.person_add_alt_1_rounded,
+                    size: 80, color: _mint),
                 const SizedBox(height: 24),
                 Text(
                   'Tạo tài khoản mới',
@@ -66,7 +68,8 @@ class _RegisterPageState extends State<RegisterPage> {
                   icon: Icons.badge_rounded,
                   label: 'Họ tên',
                   isDark: isDark,
-                  validator: (v) => (v == null || v.isEmpty) ? 'Nhập họ tên' : null,
+                  validator: (v) =>
+                      (v == null || v.isEmpty) ? 'Nhập họ tên' : null,
                 ),
                 const SizedBox(height: 16),
                 _buildTextField(
@@ -74,7 +77,8 @@ class _RegisterPageState extends State<RegisterPage> {
                   icon: Icons.email_rounded,
                   label: 'Email',
                   isDark: isDark,
-                  validator: (v) => (v == null || v.isEmpty) ? 'Nhập email hợp lệ' : null,
+                  validator: (v) =>
+                      (v == null || v.isEmpty) ? 'Nhập email hợp lệ' : null,
                 ),
                 const SizedBox(height: 16),
                 _buildTextField(
@@ -83,7 +87,9 @@ class _RegisterPageState extends State<RegisterPage> {
                   label: 'Mật khẩu',
                   obscure: true,
                   isDark: isDark,
-                  validator: (v) => (v == null || v.length < 6) ? 'Mật khẩu phải từ 6 ký tự' : null,
+                  validator: (v) => (v == null || v.length < 6)
+                      ? 'Mật khẩu phải từ 6 ký tự'
+                      : null,
                 ),
                 const SizedBox(height: 24),
                 if (auth.error != null)
@@ -95,9 +101,15 @@ class _RegisterPageState extends State<RegisterPage> {
                     ),
                     child: Row(
                       children: [
-                        const Icon(Icons.error_outline_rounded, color: Colors.red, size: 22),
+                        const Icon(Icons.error_outline_rounded,
+                            color: Colors.red, size: 22),
                         const SizedBox(width: 10),
-                        Expanded(child: Text(auth.error!, style: const TextStyle(color: Colors.red, fontWeight: FontWeight.w600, fontSize: 13))),
+                        Expanded(
+                            child: Text(auth.error!,
+                                style: const TextStyle(
+                                    color: Colors.red,
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 13))),
                       ],
                     ),
                   ),
@@ -108,7 +120,10 @@ class _RegisterPageState extends State<RegisterPage> {
                     borderRadius: BorderRadius.circular(16),
                     gradient: const LinearGradient(colors: [_tealEdge, _mint]),
                     boxShadow: [
-                      BoxShadow(color: _mint.withOpacity(0.3), blurRadius: 12, offset: const Offset(0, 6)),
+                      BoxShadow(
+                          color: _mint.withOpacity(0.3),
+                          blurRadius: 12,
+                          offset: const Offset(0, 6)),
                     ],
                   ),
                   child: ElevatedButton(
@@ -116,30 +131,52 @@ class _RegisterPageState extends State<RegisterPage> {
                         ? null
                         : () async {
                             if (!_f.currentState!.validate()) return;
-                            final ok = await context.read<AuthProvider>().register(_name.text, _email.text, _pass.text);
+                            final ok = await context
+                                .read<AuthProvider>()
+                                .register(_name.text, _email.text, _pass.text);
                             if (ok && mounted) {
-                              safeShowSnackBar(context, const SnackBar(content: Text('Đăng ký thành công!', style: TextStyle(fontWeight: FontWeight.bold))));
+                              showAppSnackBar(context, 'Đăng ký thành công!', icon: Icons.check_circle_rounded);
                               Navigator.pop(context);
                             }
                           },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.transparent,
                       shadowColor: Colors.transparent,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16)),
                     ),
                     child: auth.loading
-                        ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 3))
-                        : const Text('TẠO TÀI KHOẢN', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Colors.white, letterSpacing: 1)),
+                        ? const SizedBox(
+                            width: 24,
+                            height: 24,
+                            child: CircularProgressIndicator(
+                                color: Colors.white, strokeWidth: 3))
+                        : const Text('TẠO TÀI KHOẢN',
+                            style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w800,
+                                color: Colors.white,
+                                letterSpacing: 1)),
                   ),
                 ),
                 const SizedBox(height: 32),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Text('Đã có tài khoản? ', style: TextStyle(color: isDark ? Colors.white60 : const Color(0xFF64748B), fontSize: 15, fontWeight: FontWeight.w500)),
+                    Text('Đã có tài khoản? ',
+                        style: TextStyle(
+                            color: isDark
+                                ? Colors.white60
+                                : const Color(0xFF64748B),
+                            fontSize: 15,
+                            fontWeight: FontWeight.w500)),
                     GestureDetector(
                       onTap: () => Navigator.pop(context),
-                      child: const Text('Đăng nhập', style: TextStyle(color: _mint, fontWeight: FontWeight.w800, fontSize: 15)),
+                      child: const Text('Đăng nhập',
+                          style: TextStyle(
+                              color: _mint,
+                              fontWeight: FontWeight.w800,
+                              fontSize: 15)),
                     ),
                   ],
                 ),
@@ -163,16 +200,22 @@ class _RegisterPageState extends State<RegisterPage> {
       controller: controller,
       obscureText: obscure,
       validator: validator,
-      style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontWeight: FontWeight.w600),
+      style: TextStyle(
+          color: isDark ? Colors.white : Colors.black87,
+          fontWeight: FontWeight.w600),
       decoration: InputDecoration(
         labelText: label,
-        labelStyle: TextStyle(color: isDark ? Colors.white54 : Colors.black54, fontWeight: FontWeight.w500),
+        labelStyle: TextStyle(
+            color: isDark ? Colors.white54 : Colors.black54,
+            fontWeight: FontWeight.w500),
         prefixIcon: Icon(icon, color: _mint),
         filled: true,
         fillColor: isDark ? const Color(0xFF1E293B) : Colors.white,
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide(color: isDark ? Colors.white10 : const Color(0xFFE2E8F0), width: 1.5),
+          borderSide: BorderSide(
+              color: isDark ? Colors.white10 : const Color(0xFFE2E8F0),
+              width: 1.5),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),

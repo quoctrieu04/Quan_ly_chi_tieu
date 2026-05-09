@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:chitieu/utils/safe_ui.dart';
 import 'package:chitieu/l10n/app_localizations.dart';
 import 'package:chitieu/api/income/income_provider.dart';
 import 'package:chitieu/core/date/year_month_provider.dart';
+import 'package:chitieu/core/theme/app_colors.dart';
 
 class CreateIncomeForm extends StatefulWidget {
   const CreateIncomeForm({super.key});
@@ -72,7 +74,7 @@ class _CreateIncomeFormState extends State<CreateIncomeForm> {
           const Duration(seconds: 2), messenger.hideCurrentMaterialBanner);
     } else {
       final err = incomeProv.error ?? t.somethingWrong;
-      messenger.showSnackBar(SnackBar(content: Text(err)));
+      showAppSnackBar(context, err, isError: true);
     }
   }
 
@@ -80,7 +82,7 @@ class _CreateIncomeFormState extends State<CreateIncomeForm> {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bgColor = isDark ? cs.surface : const Color(0xFFFAFBFE);
+    final bgColor = isDark ? cs.surface : AppColors.background;
 
     return Container(
       decoration: BoxDecoration(

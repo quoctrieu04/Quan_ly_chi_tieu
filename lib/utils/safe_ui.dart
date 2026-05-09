@@ -26,6 +26,7 @@ SnackBar appSnackBar(
   IconData? icon,
   bool isError = false,
   Duration duration = const Duration(seconds: 3),
+  SnackBarAction? action,
 }) {
   final bg = isError ? const Color(0xFFB91C1C) : const Color(0xFF172033);
   final accent = isError ? const Color(0xFFFEE2E2) : const Color(0xFFEAF5FF);
@@ -37,6 +38,7 @@ SnackBar appSnackBar(
     elevation: 8,
     backgroundColor: bg,
     duration: duration,
+    action: action,
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
     content: Row(
       children: [
@@ -91,10 +93,11 @@ void showAppSnackBar(
   String message, {
   IconData? icon,
   bool isError = false,
+  SnackBarAction? action,
 }) {
   safeShowSnackBar(
     context,
-    appSnackBar(message, icon: icon, isError: isError),
+    appSnackBar(message, icon: icon, isError: isError, action: action),
   );
 }
 

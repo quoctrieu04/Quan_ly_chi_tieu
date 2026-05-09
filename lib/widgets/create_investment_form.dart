@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter/services.dart';
+import 'package:chitieu/utils/safe_ui.dart';
 
 import 'package:chitieu/api/investment/investment_provider.dart';
 import 'package:chitieu/api/bankaccount/bank_account_provider.dart';
@@ -96,9 +97,7 @@ class _CreateInvestmentFormState extends State<CreateInvestmentForm> {
   }
 
   void _showMessage(String msg) {
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(msg)));
+    showAppSnackBar(context, msg, icon: Icons.check_circle_rounded);
   }
 
   @override

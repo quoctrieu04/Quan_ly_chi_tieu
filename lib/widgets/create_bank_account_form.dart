@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter/services.dart';
+import 'package:chitieu/utils/safe_ui.dart';
 import 'package:intl/intl.dart';
 import 'package:chitieu/api/bankaccount/bank_account_provider.dart';
 import 'package:chitieu/core/theme/app_colors.dart';
@@ -169,7 +170,6 @@ class _CreateBankAccountFormState extends State<CreateBankAccountForm> {
                       _buildField(
                         controller: _titleCtrl,
                         label: 'Tên tài khoản',
-                        icon: Icons.badge_outlined,
                         cs: cs,
                         isDark: isDark,
                         textInputAction: TextInputAction.next,
@@ -183,7 +183,6 @@ class _CreateBankAccountFormState extends State<CreateBankAccountForm> {
                       _buildField(
                         controller: _bankNameCtrl,
                         label: 'Tên ngân hàng / ví',
-                        icon: Icons.account_balance_outlined,
                         cs: cs,
                         isDark: isDark,
                         textInputAction: TextInputAction.next,
@@ -194,7 +193,6 @@ class _CreateBankAccountFormState extends State<CreateBankAccountForm> {
                       _buildField(
                         controller: _bankNumberCtrl,
                         label: 'Số tài khoản',
-                        icon: Icons.credit_card_rounded,
                         cs: cs,
                         isDark: isDark,
                         textInputAction: TextInputAction.next,
@@ -206,7 +204,6 @@ class _CreateBankAccountFormState extends State<CreateBankAccountForm> {
                       _buildField(
                         controller: _initAmountCtrl,
                         label: 'Số dư ban đầu',
-                        icon: Icons.account_balance_wallet_outlined,
                         cs: cs,
                         isDark: isDark,
                         suffixText: 'đ',
@@ -227,61 +224,27 @@ class _CreateBankAccountFormState extends State<CreateBankAccountForm> {
                       const SizedBox(height: 12),
 
                       // ── Loại tiền ──
-                      Container(
-                        decoration: BoxDecoration(
-                          color:
-                              isDark ? cs.surfaceContainerHigh : Colors.white,
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(
-                            color: isDark
-                                ? cs.outlineVariant.withOpacity(.08)
-                                : const Color(0xFFECEDF2),
-                          ),
+                      DropdownButtonFormField<String>(
+                        value: _currency,
+                        decoration: _underlineDecoration(
+                          label: 'Loại tiền',
+                          cs: cs,
+                          isDark: isDark,
                         ),
-                        child: DropdownButtonFormField<String>(
-                          value: _currency,
-                          decoration: InputDecoration(
-                            labelText: 'Loại tiền',
-                            floatingLabelBehavior: FloatingLabelBehavior.never,
-                            labelStyle: TextStyle(
-                              color: cs.primary.withOpacity(.7),
-                              fontWeight: FontWeight.w600,
-                              fontSize: 14,
-                            ),
-                            filled: true,
-                            fillColor: Colors.transparent,
-                            contentPadding:
-                                const EdgeInsets.fromLTRB(18, 16, 14, 16),
-                            prefixIcon: Padding(
-                              padding:
-                                  const EdgeInsets.only(left: 14, right: 10),
-                              child: Icon(Icons.currency_exchange_rounded,
-                                  color: cs.primary, size: 22),
-                            ),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(16),
-                              borderSide: BorderSide.none,
-                            ),
-                            enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(16),
-                              borderSide: BorderSide.none,
-                            ),
-                          ),
-                          icon: Icon(Icons.expand_more_rounded,
-                              color: cs.onSurface.withOpacity(.4)),
-                          borderRadius: BorderRadius.circular(14),
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w600,
-                            color: cs.onSurface,
-                          ),
-                          items: const [
-                            DropdownMenuItem(value: 'VND', child: Text('VND')),
-                            DropdownMenuItem(value: 'USD', child: Text('USD')),
-                          ],
-                          onChanged: (v) =>
-                              setState(() => _currency = v ?? 'VND'),
+                        icon: Icon(Icons.expand_more_rounded,
+                            color: cs.onSurface.withOpacity(.55)),
+                        borderRadius: BorderRadius.circular(14),
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: cs.onSurface,
                         ),
+                        items: const [
+                          DropdownMenuItem(value: 'VND', child: Text('VND')),
+                          DropdownMenuItem(value: 'USD', child: Text('USD')),
+                        ],
+                        onChanged: (v) =>
+                            setState(() => _currency = v ?? 'VND'),
                       ),
                       const SizedBox(height: 24),
 
@@ -304,7 +267,6 @@ class _CreateBankAccountFormState extends State<CreateBankAccountForm> {
   Widget _buildField({
     required TextEditingController controller,
     required String label,
-    required IconData icon,
     required ColorScheme cs,
     required bool isDark,
     String? suffixText,
@@ -323,57 +285,62 @@ class _CreateBankAccountFormState extends State<CreateBankAccountForm> {
         fontWeight: FontWeight.w600,
         color: cs.onSurface,
       ),
-      decoration: InputDecoration(
-        labelText: label,
-        floatingLabelBehavior: FloatingLabelBehavior.never,
-        labelStyle: TextStyle(
-          color: cs.primary.withOpacity(.7),
-          fontWeight: FontWeight.w600,
-          fontSize: 14,
-        ),
+      decoration: _underlineDecoration(
+        label: label,
+        cs: cs,
+        isDark: isDark,
         suffixText: suffixText,
-        suffixStyle: TextStyle(
-          color: cs.onSurface.withOpacity(.5),
-          fontWeight: FontWeight.w700,
-          fontSize: 15,
-        ),
-        filled: true,
-        fillColor: isDark ? cs.surfaceContainerHigh : Colors.white,
-        contentPadding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
-        prefixIcon: Padding(
-          padding: const EdgeInsets.only(left: 14, right: 10),
-          child: Icon(icon, color: cs.primary, size: 22),
-        ),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide(
-            color: isDark
-                ? cs.outlineVariant.withOpacity(.08)
-                : const Color(0xFFECEDF2),
-          ),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide(
-            color: isDark
-                ? cs.outlineVariant.withOpacity(.08)
-                : const Color(0xFFECEDF2),
-          ),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide(color: cs.primary, width: 2),
-        ),
-        errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide(color: cs.error, width: 1.5),
-        ),
-        focusedErrorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide(color: cs.error, width: 2),
-        ),
       ),
       validator: validator,
+    );
+  }
+
+  InputDecoration _underlineDecoration({
+    required String label,
+    required ColorScheme cs,
+    required bool isDark,
+    String? suffixText,
+  }) {
+    final lineColor =
+        isDark ? cs.outlineVariant.withOpacity(.45) : const Color(0xFF98A2B3);
+
+    return InputDecoration(
+      labelText: label,
+      floatingLabelBehavior: FloatingLabelBehavior.auto,
+      labelStyle: TextStyle(
+        color: cs.onSurface.withOpacity(.55),
+        fontWeight: FontWeight.w500,
+        fontSize: 15,
+      ),
+      floatingLabelStyle: TextStyle(
+        color: cs.onSurface.withOpacity(.55),
+        fontWeight: FontWeight.w500,
+        fontSize: 13,
+      ),
+      suffixText: suffixText,
+      suffixStyle: TextStyle(
+        color: cs.onSurface.withOpacity(.55),
+        fontWeight: FontWeight.w700,
+        fontSize: 15,
+      ),
+      filled: false,
+      isDense: false,
+      contentPadding: const EdgeInsets.fromLTRB(0, 10, 0, 8),
+      border: UnderlineInputBorder(
+        borderSide: BorderSide(color: lineColor, width: 1),
+      ),
+      enabledBorder: UnderlineInputBorder(
+        borderSide: BorderSide(color: lineColor, width: 1),
+      ),
+      focusedBorder: UnderlineInputBorder(
+        borderSide: BorderSide(color: cs.primary, width: 1.4),
+      ),
+      errorBorder: UnderlineInputBorder(
+        borderSide: BorderSide(color: cs.error, width: 1.2),
+      ),
+      focusedErrorBorder: UnderlineInputBorder(
+        borderSide: BorderSide(color: cs.error, width: 1.4),
+      ),
     );
   }
 
@@ -438,11 +405,7 @@ class _CreateBankAccountFormState extends State<CreateBankAccountForm> {
                   if (success) {
                     Navigator.pop(context, true);
                   } else {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Tạo tài khoản không thành công'),
-                      ),
-                    );
+                    showAppSnackBar(context, 'Tạo tài khoản không thành công', isError: true);
                   }
                 },
           icon: AnimatedSwitcher(

@@ -1,3 +1,4 @@
+import 'package:chitieu/core/theme/app_colors.dart';
 import 'package:chitieu/utils/safe_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -26,10 +27,12 @@ class _LoginPageState extends State<LoginPage> {
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
     // Màu teal chủ đạo giống hình
-    const primaryColor = Color(0xFF14B8A6);
+    const primaryColor = AppColors.primary;
+
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: isDark ? const Color(0xFF0F172A) : AppColors.background,
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
@@ -47,7 +50,8 @@ class _LoginPageState extends State<LoginPage> {
                     color: primaryColor,
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(Icons.person, size: 50, color: Colors.white),
+                  child:
+                      const Icon(Icons.person, size: 50, color: Colors.white),
                 ),
                 const SizedBox(height: 24),
                 // Tiêu đề
@@ -74,18 +78,21 @@ class _LoginPageState extends State<LoginPage> {
                   controller: _email,
                   decoration: InputDecoration(
                     hintText: 'Email',
-                    hintStyle: const TextStyle(color: Color(0xFF9CA3AF)),
-                    prefixIcon: const Icon(Icons.email_rounded, color: primaryColor),
+                    hintStyle: const TextStyle(color: AppColors.textSub),
+                    prefixIcon:
+                        const Icon(Icons.email_rounded, color: primaryColor),
                     contentPadding: const EdgeInsets.symmetric(vertical: 18),
                     filled: true,
                     fillColor: Colors.white,
                     enabledBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
-                      borderSide: const BorderSide(color: Color(0xFFE5E7EB), width: 1.5),
+                      borderSide:
+                          const BorderSide(color: AppColors.border, width: 1.5),
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
-                      borderSide: const BorderSide(color: primaryColor, width: 2),
+                      borderSide:
+                          const BorderSide(color: primaryColor, width: 2),
                     ),
                     errorBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
@@ -96,7 +103,9 @@ class _LoginPageState extends State<LoginPage> {
                       borderSide: const BorderSide(color: Colors.red, width: 2),
                     ),
                   ),
-                  validator: (v) => (v == null || v.isEmpty) ? 'Vui lòng nhập tài khoản' : null,
+                  validator: (v) => (v == null || v.isEmpty)
+                      ? 'Vui lòng nhập tài khoản'
+                      : null,
                 ),
                 const SizedBox(height: 20),
 
@@ -106,18 +115,21 @@ class _LoginPageState extends State<LoginPage> {
                   obscureText: true,
                   decoration: InputDecoration(
                     hintText: 'Mật khẩu',
-                    hintStyle: const TextStyle(color: Color(0xFF9CA3AF)),
-                    prefixIcon: const Icon(Icons.lock_rounded, color: primaryColor),
+                    hintStyle: const TextStyle(color: AppColors.textSub),
+                    prefixIcon:
+                        const Icon(Icons.lock_rounded, color: primaryColor),
                     contentPadding: const EdgeInsets.symmetric(vertical: 18),
                     filled: true,
                     fillColor: Colors.white,
                     enabledBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
-                      borderSide: const BorderSide(color: Color(0xFFE5E7EB), width: 1.5),
+                      borderSide:
+                          const BorderSide(color: AppColors.border, width: 1.5),
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
-                      borderSide: const BorderSide(color: primaryColor, width: 2),
+                      borderSide:
+                          const BorderSide(color: primaryColor, width: 2),
                     ),
                     errorBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
@@ -128,16 +140,20 @@ class _LoginPageState extends State<LoginPage> {
                       borderSide: const BorderSide(color: Colors.red, width: 2),
                     ),
                   ),
-                  validator: (v) => (v == null || v.length < 6) ? 'Mật khẩu phải từ 6 ký tự' : null,
+                  validator: (v) => (v == null || v.length < 6)
+                      ? 'Mật khẩu phải từ 6 ký tự'
+                      : null,
                 ),
-                
+
                 const SizedBox(height: 8),
                 if (auth.error != null)
                   Padding(
                     padding: const EdgeInsets.only(top: 8),
-                    child: Text(auth.error!, style: const TextStyle(color: Colors.red, fontWeight: FontWeight.w500)),
+                    child: Text(auth.error!,
+                        style: const TextStyle(
+                            color: Colors.red, fontWeight: FontWeight.w500)),
                   ),
-                
+
                 const SizedBox(height: 32),
 
                 // Nút ĐĂNG NHẬP màu teal
@@ -156,9 +172,11 @@ class _LoginPageState extends State<LoginPage> {
                         ? null
                         : () async {
                             if (!_f.currentState!.validate()) return;
-                            final ok = await context.read<AuthProvider>().login(_email.text, _pass.text);
+                            final ok = await context
+                                .read<AuthProvider>()
+                                .login(_email.text, _pass.text);
                             if (ok && mounted) {
-                              safeShowSnackBar(context, const SnackBar(content: Text('Đăng nhập thành công')));
+                              showAppSnackBar(context, 'Đăng nhập thành công', icon: Icons.check_circle_rounded);
                             }
                           },
                     style: ElevatedButton.styleFrom(
@@ -171,7 +189,11 @@ class _LoginPageState extends State<LoginPage> {
                       elevation: 0,
                     ),
                     child: auth.loading
-                        ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5))
+                        ? const SizedBox(
+                            width: 24,
+                            height: 24,
+                            child: CircularProgressIndicator(
+                                color: Colors.white, strokeWidth: 2.5))
                         : const Text(
                             'ĐĂNG NHẬP',
                             style: TextStyle(
@@ -187,7 +209,8 @@ class _LoginPageState extends State<LoginPage> {
 
                 // Đăng ký ngay
                 GestureDetector(
-                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const RegisterPage())),
+                  onTap: () => Navigator.push(context,
+                      MaterialPageRoute(builder: (_) => const RegisterPage())),
                   child: RichText(
                     text: const TextSpan(
                       text: 'Chưa có tài khoản? ',
@@ -211,18 +234,21 @@ class _LoginPageState extends State<LoginPage> {
                 // Dòng Hoặc
                 const Row(
                   children: [
-                    Expanded(child: Divider(color: Color(0xFFE5E7EB), thickness: 1)),
+                    Expanded(
+                        child: Divider(color: AppColors.border, thickness: 1)),
                     Padding(
                       padding: EdgeInsets.symmetric(horizontal: 16),
                       child: Text(
                         'Hoặc',
-                        style: TextStyle(color: Color(0xFF9CA3AF), fontSize: 14),
+                        style:
+                            TextStyle(color: AppColors.textSub, fontSize: 14),
                       ),
                     ),
-                    Expanded(child: Divider(color: Color(0xFFE5E7EB), thickness: 1)),
+                    Expanded(
+                        child: Divider(color: AppColors.border, thickness: 1)),
                   ],
                 ),
-                
+
                 const SizedBox(height: 24),
 
                 // Nút Google
@@ -230,15 +256,17 @@ class _LoginPageState extends State<LoginPage> {
                   onPressed: auth.loading
                       ? null
                       : () async {
-                          final ok = await context.read<AuthProvider>().loginWithGoogle();
+                          final ok = await context
+                              .read<AuthProvider>()
+                              .loginWithGoogle();
                           if (ok && mounted) {
-                            safeShowSnackBar(context, const SnackBar(content: Text('Đăng nhập Google thành công')));
+                            showAppSnackBar(context, 'Đăng nhập Google thành công', icon: Icons.check_circle_rounded);
                           }
                         },
                   style: OutlinedButton.styleFrom(
                     backgroundColor: Colors.white,
                     minimumSize: const Size(double.infinity, 56),
-                    side: const BorderSide(color: Color(0xFFE5E7EB), width: 1.5),
+                    side: const BorderSide(color: AppColors.border, width: 1.5),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),

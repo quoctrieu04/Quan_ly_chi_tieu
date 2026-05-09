@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import 'package:chitieu/api/investment/investment_model.dart';
 import 'package:chitieu/api/investment/investment_provider.dart';
+import 'package:chitieu/utils/safe_ui.dart';
 
 class BankRenewForm extends StatefulWidget {
   final Investment baseInvestment;
@@ -114,12 +115,7 @@ class _BankRenewFormState extends State<BankRenewForm> {
       Navigator.pop(context, true);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(e.toString()),
-          backgroundColor: Colors.red,
-        ),
-      );
+      showAppSnackBar(context, e.toString(), isError: true);
     } finally {
       if (mounted) setState(() => _busy = false);
     }

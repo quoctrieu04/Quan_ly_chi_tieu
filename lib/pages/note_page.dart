@@ -7,7 +7,6 @@ import 'package:chitieu/utils/safe_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
-import 'package:diacritic/diacritic.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -17,7 +16,7 @@ import 'package:chitieu/l10n/app_localizations.dart';
 import 'package:chitieu/api/category/category_provider.dart';
 import 'package:chitieu/api/category/category_model.dart';
 import 'package:chitieu/core/budget/budgets_provider.dart';
-import 'package:chitieu/core/money/widgets/money_text.dart';
+
 import 'package:chitieu/api/bankaccount/bank_account_provider.dart';
 import 'package:chitieu/api/income/income_provider.dart';
 import 'package:chitieu/api/income/income_model.dart';
@@ -27,11 +26,19 @@ import 'package:chitieu/api/out_invoice/out_invoice_model.dart';
 import 'package:chitieu/financial_transaction/financial_transaction_provider.dart';
 
 // VOICE
-import 'package:chitieu/api/ai/stt_service.dart';
 import 'package:chitieu/api/ai/voice_intent.dart';
-import 'package:chitieu/api/ai/tts_service.dart';
+import 'package:chitieu/utils/math_utils.dart';
+import 'package:chitieu/pages/note_voice_controller.dart';
+import 'package:chitieu/widgets/note/note_guide_dialog.dart';
+import 'package:chitieu/widgets/note/tool_chip.dart';
+import 'package:chitieu/widgets/note/wallet_picker_sheet.dart';
+import 'package:chitieu/widgets/note/category_picker_sheet.dart';
+import 'package:chitieu/widgets/note/voice_confirm_dialog.dart';
 
-enum FlowType { out, in_ }
+
+import 'package:chitieu/widgets/note/voice_caption.dart';
+import 'package:chitieu/widgets/note/flow_segmented.dart';
+import 'package:chitieu/widgets/note/keypad_bar.dart';
 
 class NotePage extends StatefulWidget {
   final bool autoVoice;
@@ -40,92 +47,6 @@ class NotePage extends StatefulWidget {
 
   @override
   State<NotePage> createState() => _NotePageState();
-}
-
-class _NoteGuideStep {
-  const _NoteGuideStep({
-    required this.icon,
-    required this.title,
-    required this.message,
-  });
-
-  final IconData icon;
-  final String title;
-  final String message;
-}
-
-class _NoteGuideDialog extends StatelessWidget {
-  const _NoteGuideDialog({required this.step});
-
-  final _NoteGuideStep step;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
-    return Dialog(
-      insetPadding: const EdgeInsets.symmetric(horizontal: 28),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 22, 20, 18),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 52,
-              height: 52,
-              decoration: BoxDecoration(
-                color: cs.primary.withOpacity(.12),
-                borderRadius: BorderRadius.circular(18),
-              ),
-              child: Icon(step.icon, color: cs.primary, size: 28),
-            ),
-            const SizedBox(height: 14),
-            Text(
-              step.title,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.w900,
-                color: Color(0xFF111827),
-              ),
-            ),
-            const SizedBox(height: 10),
-            Text(
-              step.message,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontSize: 14,
-                height: 1.4,
-                fontWeight: FontWeight.w600,
-                color: Color(0xFF667085),
-              ),
-            ),
-            const SizedBox(height: 20),
-            SizedBox(
-              width: double.infinity,
-              height: 46,
-              child: FilledButton(
-                onPressed: () => Navigator.of(context).pop(),
-                style: FilledButton.styleFrom(
-                  backgroundColor: cs.primary,
-                  foregroundColor: cs.onPrimary,
-                  textStyle: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w900,
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                ),
-                child: const Text('Đã hiểu'),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 }
 
 class _NotePageState extends State<NotePage> {
@@ -162,21 +83,18 @@ class _NotePageState extends State<NotePage> {
   XFile? _pickedPhoto;
 
   // ================= VOICE =================
-  late final SttService _stt;
-  late final VoiceIntentParser _parser;
-  late final TtsService _tts;
-  bool _listening = false;
-  String _voiceText = '';
+  late final NoteVoiceController _voiceController;
   String? _originalVoiceInput;
 
   @override
   void initState() {
     super.initState();
-    _stt = SttService();
-    _parser = VoiceIntentParser();
-    _tts = TtsService();
-    _stt.init();
-    _tts.init();
+    _voiceController = NoteVoiceController();
+    _voiceController.init();
+    
+    _voiceController.addListener(() {
+      if (mounted) setState(() {});
+    });
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _showFirstUseGuideThenAutoAction();
@@ -199,26 +117,26 @@ class _NotePageState extends State<NotePage> {
     final seen = prefs.getBool(_noteGuideSeenKey) ?? false;
 
     if (!seen && mounted) {
-      final steps = <_NoteGuideStep>[
-        const _NoteGuideStep(
+      final steps = <NoteGuideStep>[
+        const NoteGuideStep(
           icon: Icons.edit_note_rounded,
           title: 'Nhập thường',
           message:
               'Chọn Thu hoặc Chi, nhập số tiền bằng bàn phím, ghi chú nội dung nếu cần rồi chọn danh mục và tài khoản trước khi lưu.',
         ),
-        const _NoteGuideStep(
+        const NoteGuideStep(
           icon: Icons.mic_none_rounded,
           title: 'Nhập bằng giọng nói',
           message:
               'Hãy nói đủ số tiền, nội dung, danh mục hoặc nguồn thu và tài khoản. Ví dụ: "Chi 40 nghìn ăn uống bằng tiền mặt" hoặc "Thu 5 triệu lương vào ngân hàng".',
         ),
-        const _NoteGuideStep(
+        const NoteGuideStep(
           icon: Icons.camera_alt_outlined,
           title: 'Chụp ảnh',
           message:
               'Chụp hóa đơn hoặc ảnh liên quan cho khoản chi. Ảnh sẽ được lưu kèm giao dịch; bạn vẫn cần kiểm tra số tiền, ghi chú, danh mục và tài khoản chi.',
         ),
-        const _NoteGuideStep(
+        const NoteGuideStep(
           icon: Icons.account_balance_wallet_rounded,
           title: 'Danh mục và tài khoản',
           message:
@@ -231,7 +149,7 @@ class _NotePageState extends State<NotePage> {
         await showDialog<void>(
           context: context,
           barrierDismissible: false,
-          builder: (_) => _NoteGuideDialog(step: step),
+          builder: (_) => NoteGuideDialog(step: step),
         );
       }
 
@@ -252,18 +170,15 @@ class _NotePageState extends State<NotePage> {
   @override
   void dispose() {
     _noteCtl.dispose();
-    _stt.stop();
-    _tts.dispose();
+    _voiceController.dispose();
     super.dispose();
   }
 
   Future<void> _cancelAll() async {
-    await _stt.stop();
+    await _voiceController.stop();
 
     setState(() {
       _forceCancel = true;
-      _listening = false;
-      _voiceText = '';
       amount = '';
       selectedCategory = null;
       selectedWallet = null;
@@ -271,8 +186,6 @@ class _NotePageState extends State<NotePage> {
       _noteText = '';
       _pickedPhoto = null;
     });
-
-    await _tts.say('Đã hủy giao dịch.');
 
     if (mounted) {
       Navigator.pop(context);
@@ -296,181 +209,189 @@ class _NotePageState extends State<NotePage> {
 
   /* ================= VOICE HANDLER ================= */
   Future<void> _toggleListening() async {
-    if (_listening) {
-      await _stt.stop();
-      setState(() => _listening = false);
-      return;
-    }
+    await _voiceController.toggleListening(
+      context: context,
+      currentType: type,
+      onEmptySpeech: () {
+        if (!mounted) return;
+        final cs = Theme.of(context).colorScheme;
+        showGeneralDialog(
+          context: context,
+          barrierDismissible: true,
+          barrierLabel: 'voice_retry',
+          barrierColor: Colors.black54,
+          transitionDuration: const Duration(milliseconds: 300),
+          transitionBuilder: (_, anim, __, child) {
+            return ScaleTransition(
+              scale: CurvedAnimation(parent: anim, curve: Curves.easeOutBack),
+              child: FadeTransition(opacity: anim, child: child),
+            );
+          },
+          pageBuilder: (ctx, _, __) {
+            return Center(
+              child: Material(
+                color: Colors.transparent,
+                child: Container(
+                  width: 300,
+                  padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 32),
+                  decoration: BoxDecoration(
+                    color: cs.surface,
+                    borderRadius: BorderRadius.circular(28),
+                    boxShadow: [
+                      BoxShadow(
+                        color: cs.primary.withValues(alpha: 0.18),
+                        blurRadius: 32,
+                        offset: const Offset(0, 12),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Animated mic icon
+                      Container(
+                        width: 72,
+                        height: 72,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: LinearGradient(
+                            colors: [
+                              cs.primary.withValues(alpha: 0.15),
+                              cs.primary.withValues(alpha: 0.06),
+                            ],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                        ),
+                        child: Icon(
+                          Icons.mic_off_rounded,
+                          size: 36,
+                          color: cs.primary,
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      Text(
+                        'Không nghe rõ',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w800,
+                          color: cs.onSurface,
+                          letterSpacing: -0.3,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        'Có vẻ mình chưa bắt được giọng nói của bạn.\nVui lòng thử lại nhé!',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: cs.onSurface.withValues(alpha: 0.6),
+                          height: 1.5,
+                        ),
+                      ),
+                      const SizedBox(height: 28),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 48,
+                        child: FilledButton.icon(
+                          onPressed: () {
+                            Navigator.pop(ctx);
+                            _toggleListening();
+                          },
+                          icon: const Icon(Icons.mic_rounded, size: 20),
+                          label: const Text(
+                            'Thử lại',
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          style: FilledButton.styleFrom(
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      TextButton(
+                        onPressed: () => Navigator.pop(ctx),
+                        child: Text(
+                          'Bỏ qua',
+                          style: TextStyle(
+                            color: cs.onSurface.withValues(alpha: 0.45),
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+      onSuccess: (result) {
+        if (!mounted) return;
+        if (_forceCancel) {
+          _forceCancel = false;
+          return;
+        }
+        setState(() {
+          _originalVoiceInput = _voiceController.voiceText;
+          if (result.intent.amount != null) amount = result.intent.amount.toString();
+          _noteText = result.intent.note ?? '';
+          if (result.intent.type == VoiceIntentType.spend) type = FlowType.out;
+          if (result.intent.type == VoiceIntentType.income) type = FlowType.in_;
 
-    final voiceStore = VoiceSynonymStore();
-    await voiceStore.load();
-
-    setState(() {
-      _listening = true;
-      _voiceText = '';
-    });
-
-    // Đừng cản trở quá trình STT bật mic bằng TTS chậm chạp
-    // await _tts.say('Tôi đang nghe bạn nói...');
-
-    final outcome = await _stt.listenOnceEx(
-      onPartial: (text) => setState(() => _voiceText = text),
+          if (result.wallet != null) selectedWallet = result.wallet;
+          if (result.category != null) selectedCategory = result.category;
+        });
+      },
+      onReadyToSubmit: () async {
+        if (!mounted) return;
+        await _showVoiceConfirmDialog();
+      },
     );
+  }
 
-    final text = outcome.text?.trim() ?? '';
-    setState(() {
-      _voiceText = text;
-      _listening = false;
-      _originalVoiceInput = text;
-    });
-
-    if (_forceCancel) {
-      _forceCancel = false;
-      return;
-    }
-
-    if (text.isEmpty) {
-      await _tts.say('Mình không nghe rõ, bạn nói lại nhé.');
-      return;
-    }
-
-    // Truyền context vào để _parser tự động hốt mảng Danh Mục của bạn gửi cho Gemini
-    final intent = await _parser.parse(text, context: context);
-    debugPrint('🎯 Voice intent: $intent');
-
-    setState(() {
-      if (intent.amount != null) amount = intent.amount.toString();
-      _noteText = intent.note ?? '';
-      if (intent.type == VoiceIntentType.spend) type = FlowType.out;
-      if (intent.type == VoiceIntentType.income) type = FlowType.in_;
-    });
-
-    final catsDebug =
-        context.read<CategoryProvider>().items.map((e) => e.name).toList();
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(
-          'DEBUG: List Cat: $catsDebug\nGemini Cat: ${intent.categoryName}'),
-      duration: const Duration(seconds: 4),
-    ));
+  /// Hiển thị popup xác nhận trước khi lưu giao dịch giọng nói.
+  Future<void> _showVoiceConfirmDialog() async {
+    final amt = evaluateMathExpression(amount);
+    if (amt <= 0) return;
 
     final wals = context.read<BankAccountProvider>().items;
-    if (wals.isNotEmpty) {
-      dynamic found;
-      if (intent.walletName != null) {
-        final target = intent.walletName!.toLowerCase();
-        try {
-          found = wals.firstWhere((w) {
-            final name = (w.name ?? '').toLowerCase();
-            final title = (w.title ?? '').toLowerCase();
-            return name.contains(target) || title.contains(target);
-          });
-          debugPrint('🎯 Ví được nói: ${found.name ?? found.title}');
-          await voiceStore.learnFromUtterance(
-            intent.walletName!,
-            'wallet:${found.name ?? found.title}',
-          );
-        } catch (_) {
-          found = null;
-        }
-      }
+    final cats = context.read<CategoryProvider>().items;
+    final incs = context.read<IncomeProvider>().items;
 
-      found ??=
-          wals.reduce((a, b) => ((a.balance ?? 0) >= (b.balance ?? 0)) ? a : b);
+    final result = await showVoiceConfirmDialog(
+      context: context,
+      type: type,
+      amount: amt.toDouble(),
+      note: _noteText,
+      selectedWallet: selectedWallet,
+      selectedCategory: selectedCategory,
+      selectedIncome: selectedIncome,
+      wallets: wals,
+      categories: cats,
+      incomes: incs,
+    );
 
-      setState(() => selectedWallet = found);
-      debugPrint('💰 Ví được chọn: ${found.name ?? found.title}');
-    }
+    if (result == null || !result.confirmed) return;
+    if (!mounted) return;
 
-    if (type == FlowType.out && intent.categoryName != null) {
-      final cats = context.read<CategoryProvider>().items;
-      if (cats.isNotEmpty) {
-        Category? found;
-        final input = removeDiacritics(intent.categoryName!.toLowerCase());
+    // Cập nhật lại thông tin đã chỉnh sửa từ dialog
+    setState(() {
+      if (result.wallet != null) selectedWallet = result.wallet;
+      if (result.category != null) selectedCategory = result.category;
+      if (result.income != null) selectedIncome = result.income;
+    });
 
-        try {
-          found = cats.firstWhere(
-            (c) {
-              final name = removeDiacritics(c.name.toLowerCase());
-              return name == input ||
-                  name.contains(input) ||
-                  input.contains(name);
-            },
-          );
-        } catch (_) {
-          found = null;
-        }
-
-        if (found != null) {
-          setState(() => selectedCategory = found);
-          debugPrint('📚 Nhận diện danh mục: ${found.name}');
-        } else {
-          debugPrint('⚠️ Không tìm thấy danh mục "${intent.categoryName}".');
-          await _tts.say(
-            'Không tìm thấy danh mục ${intent.categoryName}. Bạn có thể chọn thủ công nhé.',
-          );
-        }
-      }
-    }
-
-    if (type == FlowType.in_ && selectedIncome == null) {
-      await _tts.say(
-          'Đã nhận thông tin, bạn vui lòng chọn nguồn thu trên màn hình để hoàn tất nhé.');
-    }
-
-    final amt = intent.amount ?? 0;
-    if (type == FlowType.out && selectedCategory == null && amt > 0) {
-      await _tts.say(
-          'Trường hợp này đặc biệt, bạn vui lòng tự tay chạm vào danh mục trên màn hình để lưu nhé.');
-    }
-
-    // TODO: Không hỏi lằng nhằng nữa, mặc định user nhìn trên UI là hiểu.
-    // Chỉ cần phát âm báo ngắn gọn hoặc không nói gì để user tự tay bấm nút Check màu xanh là nhanh nhất.
-    if (amt > 0 &&
-        selectedWallet != null &&
-        ((type == FlowType.out && selectedCategory != null) ||
-            (type == FlowType.in_ && selectedIncome != null))) {
-      await _tts.say('Đã lưu');
-      await _submit();
-    }
+    await _submit();
   }
 
   /* ================= handlers ================= */
-
-  int _evaluate(String expr) {
-    try {
-      String s = expr;
-      List<String> tokens = [];
-      String num = '';
-      for (var i = 0; i < s.length; i++) {
-        var c = s[i];
-        if ('+-*/'.contains(c)) {
-          if (num.isNotEmpty) tokens.add(num);
-          tokens.add(c);
-          num = '';
-        } else {
-          num += c;
-        }
-      }
-      if (num.isNotEmpty) tokens.add(num);
-
-      if (tokens.isEmpty) return 0;
-      double res = double.tryParse(tokens[0]) ?? 0;
-      for (var i = 1; i < tokens.length - 1; i += 2) {
-        var op = tokens[i];
-        var next = double.tryParse(tokens[i + 1]) ?? 0;
-        if (op == '+')
-          res += next;
-        else if (op == '-')
-          res -= next;
-        else if (op == '*')
-          res *= next;
-        else if (op == '/') res /= next;
-      }
-      return res.toInt();
-    } catch (_) {
-      return int.tryParse(expr) ?? 0;
-    }
-  }
 
   void _onKey(String k) {
     setState(() {
@@ -479,7 +400,7 @@ class _NotePageState extends State<NotePage> {
         return;
       }
       if (k == '=') {
-        amount = _evaluate(amount).toString();
+        amount = evaluateMathExpression(amount).toString();
         return;
       }
       // Khóa nhập ký tự đặc biệt bất hợp lý
@@ -504,33 +425,29 @@ class _NotePageState extends State<NotePage> {
 
     try {
       final isOut = type == FlowType.out;
-      final amt = _evaluate(amount);
+      final amt = evaluateMathExpression(amount);
       final selectedWalletId = (selectedWallet as dynamic)?.id ?? 0;
       final categoryId = selectedCategory?.id ?? 0;
       final incomeId = selectedIncome?.id ?? 0;
 
       if (amt <= 0) {
-        showAppSnackBar(context, 'Vui long nhap so tien > 0.', isError: true);
-        await _tts.say('Ban muon ghi so tien bao nhieu?');
+        showAppSnackBar(context, 'Vui lòng nhập số tiền > 0.', isError: true);
         return;
       }
 
       if (isOut && selectedWalletId == 0) {
-        showAppSnackBar(context, 'Vui long chon tai khoan chi.', isError: true);
-        await _tts.say('Ban chua chon tai khoan chi.');
+        showAppSnackBar(context, 'Vui lòng chọn tài khoản chi.', isError: true);
         return;
       }
 
       if (isOut && categoryId == 0) {
-        showAppSnackBar(context, 'Vui long chon danh muc.', isError: true);
-        await _tts.say('Ban chua chon danh muc.');
+        showAppSnackBar(context, 'Vui lòng chọn danh mục.', isError: true);
         return;
       }
 
       if (!isOut && (selectedWalletId == 0 || incomeId == 0)) {
-        showAppSnackBar(context, 'Vui long chon nguon thu va vi.',
+        showAppSnackBar(context, 'Vui lòng chọn nguồn thu và ví.',
             isError: true);
-        await _tts.say('Ban chua chon nguon thu hoac vi nap tien.');
         return;
       }
 
@@ -593,8 +510,8 @@ class _NotePageState extends State<NotePage> {
       final messenger = ScaffoldMessenger.of(context);
       final successSnackBar = appSnackBar(
         isOut
-            ? 'Da ghi giao dich chi thanh cong'
-            : 'Da ghi giao dich thu thanh cong',
+            ? 'Đã ghi giao dịch chi thành công'
+            : 'Đã ghi giao dịch thu thành công',
         icon: Icons.receipt_long_rounded,
       );
 
@@ -630,7 +547,7 @@ class _NotePageState extends State<NotePage> {
       }));
     } catch (e) {
       if (!mounted) return;
-      showAppSnackBar(context, 'Loi luu giao dich: $e', isError: true);
+      showAppSnackBar(context, 'Lỗi lưu giao dịch: $e', isError: true);
     } finally {
       if (mounted) {
         setState(() => _submitting = false);
@@ -652,7 +569,7 @@ class _NotePageState extends State<NotePage> {
         final isDark = Theme.of(ctx).brightness == Brightness.dark;
         return Container(
           decoration: BoxDecoration(
-            color: isDark ? cs.surface : const Color(0xFFFAFBFE),
+            color: cs.surface,
             borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
           ),
           child: SafeArea(
@@ -714,7 +631,7 @@ class _NotePageState extends State<NotePage> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => _WalletPickerSheet(
+      builder: (_) => WalletPickerSheet(
         items: wProv.items,
         selectedId: selectedWallet?.id,
         onTopUp: (wallet) async {},
@@ -734,7 +651,7 @@ class _NotePageState extends State<NotePage> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => _CategoryPickerSheet(
+      builder: (_) => CategoryPickerSheet(
         items: catProv.items,
         selectedId: selectedCategory?.id,
       ),
@@ -749,7 +666,7 @@ class _NotePageState extends State<NotePage> {
         final store = VoiceSynonymStore();
         await store.load();
         await store.learnFromUtterance(textToLearn, picked.name);
-        debugPrint('🧠 Đã học: "$textToLearn" → "${picked.name}"');
+        debugPrint('🧠 Đã học: "$textToLearn" -> "${picked.name}"');
       }
     }
   }
@@ -778,7 +695,7 @@ class _NotePageState extends State<NotePage> {
         final isDark = Theme.of(ctx).brightness == Brightness.dark;
         return Container(
           decoration: BoxDecoration(
-            color: isDark ? cs.surface : const Color(0xFFFAFBFE),
+            color: cs.surface,
             borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
           ),
           padding: EdgeInsets.only(
@@ -889,8 +806,8 @@ class _NotePageState extends State<NotePage> {
     required ColorScheme cs,
     required bool isDark,
   }) {
-    const mint = Color(0xFF2EC4B6);
-    final color = active ? mint : cs.onSurface.withOpacity(.35);
+    final mint = cs.primary;
+    final color = active ? mint : cs.onSurface.withValues(alpha: .35);
     return GestureDetector(
       onTap: onTap,
       child: Column(
@@ -901,17 +818,15 @@ class _NotePageState extends State<NotePage> {
             height: 48,
             decoration: BoxDecoration(
               color: active
-                  ? mint.withOpacity(.08)
+                  ? mint.withValues(alpha: .08)
                   : (isDark
                       ? cs.surfaceContainerHigh
                       : const Color(0xFFF1F5F9)),
               shape: BoxShape.circle,
               border: Border.all(
                   color: active
-                      ? mint.withOpacity(.2)
-                      : (isDark
-                          ? cs.outlineVariant.withOpacity(.08)
-                          : const Color(0xFFE5E8ED))),
+                      ? mint.withValues(alpha: .2)
+                      : (cs.outlineVariant.withValues(alpha: .08))),
             ),
             child: Icon(icon, size: 20, color: color),
           ),
@@ -934,14 +849,14 @@ class _NotePageState extends State<NotePage> {
       child: Row(
         children: [
           if (type == FlowType.out) ...[
-            _ToolChip(
+            ToolChip(
               icon: Icons.category_rounded,
               label: selectedCategory?.name ?? 'Danh mục',
               active: selectedCategory != null,
               onTap: _openCategoryPicker,
             ),
             const SizedBox(width: 8),
-            _ToolChip(
+            ToolChip(
               icon: Icons.account_balance_wallet_rounded,
               label: selectedWallet != null
                   ? ((selectedWallet as dynamic).name ??
@@ -953,14 +868,14 @@ class _NotePageState extends State<NotePage> {
             ),
           ],
           if (type == FlowType.in_) ...[
-            _ToolChip(
+            ToolChip(
               icon: Icons.savings_rounded,
               label: selectedIncome?.title ?? 'Nguồn thu',
               active: selectedIncome != null,
               onTap: _openIncomePicker,
             ),
             const SizedBox(width: 8),
-            _ToolChip(
+            ToolChip(
               icon: Icons.account_balance_wallet_rounded,
               label: selectedWallet != null
                   ? ((selectedWallet as dynamic).name ??
@@ -972,7 +887,7 @@ class _NotePageState extends State<NotePage> {
             ),
           ],
           const SizedBox(width: 8),
-          _ToolChip(
+          ToolChip(
             icon: Icons.calendar_month_rounded,
             label: dateLabel,
             active: true,
@@ -1005,7 +920,7 @@ class _NotePageState extends State<NotePage> {
     final cs = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final chipColor =
-        isDark ? cs.onSurface.withOpacity(.5) : const Color(0xFF3F51B5);
+        cs.primary;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
@@ -1027,7 +942,7 @@ class _NotePageState extends State<NotePage> {
                   color: Colors.transparent,
                   borderRadius: BorderRadius.circular(999),
                   border:
-                      Border.all(color: chipColor.withOpacity(.35), width: 1.2),
+                      Border.all(color: chipColor.withValues(alpha: .35), width: 1.2),
                 ),
                 child: Text(
                   moneyFmt.format(v).replaceAll(',', '.'),
@@ -1057,9 +972,9 @@ class _NotePageState extends State<NotePage> {
             .replaceAll('+', ' + ')
             .replaceAll('-', ' - ');
     final hasAmount = amount.isNotEmpty;
-    const mint = Color(0xFF2EC4B6);
+    final mint = cs.primary;
     final color =
-        !hasAmount ? cs.onSurface.withOpacity(.15) : (isOut ? cs.error : mint);
+        !hasAmount ? cs.onSurface.withValues(alpha: .15) : (isOut ? cs.error : mint);
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -1085,7 +1000,7 @@ class _NotePageState extends State<NotePage> {
                 style: TextStyle(
                     fontSize: 28,
                     fontWeight: FontWeight.w500,
-                    color: color.withOpacity(.5))),
+                    color: color.withValues(alpha: .5))),
           ],
         ),
       ),
@@ -1097,7 +1012,7 @@ class _NotePageState extends State<NotePage> {
     final t = AppLocalizations.of(context)!;
     final cs = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bgColor = isDark ? cs.surface : const Color(0xFFFAFBFE);
+    final bgColor = cs.surface;
     final isOut = type == FlowType.out;
 
     return Scaffold(
@@ -1105,7 +1020,7 @@ class _NotePageState extends State<NotePage> {
       body: SafeArea(
         child: Column(
           children: [
-            // ── Top bar ──
+            // ▬▬▬ Top bar ▬▬▬
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
               child: Row(
@@ -1121,13 +1036,13 @@ class _NotePageState extends State<NotePage> {
                       child: Padding(
                         padding: const EdgeInsets.all(10),
                         child: Icon(Icons.close_rounded,
-                            size: 18, color: cs.onSurface.withOpacity(.5)),
+                            size: 18, color: cs.onSurface.withValues(alpha: .5)),
                       ),
                     ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: _FlowSegmented(
+                    child: FlowSegmented(
                       value: type,
                       onChanged: (v) => setState(() {
                         type = v;
@@ -1141,7 +1056,7 @@ class _NotePageState extends State<NotePage> {
                 ],
               ),
             ),
-            // ── Content ──
+            // ▬▬▬ Content ▬▬▬
             Expanded(
               child: SingleChildScrollView(
                 physics: const BouncingScrollPhysics(),
@@ -1153,7 +1068,7 @@ class _NotePageState extends State<NotePage> {
                       style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
-                          color: cs.onSurface.withOpacity(.35),
+                          color: cs.onSurface.withValues(alpha: .35),
                           letterSpacing: 0.5),
                     ),
                     const SizedBox(height: 8),
@@ -1180,13 +1095,13 @@ class _NotePageState extends State<NotePage> {
                         child: Container(
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
-                            color: cs.surfaceTint.withOpacity(0.05),
+                            color: cs.surfaceTint.withValues(alpha: 0.05),
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: Text(
                             _noteText,
                             style: TextStyle(
-                              color: cs.onSurface.withOpacity(0.8),
+                              color: cs.onSurface.withValues(alpha: 0.8),
                               fontSize: 14,
                             ),
                             textAlign: TextAlign.center,
@@ -1194,8 +1109,8 @@ class _NotePageState extends State<NotePage> {
                         ),
                       ),
                     const SizedBox(height: 12),
-                    if (_listening || _voiceText.isNotEmpty) ...[
-                      _VoiceCaption(text: _voiceText, listening: _listening),
+                    if (_voiceController.isListening || _voiceController.voiceText.isNotEmpty) ...[
+                      VoiceCaption(text: _voiceController.voiceText, listening: _voiceController.isListening),
                       const SizedBox(height: 8),
                       TextButton.icon(
                         onPressed: _cancelAll,
@@ -1216,8 +1131,8 @@ class _NotePageState extends State<NotePage> {
             _buildSelectionList(),
             const SizedBox(height: 4),
             _buildQuickAmountSuggestions(),
-            // ── Keypad ──
-            _KeypadBar(
+            // ▬▬▬ Keypad ▬▬▬
+            KeypadBar(
                 onTap: _onKey,
                 onBack: _onBackspace,
                 onConfirm: _submit,
@@ -1230,556 +1145,3 @@ class _NotePageState extends State<NotePage> {
   }
 }
 
-// ═══════════════════════════════════════
-//  STANDALONE WIDGETS
-// ═══════════════════════════════════════
-
-class _VoiceCaption extends StatelessWidget {
-  const _VoiceCaption({required this.text, required this.listening});
-  final String text;
-  final bool listening;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    const mint = Color(0xFF2EC4B6);
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: isDark ? cs.surfaceContainerHigh : Colors.white,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-              color: listening
-                  ? mint.withOpacity(.3)
-                  : (isDark
-                      ? cs.outlineVariant.withOpacity(.08)
-                      : const Color(0xFFECEDF2))),
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(
-                listening ? Icons.mic_rounded : Icons.record_voice_over_rounded,
-                size: 18,
-                color: listening ? mint : cs.onSurface.withOpacity(.5)),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(text.isEmpty ? 'Đang nghe…' : text,
-                  maxLines: 3,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: cs.onSurface)),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _FlowSegmented extends StatelessWidget {
-  const _FlowSegmented({required this.value, required this.onChanged});
-  final FlowType value;
-  final ValueChanged<FlowType> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final t = AppLocalizations.of(context)!;
-    const mint = Color(0xFF2EC4B6);
-
-    return Container(
-      height: 44,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(14),
-        color: isDark ? cs.surfaceContainerHigh : const Color(0xFFF1F5F9),
-      ),
-      padding: const EdgeInsets.all(3),
-      child: Row(
-        children: [
-          _seg(t.moneyOut, Icons.arrow_outward_rounded, value == FlowType.out,
-              cs.error, cs, isDark, () => onChanged(FlowType.out)),
-          const SizedBox(width: 3),
-          _seg(t.moneyIn, Icons.arrow_downward_rounded, value == FlowType.in_,
-              mint, cs, isDark, () => onChanged(FlowType.in_)),
-        ],
-      ),
-    );
-  }
-
-  Widget _seg(String label, IconData icon, bool active, Color ac,
-      ColorScheme cs, bool isDark, VoidCallback onTap) {
-    return Expanded(
-      child: GestureDetector(
-        onTap: onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          decoration: BoxDecoration(
-            color: active
-                ? (isDark ? cs.surface : Colors.white)
-                : Colors.transparent,
-            borderRadius: BorderRadius.circular(11),
-            boxShadow: active
-                ? [
-                    BoxShadow(
-                        color: Colors.black.withOpacity(.04),
-                        blurRadius: 4,
-                        offset: const Offset(0, 1))
-                  ]
-                : null,
-          ),
-          child: Center(
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(icon,
-                    size: 16,
-                    color: active ? ac : cs.onSurface.withOpacity(.3)),
-                const SizedBox(width: 6),
-                Text(label,
-                    style: TextStyle(
-                        fontWeight: active ? FontWeight.w700 : FontWeight.w500,
-                        fontSize: 13.5,
-                        color: active ? ac : cs.onSurface.withOpacity(.3))),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _KeypadBar extends StatelessWidget {
-  const _KeypadBar(
-      {required this.onTap,
-      required this.onBack,
-      required this.onConfirm,
-      required this.isConfirming,
-      this.onVoice});
-  final ValueChanged<String> onTap;
-  final VoidCallback onBack;
-  final VoidCallback onConfirm;
-  final bool isConfirming;
-  final VoidCallback? onVoice;
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bg = isDark ? const Color(0xFF1E1E1E) : const Color(0xFFEBEBEB);
-    final keyBg = isDark ? const Color(0xFF2D2D2D) : Colors.white;
-    const mint = Color(0xFF2EC4B6);
-
-    Widget btn(String label, {Color? textColor, VoidCallback? action}) {
-      return Expanded(
-        child: Padding(
-          padding: const EdgeInsets.all(4.0),
-          child: Material(
-            color: keyBg,
-            borderRadius: BorderRadius.circular(10),
-            child: InkWell(
-              borderRadius: BorderRadius.circular(10),
-              onTap: action ?? () => onTap(label),
-              child: Center(
-                child: Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.w500,
-                    color:
-                        textColor ?? (isDark ? Colors.white : Colors.black87),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      );
-    }
-
-    Widget iconBtn(IconData icon,
-        {Color? color, required VoidCallback action}) {
-      return Expanded(
-        child: Padding(
-          padding: const EdgeInsets.all(4.0),
-          child: Material(
-            color: keyBg,
-            borderRadius: BorderRadius.circular(10),
-            child: InkWell(
-              borderRadius: BorderRadius.circular(10),
-              onTap: action,
-              child: Center(
-                child: Icon(icon, color: color ?? mint, size: 24),
-              ),
-            ),
-          ),
-        ),
-      );
-    }
-
-    return Container(
-      color: bg,
-      padding: const EdgeInsets.fromLTRB(8, 8, 8, 16),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Row 1: 7  8  9  ⌫
-          SizedBox(
-            height: 56,
-            child: Row(children: [
-              btn('7'),
-              btn('8'),
-              btn('9'),
-              iconBtn(Icons.backspace_outlined, action: onBack),
-            ]),
-          ),
-          // Rows 2-4: left(4-5-6 / 1-2-3 / 0) + right(✓ spanning all 3)
-          SizedBox(
-            height: 168,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // Left 3 columns
-                Expanded(
-                  flex: 3,
-                  child: Column(children: [
-                    Expanded(
-                        child: Row(children: [btn('4'), btn('5'), btn('6')])),
-                    Expanded(
-                        child: Row(children: [btn('1'), btn('2'), btn('3')])),
-                    Expanded(child: Row(children: [btn('0')])),
-                  ]),
-                ),
-                // Right col: ✓ spanning 3 rows
-                Expanded(
-                  flex: 1,
-                  child: Padding(
-                    padding: const EdgeInsets.all(4.0),
-                    child: Material(
-                      color: isConfirming ? mint.withOpacity(.55) : mint,
-                      borderRadius: BorderRadius.circular(10),
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(10),
-                        onTap: isConfirming ? null : onConfirm,
-                        child: Center(
-                          child: isConfirming
-                              ? const SizedBox(
-                                  width: 28,
-                                  height: 28,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 3,
-                                    color: Colors.white,
-                                  ),
-                                )
-                              : const Icon(Icons.check_rounded,
-                                  color: Colors.white, size: 36),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _WalletPickerSheet extends StatelessWidget {
-  const _WalletPickerSheet(
-      {required this.items, required this.selectedId, required this.onTopUp});
-  final List<dynamic> items;
-  final dynamic selectedId;
-  final Future<void> Function(dynamic wallet) onTopUp;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    const mint = Color(0xFF2EC4B6);
-    return Container(
-      decoration: BoxDecoration(
-        color: isDark ? cs.surface : const Color(0xFFFAFBFE),
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      child: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                    width: 40,
-                    height: 4,
-                    decoration: BoxDecoration(
-                        color: cs.onSurface.withOpacity(.12),
-                        borderRadius: BorderRadius.circular(2))),
-                const SizedBox(height: 16),
-                Row(children: [
-                  Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                          color: mint.withOpacity(.08),
-                          borderRadius: BorderRadius.circular(10)),
-                      child: const Icon(Icons.account_balance_wallet_rounded,
-                          color: mint, size: 18)),
-                  const SizedBox(width: 12),
-                  Text('Chọn tài khoản',
-                      style: TextStyle(
-                          fontSize: 17,
-                          fontWeight: FontWeight.w800,
-                          color: cs.onSurface)),
-                ]),
-                const SizedBox(height: 14),
-                for (final w in items)
-                  Container(
-                    margin: const EdgeInsets.only(bottom: 8),
-                    decoration: BoxDecoration(
-                      color: isDark ? cs.surfaceContainerHigh : Colors.white,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                          color: (w as dynamic).id == selectedId
-                              ? mint.withOpacity(.3)
-                              : (isDark
-                                  ? cs.outlineVariant.withOpacity(.08)
-                                  : const Color(0xFFECEDF2))),
-                    ),
-                    child: ListTile(
-                      contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 14, vertical: 4),
-                      leading: Container(
-                          width: 42,
-                          height: 42,
-                          decoration: BoxDecoration(
-                              color: mint.withOpacity(.08),
-                              borderRadius: BorderRadius.circular(12)),
-                          child: const Icon(Icons.account_balance_rounded,
-                              color: mint, size: 20)),
-                      title: Text(
-                          (w as dynamic).name ?? (w as dynamic).title ?? '—',
-                          style: TextStyle(
-                              fontWeight: FontWeight.w700,
-                              color: cs.onSurface)),
-                      subtitle: Row(children: [
-                        Text('Số dư: ',
-                            style: TextStyle(
-                                fontSize: 12,
-                                color: cs.onSurface.withOpacity(.4))),
-                        MoneyText((w as dynamic).balance ??
-                            (w as dynamic).amount ??
-                            0),
-                      ]),
-                      trailing: (w as dynamic).id == selectedId
-                          ? const Icon(Icons.check_circle_rounded,
-                              color: mint, size: 22)
-                          : null,
-                      onTap: () => Navigator.pop(context, w),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16)),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _CategoryPickerSheet extends StatelessWidget {
-  const _CategoryPickerSheet({required this.items, required this.selectedId});
-  final List<Category> items;
-  final int? selectedId;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    const mint = Color(0xFF2EC4B6);
-    return Container(
-      decoration: BoxDecoration(
-        color: isDark ? cs.surface : const Color(0xFFFAFBFE),
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      child: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                      color: cs.onSurface.withOpacity(.12),
-                      borderRadius: BorderRadius.circular(2))),
-              const SizedBox(height: 16),
-              Row(children: [
-                Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                        color: mint.withOpacity(.08),
-                        borderRadius: BorderRadius.circular(10)),
-                    child: const Icon(Icons.category_rounded,
-                        color: mint, size: 18)),
-                const SizedBox(width: 12),
-                Text('Chọn danh mục',
-                    style: TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.w800,
-                        color: cs.onSurface)),
-              ]),
-              const SizedBox(height: 14),
-              GridView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: items.length,
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 3,
-                    childAspectRatio: 1.15,
-                    mainAxisSpacing: 8,
-                    crossAxisSpacing: 8),
-                itemBuilder: (_, i) {
-                  final c = items[i];
-                  final selected = c.id == selectedId;
-                  final first =
-                      (c.name.isNotEmpty ? c.name[0] : '•').toUpperCase();
-                  return Material(
-                    color: selected
-                        ? mint.withOpacity(.08)
-                        : (isDark ? cs.surfaceContainerHigh : Colors.white),
-                    borderRadius: BorderRadius.circular(14),
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(14),
-                      onTap: () => Navigator.pop(_, c),
-                      child: Container(
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(
-                              color: selected
-                                  ? mint.withOpacity(.3)
-                                  : (isDark
-                                      ? cs.outlineVariant.withOpacity(.08)
-                                      : const Color(0xFFECEDF2))),
-                        ),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Container(
-                              width: 36,
-                              height: 36,
-                              decoration: BoxDecoration(
-                                  color: mint.withOpacity(.1),
-                                  borderRadius: BorderRadius.circular(10)),
-                              child: Center(
-                                  child: Text(first,
-                                      style: const TextStyle(
-                                          fontWeight: FontWeight.w800,
-                                          color: mint,
-                                          fontSize: 15))),
-                            ),
-                            const SizedBox(height: 6),
-                            Padding(
-                              padding:
-                                  const EdgeInsets.symmetric(horizontal: 4),
-                              child: Text(c.name,
-                                  textAlign: TextAlign.center,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: 12,
-                                      color: selected ? mint : cs.onSurface)),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _ToolChip extends StatelessWidget {
-  const _ToolChip({
-    required this.icon,
-    required this.label,
-    required this.active,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String label;
-  final bool active;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    const mint = Color(0xFF2EC4B6);
-
-    return Expanded(
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          height: 44,
-          padding: const EdgeInsets.symmetric(horizontal: 4),
-          decoration: BoxDecoration(
-            color: active
-                ? mint.withOpacity(0.08)
-                : (isDark ? cs.surfaceContainerHigh : const Color(0xFFF1F5F9)),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: active
-                  ? mint.withOpacity(0.3)
-                  : (isDark
-                      ? cs.outlineVariant.withOpacity(0.08)
-                      : const Color(0xFFE5E8ED)),
-            ),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                icon,
-                size: 16,
-                color: active ? mint : cs.onSurface.withOpacity(0.5),
-              ),
-              const SizedBox(width: 4),
-              Flexible(
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 12.5,
-                    fontWeight: active ? FontWeight.w700 : FontWeight.w600,
-                    color: active ? mint : cs.onSurface.withOpacity(0.7),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}

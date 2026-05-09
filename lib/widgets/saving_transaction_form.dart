@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import 'package:chitieu/utils/safe_ui.dart';
 
 import 'package:chitieu/api/saving/saving_model.dart';
 import 'package:chitieu/api/saving/saving_provider.dart';
@@ -163,9 +164,7 @@ class _SavingTransactionFormState extends State<SavingTransactionForm> {
   /// ===== SAVE =====
   Future<void> save() async {
     if (selectedWallet == null || amount <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Thiếu dữ liệu")),
-      );
+      showAppSnackBar(context, 'Thiếu dữ liệu', isError: true);
       return;
     }
 

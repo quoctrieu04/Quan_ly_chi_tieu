@@ -57,22 +57,14 @@ class _EditIncomeFormState extends State<EditIncomeForm> {
       if (!mounted) return;
       if (ok) {
         Navigator.pop(context, true);
-        safeShowSnackBar(
-          context,
-          SnackBar(
-            content: Text('Đã cập nhật khoản thu tháng ${ym.month}/${ym.year}'),
-          ),
-        );
+        showAppSnackBar(context, 'Đã cập nhật khoản thu tháng ${ym.month}/${ym.year}', icon: Icons.check_circle_rounded);
       } else {
         final err = context.read<IncomeProvider>().error ?? 'Cập nhật không thành công';
-        safeShowSnackBar(context, SnackBar(content: Text(err)));
+        showAppSnackBar(context, err, isError: true);
       }
     } catch (e) {
       if (mounted) {
-        safeShowSnackBar(
-          context,
-          SnackBar(content: Text('Lỗi cập nhật khoản thu: $e')),
-        );
+        showAppSnackBar(context, 'Lỗi cập nhật khoản thu: $e', isError: true);
       }
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -109,22 +101,13 @@ class _EditIncomeFormState extends State<EditIncomeForm> {
 
       if (ok) {
         Navigator.pop(context, true);
-        safeShowSnackBar(
-          context,
-          const SnackBar(content: Text('Đã xóa khoản thu')),
-        );
+        showAppSnackBar(context, 'Đã xóa khoản thu', icon: Icons.delete_rounded);
       } else {
-        safeShowSnackBar(
-          context,
-          const SnackBar(content: Text('Xóa khoản thu thất bại')),
-        );
+        showAppSnackBar(context, 'Xóa khoản thu thất bại', isError: true);
       }
     } catch (e) {
       if (mounted) {
-        safeShowSnackBar(
-          context,
-          SnackBar(content: Text('Lỗi xóa khoản thu: $e')),
-        );
+        showAppSnackBar(context, 'Lỗi xóa khoản thu: $e', isError: true);
       }
     } finally {
       if (mounted) setState(() => _saving = false);

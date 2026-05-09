@@ -8,6 +8,7 @@ import 'package:chitieu/widgets/investment/real_estate/sell_real_estate_sheet.da
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import 'package:chitieu/utils/safe_ui.dart';
 
 class RealEstateDetailPage extends StatefulWidget {
   final dynamic item;
@@ -238,35 +239,13 @@ class _RealEstateDetailPageState extends State<RealEstateDetailPage> {
 
                 if (!context.mounted) return;
 
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Row(
-                      children: [
-                        const Icon(Icons.check_circle_outline, color: Colors.white),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            'Đã bán. Lãi/Lỗ: ${profit.toStringAsFixed(0)}',
-                            style: const TextStyle(color: Colors.white),
-                          ),
-                        ),
-                      ],
-                    ),
-                    backgroundColor: Colors.green.shade600,
-                    behavior: SnackBarBehavior.floating,
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10)),
-                    margin: const EdgeInsets.all(16),
-                  ),
-                );
+                showAppSnackBar(context, 'Đã bán. Lãi/Lỗ: ${profit.toStringAsFixed(0)}', icon: Icons.check_circle_rounded);
 
                 // index() chỉ show whereNull(sold_at) -> quay lại list
                 Navigator.pop(context, true);
               } catch (e) {
                 if (!context.mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text(e.toString())),
-                );
+                showAppSnackBar(context, e.toString(), isError: true);
               }
             },
           ),

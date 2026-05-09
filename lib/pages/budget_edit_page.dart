@@ -7,6 +7,8 @@ import 'package:chitieu/api/category/category_model.dart';
 import 'package:chitieu/api/category/category_provider.dart';
 import 'package:chitieu/auth/auth_provider.dart';
 import 'package:chitieu/core/budget/budgets_provider.dart';
+import 'package:chitieu/core/theme/app_colors.dart';
+import 'package:chitieu/utils/error_handler.dart';
 
 class BudgetEditPage extends StatefulWidget {
   /// null = tạo mới, khác null = sửa
@@ -65,10 +67,7 @@ class _BudgetEditPageState extends State<BudgetEditPage>
     if (_saving) return;
     final auth = context.read<AuthProvider>();
     if (!auth.isAuthenticated) {
-      safeShowSnackBar(
-        context,
-        SnackBar(content: Text(t.loginRequiredMessage)),
-      );
+      showAppSnackBar(context, t.loginRequiredMessage, isError: true);
       return;
     }
 
@@ -102,7 +101,7 @@ class _BudgetEditPageState extends State<BudgetEditPage>
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
       if (!mounted) return;
-      String msg = e.toString();
+      String msg = getFriendlyError(e);
       try {
         final jsonStart = msg.indexOf('{');
         if (jsonStart != -1) {
@@ -111,11 +110,8 @@ class _BudgetEditPageState extends State<BudgetEditPage>
           msg = (map['message'] as String?) ??
               (map['errors']?.toString() ?? e.toString());
         }
-      } catch (_) {}
-      safeShowSnackBar(
-        context,
-        SnackBar(content: Text('${t.genericFailedMessage}: $msg')),
-      );
+      } catch (_) {} // Đã xử lý ở getFriendlyError
+      showAppSnackBar(context, '${t.genericFailedMessage}: $msg', isError: true);
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -187,10 +183,7 @@ class _BudgetEditPageState extends State<BudgetEditPage>
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
       if (!mounted) return;
-      safeShowSnackBar(
-        context,
-        SnackBar(content: Text('${t.genericFailedMessage}: $e')),
-      );
+      showAppSnackBar(context, '${t.genericFailedMessage}: ${getFriendlyError(e)}', isError: true);
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -228,7 +221,7 @@ class _BudgetEditPageState extends State<BudgetEditPage>
     final isEdit = widget.category != null;
     final cs = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bgColor = isDark ? cs.surface : const Color(0xFFFAFBFE);
+    final bgColor = isDark ? cs.surface : AppColors.background;
 
     return Scaffold(
       backgroundColor: bgColor,
@@ -387,85 +380,80 @@ class _BudgetEditPageState extends State<BudgetEditPage>
   }
 
   Widget _buildNameField(ColorScheme cs, bool isDark, AppLocalizations t) {
-    return Container(
-      decoration: BoxDecoration(
-        color: isDark ? cs.surfaceContainerHigh : Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: isDark
-              ? cs.outlineVariant.withOpacity(.08)
-              : const Color(0xFFECEDF2),
-        ),
-        boxShadow: [
-          if (!isDark)
-            BoxShadow(
-              color: Colors.black.withOpacity(.02),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-        ],
+    return TextFormField(
+      controller: _controller,
+      focusNode: _nameFocus,
+      textInputAction: TextInputAction.done,
+      onFieldSubmitted: (_) => _save(),
+      style: TextStyle(
+        fontSize: 16,
+        fontWeight: FontWeight.w600,
+        color: cs.onSurface,
       ),
-      child: TextFormField(
-        controller: _controller,
-        focusNode: _nameFocus,
-        textInputAction: TextInputAction.done,
-        onFieldSubmitted: (_) => _save(),
-        style: TextStyle(
-          fontSize: 16,
+      decoration: InputDecoration(
+        labelText: t.categoryNameLabel,
+        hintText: t.categoryNameHint,
+        labelStyle: TextStyle(
+          color: cs.primary.withOpacity(.7),
           fontWeight: FontWeight.w600,
-          color: cs.onSurface,
+          fontSize: 14,
         ),
-        decoration: InputDecoration(
-          labelText: t.categoryNameLabel,
-          hintText: t.categoryNameHint,
-          labelStyle: TextStyle(
-            color: cs.primary.withOpacity(.7),
-            fontWeight: FontWeight.w600,
-            fontSize: 14,
-          ),
-          hintStyle: TextStyle(
-            color: cs.onSurface.withOpacity(.3),
-            fontWeight: FontWeight.w400,
-            fontSize: 14,
-          ),
-          filled: true,
-          fillColor: Colors.transparent,
-          contentPadding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
-          prefixIcon: Padding(
-            padding: const EdgeInsets.only(left: 14, right: 10),
-            child:
-                Icon(Icons.label_outline_rounded, color: cs.primary, size: 22),
-          ),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(18),
-            borderSide: BorderSide.none,
-          ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(18),
-            borderSide: BorderSide.none,
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(18),
-            borderSide: BorderSide(color: cs.primary, width: 2),
-          ),
-          errorBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(18),
-            borderSide: BorderSide(color: cs.error, width: 1.5),
-          ),
-          focusedErrorBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(18),
-            borderSide: BorderSide(color: cs.error, width: 2),
-          ),
-          counterText: '',
+        hintStyle: TextStyle(
+          color: cs.onSurface.withOpacity(.3),
+          fontWeight: FontWeight.w400,
+          fontSize: 14,
         ),
-        maxLength: 50,
-        enabled: !_saving,
-        validator: (value) {
-          final name = (value ?? '').trim();
-          if (name.isEmpty) return t.categoryNameRequired;
-          return null;
-        },
+        filled: true,
+        fillColor: isDark ? cs.surfaceContainerHigh : Colors.white,
+        contentPadding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
+        prefixIcon: Padding(
+          padding: const EdgeInsets.only(left: 14, right: 10),
+          child:
+              Icon(Icons.label_outline_rounded, color: cs.primary, size: 22),
+        ),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(18),
+          borderSide: BorderSide(
+            color: isDark
+                ? cs.outlineVariant.withOpacity(.08)
+                : const Color(0xFFECEDF2),
+          ),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(18),
+          borderSide: BorderSide(
+            color: isDark
+                ? cs.outlineVariant.withOpacity(.08)
+                : const Color(0xFFECEDF2),
+          ),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(18),
+          borderSide: BorderSide(color: cs.primary, width: 2),
+        ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(18),
+          borderSide: BorderSide(color: cs.error, width: 1.5),
+        ),
+        focusedErrorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(18),
+          borderSide: BorderSide(color: cs.error, width: 2),
+        ),
+        errorStyle: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w500,
+          color: cs.error,
+          height: 1.3,
+        ),
+        counterText: '',
       ),
+      maxLength: 50,
+      enabled: !_saving,
+      validator: (value) {
+        final name = (value ?? '').trim();
+        if (name.isEmpty) return t.categoryNameRequired;
+        return null;
+      },
     );
   }
 

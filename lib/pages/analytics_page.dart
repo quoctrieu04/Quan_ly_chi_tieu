@@ -15,6 +15,7 @@ import 'package:chitieu/core/theme/app_colors.dart';
 import 'package:chitieu/widgets/app_page_header.dart';
 import 'package:chitieu/widgets/app_month_picker_sheet.dart';
 import 'package:chitieu/pages/note_page.dart';
+import 'package:chitieu/utils/error_handler.dart';
 
 class AnalyticsPage extends StatefulWidget {
   const AnalyticsPage({super.key});
@@ -115,7 +116,7 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
         final status = e.response?.statusCode;
         _aiError = status == 401
             ? 'Phiên đăng nhập đã hết hạn'
-            : 'API lỗi ${status ?? ''}'.trim();
+            : getFriendlyError(e.response?.data ?? e);
         _loadingAI = false;
       });
     } catch (e) {
@@ -170,8 +171,10 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
       }
     }
 
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: isDark ? const Color(0xFF0F172A) : AppColors.background,
       appBar: AppPageHeaderBar(
         icon: Icons.analytics_outlined,
         title: t.analyticsTitle,
@@ -254,7 +257,7 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
       return Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: Colors.red.withOpacity(.08),
+          color: Colors.red.withValues(alpha: .08),
           borderRadius: BorderRadius.circular(12),
         ),
         child: Text(
@@ -498,7 +501,7 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
                 width: 38,
                 height: 38,
                 decoration: BoxDecoration(
-                  color: AppColors.primary.withOpacity(.1),
+                  color: AppColors.primary.withValues(alpha: .1),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: const Icon(
@@ -514,9 +517,9 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
             width: double.infinity,
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              color: const Color(0xFFFAFBFE),
+              color: Theme.of(context).brightness == Brightness.dark ? Theme.of(context).colorScheme.surface : Theme.of(context).colorScheme.surface,
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: const Color(0xFFEFF2F6)),
+              border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -564,7 +567,7 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
                     alignment: Alignment.centerLeft,
                     child: FractionallySizedBox(
                       widthFactor: progress,
-                      child: Container(color: barColor.withOpacity(.86)),
+                      child: Container(color: barColor.withValues(alpha: .86)),
                     ),
                   ),
                 ),
@@ -659,11 +662,11 @@ class _PredictionMiniCard extends StatelessWidget {
       constraints: const BoxConstraints(minHeight: 118),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Theme.of(context).brightness == Brightness.dark ? Theme.of(context).colorScheme.surfaceContainerHigh : Colors.white,
         borderRadius: BorderRadius.circular(18),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(.035),
+            color: Colors.black.withValues(alpha: .035),
             blurRadius: 14,
             offset: const Offset(0, 6),
           ),
@@ -757,7 +760,7 @@ class _PredictionMiniCard extends StatelessWidget {
                         style: TextStyle(
                           fontSize: 10,
                           fontWeight: FontWeight.w700,
-                          color: footerColor.withOpacity(.82),
+                          color: footerColor.withValues(alpha: .82),
                         ),
                       ),
                     ],
@@ -800,21 +803,28 @@ class _SectionCardState extends State<_SectionCard> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Container(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(16),
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFFFFFFFF), Color(0xFFF4F6FF)],
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(.04),
-            blurRadius: 12,
-            offset: const Offset(0, 6),
-          ),
-        ],
+        color: isDark ? AppColors.darkSurface : null,
+        gradient: isDark
+            ? null
+            : const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [Color(0xFFFFFFFF), Color(0xFFF4F6FF)],
+              ),
+        boxShadow: isDark
+            ? []
+            : [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: .04),
+                  blurRadius: 12,
+                  offset: const Offset(0, 6),
+                ),
+              ],
       ),
       child: Column(
         children: [
@@ -830,10 +840,10 @@ class _SectionCardState extends State<_SectionCard> {
                   Expanded(
                     child: Text(
                       widget.title,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 17,
                         fontWeight: FontWeight.w800,
-                        color: Color(0xFF1F2937),
+                        color: isDark ? Colors.white : const Color(0xFF1F2937),
                       ),
                     ),
                   ),
@@ -841,10 +851,10 @@ class _SectionCardState extends State<_SectionCard> {
                     AnimatedRotation(
                       duration: const Duration(milliseconds: 250),
                       turns: _expanded ? 0.0 : 0.5,
-                      child: const Icon(
+                      child: Icon(
                         Icons.keyboard_arrow_up_rounded,
                         size: 22,
-                        color: Colors.black54,
+                        color: isDark ? Colors.white70 : Colors.black54,
                       ),
                     ),
                 ],
@@ -887,13 +897,17 @@ class _AnalyticsEmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: const Color(0xFFFAFBFC),
+        color: isDark ? const Color(0xFF1C2530) : const Color(0xFFFAFBFC),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFEFF2F6)),
+        border: Border.all(
+          color: isDark ? Colors.white10 : Theme.of(context).colorScheme.outlineVariant,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -902,20 +916,20 @@ class _AnalyticsEmptyState extends StatelessWidget {
           const SizedBox(height: 10),
           Text(
             title,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 15,
               fontWeight: FontWeight.w900,
-              color: Color(0xFF1F2937),
+              color: isDark ? Colors.white : const Color(0xFF1F2937),
             ),
           ),
           const SizedBox(height: 6),
           Text(
             message,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w600,
               height: 1.35,
-              color: Color(0xFF667085),
+              color: isDark ? Colors.white70 : const Color(0xFF667085),
             ),
           ),
           if (secondaryText != null) ...[
@@ -995,6 +1009,8 @@ class _BudgetPieChart extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
     final data = items.where((e) => e.amount > 0).toList();
     data.sort((a, b) => b.amount.compareTo(a.amount));
 
@@ -1068,10 +1084,10 @@ class _BudgetPieChart extends StatelessWidget {
               sections: sections,
               sectionsSpace: 2,
               centerSpaceRadius: 52,
-              centerSpaceColor: Colors.white,
+              centerSpaceColor: Theme.of(context).colorScheme.surface,
             ),
           ),
-          const Column(
+          Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
@@ -1079,16 +1095,16 @@ class _BudgetPieChart extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 22,
                   fontWeight: FontWeight.w900,
-                  color: Color(0xFF1F2937),
+                  color: isDark ? Colors.white : const Color(0xFF1F2937),
                 ),
               ),
-              SizedBox(height: 1),
+              const SizedBox(height: 1),
               Text(
                 'Tổng chi',
                 style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w600,
-                  color: Color(0xFF6B7280),
+                  color: isDark ? Colors.white70 : const Color(0xFF6B7280),
                 ),
               ),
             ],
@@ -1132,6 +1148,8 @@ class _BudgetLegendItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -1154,10 +1172,10 @@ class _BudgetLegendItem extends StatelessWidget {
                 alignment: Alignment.centerLeft,
                 child: Text(
                   percent,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w900,
-                    color: Color(0xFF111827),
+                    color: isDark ? Colors.white : const Color(0xFF111827),
                   ),
                   maxLines: 1,
                 ),
@@ -1165,10 +1183,10 @@ class _BudgetLegendItem extends StatelessWidget {
               const SizedBox(height: 1),
               Text(
                 label,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 9,
                   fontWeight: FontWeight.w600,
-                  color: Color(0xFF6B7280),
+                  color: isDark ? Colors.white70 : const Color(0xFF6B7280),
                 ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
@@ -1204,7 +1222,7 @@ class _TopCategoriesList extends StatelessWidget {
               dense: true,
               contentPadding: const EdgeInsets.symmetric(horizontal: 8),
               leading: CircleAvatar(
-                backgroundColor: Colors.indigo.withOpacity(.08),
+                backgroundColor: Colors.indigo.withValues(alpha: .08),
                 child: Text(
                   (categories[it.categoryId]?.name ?? '#')[0].toUpperCase(),
                   style: const TextStyle(fontWeight: FontWeight.w800),
@@ -1312,6 +1330,8 @@ class _SummaryTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8),
       child: Row(
@@ -1321,7 +1341,7 @@ class _SummaryTile extends StatelessWidget {
             width: 32,
             height: 32,
             decoration: BoxDecoration(
-              color: color.withOpacity(.1),
+              color: color.withValues(alpha: .1),
               borderRadius: BorderRadius.circular(9),
             ),
             child: Icon(icon, color: color, size: 17),
@@ -1334,10 +1354,10 @@ class _SummaryTile extends StatelessWidget {
               children: [
                 Text(
                   label,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
-                    color: Color(0xFF6B7280),
+                    color: isDark ? Colors.white70 : const Color(0xFF6B7280),
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -1348,10 +1368,10 @@ class _SummaryTile extends StatelessWidget {
                   alignment: Alignment.centerLeft,
                   child: Text(
                     value,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontWeight: FontWeight.w900,
                       fontSize: 14,
-                      color: Color(0xFF111827),
+                      color: isDark ? Colors.white : const Color(0xFF111827),
                     ),
                     maxLines: 1,
                   ),
@@ -1364,3 +1384,5 @@ class _SummaryTile extends StatelessWidget {
     );
   }
 }
+
+

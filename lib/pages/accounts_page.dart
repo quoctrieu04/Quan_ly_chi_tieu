@@ -295,10 +295,7 @@ class _AccountsPageState extends State<AccountsPage> {
 
     if (created == true && mounted) {
       await _fetchCurrentYm();
-      safeShowSnackBar(
-        context,
-        const SnackBar(content: Text('Đã thêm nguồn thu')),
-      );
+      showAppSnackBar(context, 'Đã thêm nguồn thu', icon: Icons.check_circle_rounded);
     }
   }
 
@@ -392,8 +389,10 @@ class _AccountsPageState extends State<AccountsPage> {
     final totalSaved =
         savingProv.items.fold<double>(0, (sum, s) => sum + s.currentAmount);
 
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: isDark ? const Color(0xFF0F172A) : AppColors.background,
       appBar: AppPageHeaderBar(
         icon: Icons.account_balance_rounded,
         title: t.tabAccounts,
@@ -620,10 +619,7 @@ class _AccountsPageState extends State<AccountsPage> {
                       );
                       if (created == true && context.mounted) {
                         await _fetchCurrentYm();
-                        safeShowSnackBar(
-                          context,
-                          const SnackBar(content: Text('Đã thêm nguồn thu')),
-                        );
+                        showAppSnackBar(context, 'Đã thêm nguồn thu', icon: Icons.check_circle_rounded);
                       }
                     },
                   ),
@@ -663,9 +659,7 @@ class _AccountsPageState extends State<AccountsPage> {
     final success = await context.read<SavingProvider>().remove(id);
 
     if (success && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Đã xoá kế hoạch tiết kiệm")),
-      );
+      showAppSnackBar(context, "Đã xoá kế hoạch tiết kiệm", icon: Icons.delete_rounded);
     }
   }
 }
@@ -694,7 +688,7 @@ class HeaderCard extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final cardBg = isDark ? cs.surfaceContainerHigh : Colors.white;
     final textColor = isDark ? cs.onSurface : AppColors.textMain;
-    final mutedColor = cs.onSurface.withOpacity(.52);
+    final mutedColor = cs.onSurface.withValues(alpha: .52);
     final accent = cs.primary;
 
     return Container(
@@ -702,12 +696,12 @@ class HeaderCard extends StatelessWidget {
         color: cardBg,
         borderRadius: BorderRadius.circular(24),
         border: Border.all(
-          color: isDark ? cs.outlineVariant.withOpacity(.1) : AppColors.border,
+          color: isDark ? cs.outlineVariant.withValues(alpha: .1) : AppColors.border,
         ),
         boxShadow: [
           if (!isDark)
             BoxShadow(
-              color: Colors.black.withOpacity(.035),
+              color: Colors.black.withValues(alpha: .035),
               blurRadius: 16,
               offset: const Offset(0, 7),
             ),
@@ -728,7 +722,7 @@ class HeaderCard extends StatelessWidget {
                         width: 34,
                         height: 34,
                         decoration: BoxDecoration(
-                          color: accent.withOpacity(.1),
+                          color: accent.withValues(alpha: .1),
                           borderRadius: BorderRadius.circular(11),
                         ),
                         child: Icon(
@@ -757,7 +751,7 @@ class HeaderCard extends StatelessWidget {
                           height: 34,
                           alignment: Alignment.center,
                           decoration: BoxDecoration(
-                            color: accent.withOpacity(.1),
+                            color: accent.withValues(alpha: .1),
                             shape: BoxShape.circle,
                           ),
                           child: Icon(
@@ -794,7 +788,7 @@ class HeaderCard extends StatelessWidget {
                       borderRadius: BorderRadius.circular(999),
                       child: LinearProgressIndicator(
                         minHeight: 3,
-                        backgroundColor: accent.withOpacity(0.12),
+                        backgroundColor: accent.withValues(alpha: 0.12),
                         valueColor: AlwaysStoppedAnimation(accent),
                       ),
                     ),
@@ -1344,13 +1338,13 @@ class _SummaryItem extends StatelessWidget {
         borderRadius: BorderRadius.circular(18),
         border: Border.all(
           color: isDark
-              ? cs.outlineVariant.withOpacity(.12)
+              ? cs.outlineVariant.withValues(alpha: .12)
               : const Color(0xFFE8EEF2),
         ),
         boxShadow: [
           if (!isDark)
             BoxShadow(
-              color: Colors.black.withOpacity(.035),
+              color: Colors.black.withValues(alpha: .035),
               blurRadius: 14,
               offset: const Offset(0, 6),
             ),
@@ -1374,7 +1368,7 @@ class _SummaryItem extends StatelessWidget {
               Icon(
                 Icons.more_horiz_rounded,
                 size: 18,
-                color: cs.onSurface.withOpacity(.25),
+                color: cs.onSurface.withValues(alpha: .25),
               ),
             ],
           ),
@@ -1384,7 +1378,7 @@ class _SummaryItem extends StatelessWidget {
             style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w700,
-              color: cs.onSurface.withOpacity(.55),
+              color: cs.onSurface.withValues(alpha: .55),
             ),
           ),
           const SizedBox(height: 4),
@@ -1403,3 +1397,5 @@ class _SummaryItem extends StatelessWidget {
     );
   }
 }
+
+

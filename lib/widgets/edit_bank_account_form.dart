@@ -74,22 +74,13 @@ class _EditBankAccountFormState extends State<EditBankAccountForm> {
       if (!mounted) return;
       if (ok) {
         Navigator.pop(context, true);
-        safeShowSnackBar(
-          context,
-          const SnackBar(content: Text('Đã cập nhật tài khoản')),
-        );
+        showAppSnackBar(context, 'Đã cập nhật tài khoản', icon: Icons.check_circle_rounded);
       } else {
-        safeShowSnackBar(
-          context,
-          const SnackBar(content: Text('Cập nhật thất bại')),
-        );
+        showAppSnackBar(context, 'Cập nhật thất bại', isError: true);
       }
     } catch (e) {
       if (mounted) {
-        safeShowSnackBar(
-          context,
-          SnackBar(content: Text('Lỗi cập nhật: $e')),
-        );
+        showAppSnackBar(context, 'Lỗi cập nhật: $e', isError: true);
       }
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -123,16 +114,10 @@ class _EditBankAccountFormState extends State<EditBankAccountForm> {
       await context.read<BankAccountProvider>().fetchAccounts();
       if (!mounted) return;
       Navigator.pop(context, true);
-      safeShowSnackBar(
-        context,
-        const SnackBar(content: Text('Đã xóa tài khoản')),
-      );
+      showAppSnackBar(context, 'Đã xóa tài khoản', icon: Icons.delete_rounded);
     } catch (e) {
       if (mounted) {
-        safeShowSnackBar(
-          context,
-          SnackBar(content: Text('Lỗi xóa tài khoản: $e')),
-        );
+        showAppSnackBar(context, 'Lỗi xóa tài khoản: $e', isError: true);
       }
     } finally {
       if (mounted) setState(() => _saving = false);
