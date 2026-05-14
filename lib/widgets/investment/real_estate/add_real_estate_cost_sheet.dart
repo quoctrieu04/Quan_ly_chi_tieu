@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:chitieu/utils/money_input_formatter.dart';
 import 'package:chitieu/utils/safe_ui.dart';
+import 'package:chitieu/api/bankaccount/bank_account_provider.dart';
 
 class AddRealEstateCostSheet extends StatefulWidget {
   final int realEstateId;
@@ -62,6 +63,28 @@ class _AddRealEstateCostSheetState extends State<AddRealEstateCostSheet> {
             ),
           ),
           const SizedBox(height: 12),
+          DropdownButtonFormField<int>(
+            value: _accountId,
+            items: context.watch<BankAccountProvider>().items
+                .map(
+                  (a) => DropdownMenuItem<int>(
+                    value: a.id,
+                    child: Text(
+                      a.bankname != null && a.bankname!.isNotEmpty
+                          ? '${a.name} • ${a.bankname}'
+                          : a.name,
+                    ),
+                  ),
+                )
+                .toList(),
+            onChanged: (v) => setState(() => _accountId = v),
+            decoration: const InputDecoration(
+              labelText: 'Tài khoản nguồn',
+              prefixIcon: Icon(Icons.account_balance_wallet_outlined),
+            ),
+            validator: (v) => v == null ? 'Chọn tài khoản' : null,
+          ),
+          const SizedBox(height: 12),
           ListTile(
             contentPadding: EdgeInsets.zero,
             leading: const Icon(Icons.calendar_today, size: 20),
@@ -101,13 +124,18 @@ class _AddRealEstateCostSheetState extends State<AddRealEstateCostSheet> {
     return;
   }
 
+  if (_accountId == null) {
+    _toast('Vui lòng chọn tài khoản nguồn');
+    return;
+  }
+
   setState(() => _saving = true);
 
   try {
     await context.read<RealEstateProvider>().addCost(
       realEstateId: widget.realEstateId,
       amount: amount,
-      accountSourceId: _accountId ?? 1,
+      accountSourceId: _accountId!,
       note: _noteCtrl.text,
       costDate: _date,
     );

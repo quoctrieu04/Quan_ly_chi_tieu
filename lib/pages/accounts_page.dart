@@ -369,9 +369,7 @@ class _AccountsPageState extends State<AccountsPage> {
     final hasAccounts = walletProv.items.isNotEmpty;
     final hasTransactions = totalIncome > 0 || totalSpent > 0;
 
-    final bool overSpent =
-        !(walletProv.loading || ftProv.loading) && combinedRemaining < 0;
-    final num deficit = (combinedRemaining < 0) ? -combinedRemaining : 0;
+
 
     final now = DateTime.now();
     final int daysInMonth = _daysInMonth(DateTime(ym.year, ym.month));
@@ -591,39 +589,7 @@ class _AccountsPageState extends State<AccountsPage> {
 
                 const SizedBox(height: 16),
 
-                // ===== Cảnh báo vượt chi =====
-                if (overSpent) ...[
-                  const SizedBox(height: 8),
-                  WarningBanner(
-                    message: _hideBalance
-                        ? 'Chi dự kiến tháng này đang vượt số tiền còn lại.'
-                        : 'Chi dự kiến tháng này vượt quá số tiền còn lại ${fmt(deficit)}.',
-                    onFixBudgets: () {
-                      Navigator.pushNamed(context, '/budgets');
-                    },
-                    onAddIncome: () async {
-                      final created = await showModalBottomSheet<bool>(
-                        context: context,
-                        isScrollControlled: true,
-                        useSafeArea: true,
-                        shape: const RoundedRectangleBorder(
-                          borderRadius:
-                              BorderRadius.vertical(top: Radius.circular(20)),
-                        ),
-                        builder: (context) => Padding(
-                          padding: EdgeInsets.only(
-                            bottom: MediaQuery.of(context).viewInsets.bottom,
-                          ),
-                          child: const CreateIncomeForm(),
-                        ),
-                      );
-                      if (created == true && context.mounted) {
-                        await _fetchCurrentYm();
-                        showAppSnackBar(context, 'Đã thêm nguồn thu', icon: Icons.check_circle_rounded);
-                      }
-                    },
-                  ),
-                ],
+
               ],
             ),
           ),
@@ -803,72 +769,7 @@ class HeaderCard extends StatelessWidget {
   }
 }
 
-class WarningBanner extends StatelessWidget {
-  final String message;
-  final VoidCallback onFixBudgets;
-  final VoidCallback onAddIncome;
 
-  const WarningBanner({
-    super.key,
-    required this.message,
-    required this.onFixBudgets,
-    required this.onAddIncome,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Container(
-      decoration: BoxDecoration(
-        color: const Color(0xFFFFE9E9),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFF19999)),
-        boxShadow: const [
-          BoxShadow(blurRadius: 6, offset: Offset(0, 2), color: Colors.black12),
-        ],
-      ),
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(Icons.warning_amber_rounded, color: Color(0xFFD64545)),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  message,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF8B1E1E),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              TextButton(
-                onPressed: onFixBudgets,
-                child: const Text('Điều chỉnh ngân sách'),
-              ),
-              const SizedBox(width: 8),
-              OutlinedButton(
-                onPressed: onAddIncome,
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: cs.primary,
-                  side: BorderSide(color: cs.primary),
-                ),
-                child: const Text('Thêm nguồn thu'),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
 
 class LegacyAccountsMonthPickerSheet extends StatefulWidget {
   final DateTime initial;
@@ -1290,6 +1191,14 @@ class MonthSummaryCard extends StatelessWidget {
                 color: const Color(0xFF12805C),
                 bg: const Color(0xFFE9F7EF),
                 isDark: isDark,
+                onTap: () {
+                  final ym = context.read<YearMonthProvider>().ym;
+                  Navigator.pushNamed(context, '/transactions', arguments: {
+                    'year': ym.year,
+                    'month': ym.month,
+                    'type': 'in',
+                  });
+                },
               ),
             ),
             const SizedBox(width: 10),
@@ -1301,6 +1210,14 @@ class MonthSummaryCard extends StatelessWidget {
                 color: const Color(0xFFD13B3B),
                 bg: const Color(0xFFFFEFEF),
                 isDark: isDark,
+                onTap: () {
+                  final ym = context.read<YearMonthProvider>().ym;
+                  Navigator.pushNamed(context, '/transactions', arguments: {
+                    'year': ym.year,
+                    'month': ym.month,
+                    'type': 'out',
+                  });
+                },
               ),
             ),
           ],
@@ -1317,6 +1234,7 @@ class _SummaryItem extends StatelessWidget {
   final Color color;
   final Color bg;
   final bool isDark;
+  final VoidCallback onTap;
 
   const _SummaryItem({
     required this.icon,
@@ -1325,13 +1243,16 @@ class _SummaryItem extends StatelessWidget {
     required this.color,
     required this.bg,
     required this.isDark,
+    required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
 
-    return Container(
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
       constraints: const BoxConstraints(minHeight: 96),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -1395,6 +1316,7 @@ class _SummaryItem extends StatelessWidget {
           ),
         ],
       ),
+    ),
     );
   }
 }

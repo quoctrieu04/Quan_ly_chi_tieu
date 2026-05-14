@@ -38,6 +38,18 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
   String? _aiError;
   bool _loadingAI = false;
 
+  bool _weeklyLoaded = false;
+  double? _currentWeekPrediction;
+  double? _nextWeekPrediction;
+  double? _weeklyWarningLimit;
+  double? _spentWtd;
+  int _weeklyProgressPercent = 0;
+  String? _weeklyStatus;
+  String? _weeklyMessage;
+  String? _weeklyTargetLabel;
+  String? _weeklyNextStart;
+  String? _weeklyNextEnd;
+
   void _safeSetState(VoidCallback fn) {
     if (!mounted) return;
     setState(fn);
@@ -62,6 +74,7 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
 
       await Future.wait(futures);
       await _fetchPrediction();
+      await _fetchWeeklyPrediction();
     });
   }
 
@@ -129,6 +142,46 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
     }
   }
 
+  Future<void> _fetchWeeklyPrediction() async {
+    try {
+      final dio = context.read<Dio>();
+
+      final res = await dio.get('predict/weekly-status');
+
+      final root = (res.data is Map<String, dynamic>)
+          ? res.data as Map<String, dynamic>
+          : <String, dynamic>{};
+
+      final data = (root['data'] is Map<String, dynamic>)
+          ? root['data'] as Map<String, dynamic>
+          : root;
+
+      double toDouble(dynamic v) {
+        if (v is num) return v.toDouble();
+        if (v is String) return double.tryParse(v) ?? 0.0;
+        return 0.0;
+      }
+
+      _safeSetState(() {
+        _weeklyLoaded = true;
+        _currentWeekPrediction = toDouble(data['current_week_prediction']);
+        _nextWeekPrediction = toDouble(data['next_week_prediction']);
+        _weeklyWarningLimit = toDouble(data['warning_limit']);
+        _spentWtd = toDouble(data['spent_wtd']);
+        _weeklyProgressPercent =
+            (data['progress_percent'] as num?)?.round() ?? 0;
+        _weeklyStatus = (data['status'] ?? 'ok').toString();
+        _weeklyMessage = (data['message'] ?? '').toString();
+        _weeklyTargetLabel = (data['target_label'] ?? '').toString();
+        _weeklyNextStart = (data['next_week_start'] ?? '').toString();
+        _weeklyNextEnd = (data['next_week_end'] ?? '').toString();
+      });
+    } catch (e) {
+      debugPrint('predict/weekly-status FAILED: $e');
+      _safeSetState(() => _weeklyLoaded = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     // Ép AnalyticsPage luôn build lại khi thay đổi màu chủ đạo ở SettingsProvider
@@ -145,8 +198,10 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
     final totalAssigned = budgetsProv.totalAssigned;
     final num totalIncome = ftProv.totalIncome;
     final num totalSpent = ftProv.totalExpense;
+    final num totalBudgetSpent =
+        items.fold<num>(0, (sum, item) => sum + item.spent);
     final num monthRemaining = totalIncome - totalSpent;
-    final num budgetRemaining = totalAssigned - totalSpent;
+    final num budgetRemaining = totalAssigned - totalBudgetSpent;
     final totalBudgetAmount = items
         .map((e) => e.amount)
         .where((v) => v > 0)
@@ -168,6 +223,7 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
           ftProv.fetchByMonth(year: _ym.year, month: _ym.month),
         ]);
         await _fetchPrediction();
+        await _fetchWeeklyPrediction();
       }
     }
 
@@ -196,6 +252,7 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
             if (!catsProv.loading) catsProv.refresh(),
           ]);
           await _fetchPrediction();
+          await _fetchWeeklyPrediction();
         },
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
@@ -245,12 +302,174 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
 
   bool get _showLegacyPredictionCard => false;
 
+  Widget _buildWeeklyPredictionInsightCard(
+      NumberFormat nf, AppLocalizations t) {
+    final nextWeekPrediction = (_nextWeekPrediction ?? 0).toDouble();
+    final currentWeekPrediction = (_currentWeekPrediction ?? 0).toDouble();
+    final warningLimit = (_weeklyWarningLimit ?? 0).toDouble();
+    final spentWtd = (_spentWtd ?? 0).toDouble();
+
+    final hasWeeklyData = !_isNoPredictionStatus(_weeklyStatus) &&
+        (nextWeekPrediction > 0 ||
+            currentWeekPrediction > 0 ||
+            warningLimit > 0);
+
+    if (!hasWeeklyData) {
+      return _AnalyticsEmptyState(
+        icon: Icons.insights_rounded,
+        title: t.notEnoughDataTitle,
+        message: (_weeklyMessage != null && _weeklyMessage!.trim().isNotEmpty)
+            ? _weeklyMessage!
+            : t.notEnoughDataDesc,
+      );
+    }
+
+    late Color barColor;
+    late Color badgeBg;
+    late Color badgeText;
+
+    switch (_weeklyStatus) {
+      case 'over':
+      case 'over_limit':
+        barColor = const Color(0xFFEF4444);
+        badgeBg = const Color(0xFFFDECEC);
+        badgeText = const Color(0xFFD93025);
+        break;
+      case 'near_limit':
+      case 'warning':
+        barColor = const Color(0xFFF59E0B);
+        badgeBg = const Color(0xFFFFF7ED);
+        badgeText = const Color(0xFFB45309);
+        break;
+      case 'watch':
+        barColor = const Color(0xFF2563EB);
+        badgeBg = const Color(0xFFEFF6FF);
+        badgeText = const Color(0xFF1D4ED8);
+        break;
+      default:
+        barColor = const Color(0xFF16A34A);
+        badgeBg = const Color(0xFFECFDF5);
+        badgeText = const Color(0xFF047857);
+        break;
+    }
+
+    final isOver = _weeklyStatus == 'over' || _weeklyStatus == 'over_limit';
+    final isWarning =
+        _weeklyStatus == 'near_limit' || _weeklyStatus == 'warning';
+    final statusLabel = isOver
+        ? 'Vượt mốc'
+        : isWarning
+            ? 'Cần chú ý'
+            : (_weeklyStatus == 'watch')
+                ? 'Theo dõi'
+                : 'An toàn';
+
+    final progress = (_weeklyProgressPercent.clamp(0, 100)) / 100.0;
+    final spentLabel = nf.format(spentWtd.round());
+    final remainingToLimit = warningLimit - spentWtd;
+    final insightText = warningLimit <= 0
+        ? (_weeklyMessage ?? 'Chưa có mốc cảnh báo')
+        : isOver
+            ? 'Đã vượt mốc ${nf.format(remainingToLimit.abs().round())}'
+            : 'Còn ${nf.format(remainingToLimit.round())} trước khi chạm mốc';
+    final currentLabel =
+        (_weeklyTargetLabel != null && _weeklyTargetLabel!.trim().isNotEmpty)
+            ? _weeklyTargetLabel!
+            : 'tuần này';
+    final nextLabel = _formatWeekRange(_weeklyNextStart, _weeklyNextEnd);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(
+                child: _PredictionMiniCard(
+                  label: 'DỰ ĐOÁN $nextLabel',
+                  value: nextWeekPrediction > 0
+                      ? nf.format(nextWeekPrediction.round())
+                      : '--',
+                  caption: 'Ước chi tuần sau',
+                  color: const Color(0xFF2F73B8),
+                  footerIcon: Icons.trending_up_rounded,
+                  footerText: statusLabel,
+                  footerColor: AppColors.primaryDark,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _PredictionMiniCard(
+                  label: 'DỰ CHI $currentLabel',
+                  value: currentWeekPrediction > 0
+                      ? nf.format(currentWeekPrediction.round())
+                      : '--',
+                  caption: 'Ước chi tuần này',
+                  color: isOver
+                      ? const Color(0xFFEF4444)
+                      : const Color(0xFF2F73B8),
+                  progress: progress,
+                  progressColor: barColor,
+                  footerIcon:
+                      isOver ? Icons.warning_rounded : Icons.shield_rounded,
+                  footerText: 'Đã chi $spentLabel',
+                  footerColor: barColor,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+          decoration: BoxDecoration(
+            color: badgeBg,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                isOver ? Icons.warning_rounded : Icons.shield_rounded,
+                color: badgeText,
+                size: 18,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: RichText(
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  text: TextSpan(
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w800,
+                      color: badgeText,
+                    ),
+                    children: [
+                      const TextSpan(text: 'Cảnh báo: '),
+                      TextSpan(text: insightText),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildPredictionInsightCard(NumberFormat nf, AppLocalizations t) {
     if (_loadingAI) {
       return const Padding(
         padding: EdgeInsets.all(16),
         child: Center(child: CircularProgressIndicator()),
       );
+    }
+
+    if (_weeklyLoaded) {
+      return _buildWeeklyPredictionInsightCard(nf, t);
     }
 
     if (_aiError != null) {
@@ -516,9 +735,12 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
             width: double.infinity,
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              color: Theme.of(context).brightness == Brightness.dark ? Theme.of(context).colorScheme.surface : Theme.of(context).colorScheme.surface,
+              color: Theme.of(context).brightness == Brightness.dark
+                  ? Theme.of(context).colorScheme.surface
+                  : Theme.of(context).colorScheme.surface,
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+              border: Border.all(
+                  color: Theme.of(context).colorScheme.outlineVariant),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -623,6 +845,18 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
     return DateTime(picked.year, picked.month);
   }
 
+  String _formatWeekRange(String? startRaw, String? endRaw) {
+    final start = startRaw == null ? null : DateTime.tryParse(startRaw);
+    final end = endRaw == null ? null : DateTime.tryParse(endRaw);
+
+    if (start == null || end == null) {
+      return 'tuần sau';
+    }
+
+    final locale = Localizations.localeOf(context).toLanguageTag();
+    return '${DateFormat('dd/MM', locale).format(start)} - ${DateFormat('dd/MM', locale).format(end)}';
+  }
+
   bool _isNoPredictionStatus(String? status) {
     return status == 'no_prediction' ||
         status == 'no_data' ||
@@ -661,7 +895,9 @@ class _PredictionMiniCard extends StatelessWidget {
       constraints: const BoxConstraints(minHeight: 118),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Theme.of(context).brightness == Brightness.dark ? Theme.of(context).colorScheme.surfaceContainerHigh : Colors.white,
+        color: Theme.of(context).brightness == Brightness.dark
+            ? Theme.of(context).colorScheme.surfaceContainerHigh
+            : Colors.white,
         borderRadius: BorderRadius.circular(18),
         boxShadow: [
           BoxShadow(
@@ -897,7 +1133,7 @@ class _AnalyticsEmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(18),
@@ -905,7 +1141,9 @@ class _AnalyticsEmptyState extends StatelessWidget {
         color: isDark ? const Color(0xFF1C2530) : const Color(0xFFFAFBFC),
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: isDark ? Colors.white10 : Theme.of(context).colorScheme.outlineVariant,
+          color: isDark
+              ? Colors.white10
+              : Theme.of(context).colorScheme.outlineVariant,
         ),
       ),
       child: Column(
@@ -1010,7 +1248,7 @@ class _BudgetPieChart extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = AppLocalizations.of(context)!;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    
+
     final data = items.where((e) => e.amount > 0).toList();
     data.sort((a, b) => b.amount.compareTo(a.amount));
 
@@ -1149,7 +1387,7 @@ class _BudgetLegendItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    
+
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -1385,5 +1623,3 @@ class _SummaryTile extends StatelessWidget {
     );
   }
 }
-
-

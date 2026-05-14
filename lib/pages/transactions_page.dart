@@ -35,6 +35,7 @@ class _TransactionsPageState extends State<TransactionsPage> {
   bool _inited = false;
   final TextEditingController _dateFilterCtl = TextEditingController();
   Timer? _dateFilterDebounce;
+  String? _filterType;
 
   HistoryTab _tab = HistoryTab.transaction;
 
@@ -55,6 +56,9 @@ class _TransactionsPageState extends State<TransactionsPage> {
       if (args.containsKey('day')) {
         _day = args['day'] as int?;
       }
+      if (args.containsKey('type')) {
+        _filterType = args['type'] as String?;
+      }
     }
     _baseYear = _year;
     _baseMonth = _month;
@@ -68,7 +72,16 @@ class _TransactionsPageState extends State<TransactionsPage> {
   }
 
   Future<void> _fetchCurrentTab() async {
-    if (_tab == HistoryTab.transaction) {
+    final bool isDedicated = _filterType != null;
+
+    if (isDedicated) {
+      await context.read<FinancialTransactionProvider>().fetchByMonth(
+            year: _year,
+            month: _month,
+            day: _day,
+            category: null,
+          );
+    } else if (_tab == HistoryTab.transaction) {
       await Future.wait([
         context.read<OutInvoiceProvider>().fetch(
               year: _year,
@@ -228,6 +241,12 @@ class _TransactionsPageState extends State<TransactionsPage> {
         ? DateFormat('dd/MM/yyyy').format(DateTime(_year, _month, _day!))
         : null;
 
+    final bool isDedicated = _filterType != null;
+    final String defaultTitle = _day == null ? 'Lịch sử All $monthLabel' : 'Lịch sử $dayLabel';
+    final String pageTitle = isDedicated
+        ? (_filterType == 'in' ? 'Chi tiết Thu vào' : 'Chi tiết Chi ra')
+        : defaultTitle;
+
     return Scaffold(
       backgroundColor: bgColor,
       appBar: AppBar(
@@ -241,7 +260,7 @@ class _TransactionsPageState extends State<TransactionsPage> {
         ),
         centerTitle: true,
         title: Text(
-          _day == null ? 'Lịch sử $monthLabel' : 'Lịch sử $dayLabel',
+          pageTitle,
           style: TextStyle(
             fontSize: 15,
             fontWeight: FontWeight.w700,
@@ -281,8 +300,8 @@ class _TransactionsPageState extends State<TransactionsPage> {
       ),
       body: Column(
         children: [
-          _buildDateFilterBar(cs, isDark),
-          _buildTabSwitcher(cs, isDark),
+          if (!isDedicated) _buildDateFilterBar(cs, isDark),
+          if (!isDedicated) _buildTabSwitcher(cs, isDark),
           Expanded(
             child: RefreshIndicator(
               color: cs.primary,
@@ -298,64 +317,105 @@ class _TransactionsPageState extends State<TransactionsPage> {
   }
 
   Widget _buildDateFilterBar(ColorScheme cs, bool isDark) {
+    final showingAll = _day == null;
+
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-      child: TextField(
-        controller: _dateFilterCtl,
-        keyboardType: TextInputType.datetime,
-        textInputAction: TextInputAction.search,
-        onChanged: _onDateFilterChanged,
-        onSubmitted: (_) => _applyDateFilter(),
-        style: TextStyle(
-          fontSize: 14,
-          fontWeight: FontWeight.w600,
-          color: cs.onSurface,
-        ),
-        decoration: InputDecoration(
-          hintText: 'Lọc theo ngày: 28/04/2026',
-          hintStyle: TextStyle(
-            color: cs.onSurface.withOpacity(.38),
-            fontWeight: FontWeight.w500,
-          ),
-          prefixIcon: Icon(Icons.search_rounded,
-              color: cs.onSurface.withOpacity(.45), size: 20),
-          suffixIcon: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (_day != null || _dateFilterCtl.text.trim().isNotEmpty)
-                IconButton(
-                  icon: Icon(Icons.close_rounded,
-                      color: cs.onSurface.withOpacity(.45), size: 20),
-                  onPressed: _clearDateFilter,
-                  tooltip: 'Bỏ lọc ngày',
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+      child: Row(
+        children: [
+          Expanded(
+            child: TextField(
+              controller: _dateFilterCtl,
+              keyboardType: TextInputType.datetime,
+              textInputAction: TextInputAction.search,
+              onChanged: _onDateFilterChanged,
+              onSubmitted: (_) => _applyDateFilter(),
+              style: TextStyle(
+                fontSize: 13.5,
+                fontWeight: FontWeight.w600,
+                color: cs.onSurface,
+              ),
+              decoration: InputDecoration(
+                hintText: 'Lọc theo ngày',
+                hintStyle: TextStyle(
+                  color: cs.onSurface.withOpacity(.38),
+                  fontWeight: FontWeight.w500,
                 ),
-            ],
-          ),
-          filled: true,
-          fillColor: isDark ? cs.surfaceContainerHigh : Colors.white,
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(14),
-            borderSide: BorderSide(
-              color: isDark
-                  ? cs.outlineVariant.withOpacity(.08)
-                  : const Color(0xFFECEDF2),
+                prefixIcon: Icon(Icons.search_rounded,
+                    color: cs.onSurface.withOpacity(.45), size: 19),
+                prefixIconConstraints:
+                    const BoxConstraints(minWidth: 42, minHeight: 42),
+                suffixIconConstraints:
+                    const BoxConstraints(minWidth: 36, minHeight: 42),
+                suffixIcon: (_day != null ||
+                        _dateFilterCtl.text.trim().isNotEmpty)
+                    ? IconButton(
+                        icon: Icon(Icons.close_rounded,
+                            color: cs.onSurface.withOpacity(.45), size: 19),
+                        onPressed: _clearDateFilter,
+                        tooltip: 'Bỏ lọc ngày',
+                      )
+                    : null,
+                filled: true,
+                fillColor: isDark ? cs.surfaceContainerHigh : Colors.white,
+                isDense: true,
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(
+                    color: isDark
+                        ? cs.outlineVariant.withOpacity(.08)
+                        : const Color(0xFFECEDF2),
+                  ),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(
+                    color: isDark
+                        ? cs.outlineVariant.withOpacity(.08)
+                        : const Color(0xFFECEDF2),
+                  ),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: cs.primary.withOpacity(.45)),
+                ),
+              ),
             ),
           ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(14),
-            borderSide: BorderSide(
-              color: isDark
-                  ? cs.outlineVariant.withOpacity(.08)
-                  : const Color(0xFFECEDF2),
+          const SizedBox(width: 6),
+          SizedBox(
+            width: 54,
+            height: 44,
+            child: OutlinedButton(
+              onPressed: showingAll ? null : _clearDateFilter,
+              style: OutlinedButton.styleFrom(
+                backgroundColor: showingAll
+                    ? cs.primary.withOpacity(.1)
+                    : (isDark ? cs.surfaceContainerHigh : Colors.white),
+                foregroundColor:
+                    showingAll ? cs.primary : cs.onSurface.withOpacity(.65),
+                disabledForegroundColor: cs.primary,
+                side: BorderSide(
+                  color: showingAll
+                      ? cs.primary.withOpacity(.22)
+                      : (isDark
+                          ? cs.outlineVariant.withOpacity(.08)
+                          : const Color(0xFFECEDF2)),
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                padding: EdgeInsets.zero,
+              ),
+              child: const Text(
+                'All',
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+              ),
             ),
           ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(14),
-            borderSide: BorderSide(color: cs.primary.withOpacity(.45)),
-          ),
-        ),
+        ],
       ),
     );
   }
@@ -441,6 +501,36 @@ class _TransactionsPageState extends State<TransactionsPage> {
   // ═══════════════════════════
   Widget _buildTransactionList(
       MoneySettings settings, ColorScheme cs, bool isDark) {
+    final bool isDedicated = _filterType != null;
+
+    if (isDedicated) {
+      final ftProv = context.watch<FinancialTransactionProvider>();
+      if (ftProv.loading) {
+        return Center(child: CircularProgressIndicator(color: cs.primary));
+      }
+
+      final filteredRows = ftProv.items
+          .where((e) => e.direction == _filterType)
+          .map((e) => _TxnRow(
+                amount: e.amount,
+                type: e.direction,
+                date: e.occurredAt,
+                label: e.title.isNotEmpty ? e.title : (e.direction == 'in' ? 'Thu' : 'Chi'),
+                content: e.description,
+              ))
+          .toList()
+        ..sort((a, b) => b.date.compareTo(a.date));
+
+      if (filteredRows.isEmpty) return _emptyState('Chưa có giao dịch', cs);
+
+      return ListView.builder(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(16, 4, 16, 40),
+        itemCount: filteredRows.length,
+        itemBuilder: (_, i) => _transactionTile(filteredRows[i], settings, cs, isDark, i),
+      );
+    }
+
     final outProv = context.watch<OutInvoiceProvider>();
     final inProv = context.watch<InInvoiceProvider>();
 
@@ -469,15 +559,20 @@ class _TransactionsPageState extends State<TransactionsPage> {
           content: e.content,
         ),
       ),
-    ]..sort((a, b) => b.date.compareTo(a.date));
+    ];
 
-    if (rows.isEmpty) return _emptyState('Chưa có giao dịch', cs);
+    final filteredRows = rows.where((r) {
+      if (_filterType != null && r.type != _filterType) return false;
+      return true;
+    }).toList()..sort((a, b) => b.date.compareTo(a.date));
+
+    if (filteredRows.isEmpty) return _emptyState('Chưa có giao dịch', cs);
 
     return ListView.builder(
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 40),
-      itemCount: rows.length,
-      itemBuilder: (_, i) => _transactionTile(rows[i], settings, cs, isDark, i),
+      itemCount: filteredRows.length,
+      itemBuilder: (_, i) => _transactionTile(filteredRows[i], settings, cs, isDark, i),
     );
   }
 
@@ -641,12 +736,15 @@ class _TransactionsPageState extends State<TransactionsPage> {
       return _emptyState('Chưa có lịch sử đầu tư', cs);
     }
 
+    final sortedItems = prov.items.toList()
+      ..sort((a, b) => b.occurredAt.compareTo(a.occurredAt));
+
     return ListView.builder(
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 40),
-      itemCount: prov.items.length,
+      itemCount: sortedItems.length,
       itemBuilder: (_, i) =>
-          _investmentTile(prov.items[i], settings, cs, isDark, i),
+          _investmentTile(sortedItems[i], settings, cs, isDark, i),
     );
   }
 
