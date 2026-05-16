@@ -24,8 +24,12 @@ class AnalyticsPage extends StatefulWidget {
   State<AnalyticsPage> createState() => _AnalyticsPageState();
 }
 
+enum _PredictionViewMode { week, month }
+
 class _AnalyticsPageState extends State<AnalyticsPage> {
   DateTime _ym = DateTime(DateTime.now().year, DateTime.now().month);
+  DateTime _selectedWeekStart = _startOfWeek(DateTime.now());
+  _PredictionViewMode _predictionViewMode = _PredictionViewMode.week;
 
   double? _currentMonthPrediction;
   double? _snapshotPrediction;
@@ -39,6 +43,7 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
   bool _loadingAI = false;
 
   bool _weeklyLoaded = false;
+  bool _loadingWeekly = false;
   double? _currentWeekPrediction;
   double? _nextWeekPrediction;
   double? _weeklyWarningLimit;
@@ -49,6 +54,8 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
   String? _weeklyTargetLabel;
   String? _weeklyNextStart;
   String? _weeklyNextEnd;
+  Map<int, num> _previousMonthSpentByCategory = {};
+  Map<int, num> _previousWeekSpentByCategory = {};
 
   void _safeSetState(VoidCallback fn) {
     if (!mounted) return;
@@ -73,9 +80,53 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
       }
 
       await Future.wait(futures);
+      await _fetchPreviousMonthCategorySpending();
+      await _fetchPreviousWeekCategorySpending();
       await _fetchPrediction();
       await _fetchWeeklyPrediction();
     });
+  }
+
+  Future<void> _fetchPreviousMonthCategorySpending() async {
+    try {
+      final previous = DateTime(_ym.year, _ym.month - 1);
+      final service = context.read<BudgetsProvider>().service;
+      final spent = await service.getSpentByCategory(
+        year: previous.year,
+        month: previous.month,
+      );
+
+      _safeSetState(() {
+        _previousMonthSpentByCategory = spent;
+      });
+    } catch (e) {
+      debugPrint('fetchPreviousMonthCategorySpending FAILED: $e');
+      _safeSetState(() {
+        _previousMonthSpentByCategory = {};
+      });
+    }
+  }
+
+  Future<void> _fetchPreviousWeekCategorySpending() async {
+    try {
+      final previousWeekStart =
+          _selectedWeekStart.subtract(const Duration(days: 7));
+      final service = context.read<BudgetsProvider>().service;
+      final spent = await service.getSpentByCategory(
+        year: previousWeekStart.year,
+        month: previousWeekStart.month,
+        weekStart: _formatApiDate(previousWeekStart),
+      );
+
+      _safeSetState(() {
+        _previousWeekSpentByCategory = spent;
+      });
+    } catch (e) {
+      debugPrint('fetchPreviousWeekCategorySpending FAILED: $e');
+      _safeSetState(() {
+        _previousWeekSpentByCategory = {};
+      });
+    }
   }
 
   Future<void> _fetchPrediction() async {
@@ -144,9 +195,18 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
 
   Future<void> _fetchWeeklyPrediction() async {
     try {
+      _safeSetState(() {
+        _loadingWeekly = true;
+      });
+
       final dio = context.read<Dio>();
 
-      final res = await dio.get('predict/weekly-status');
+      final res = await dio.get(
+        'predict/weekly-status',
+        queryParameters: {
+          'week_start': _formatApiDate(_selectedWeekStart),
+        },
+      );
 
       final root = (res.data is Map<String, dynamic>)
           ? res.data as Map<String, dynamic>
@@ -175,11 +235,58 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
         _weeklyTargetLabel = (data['target_label'] ?? '').toString();
         _weeklyNextStart = (data['next_week_start'] ?? '').toString();
         _weeklyNextEnd = (data['next_week_end'] ?? '').toString();
+        _loadingWeekly = false;
       });
     } catch (e) {
       debugPrint('predict/weekly-status FAILED: $e');
-      _safeSetState(() => _weeklyLoaded = false);
+      _safeSetState(() {
+        _weeklyLoaded = false;
+        _loadingWeekly = false;
+      });
     }
+  }
+
+  Future<void> _reloadSelectedPeriod({
+    bool reloadMonthData = false,
+  }) async {
+    _safeSetState(() {
+      _weeklyLoaded = false;
+      _loadingWeekly = true;
+    });
+
+    if (reloadMonthData) {
+      final budgetsProv = context.read<BudgetsProvider>();
+      final ftProv = context.read<FinancialTransactionProvider>();
+
+      await Future.wait([
+        budgetsProv.loadForMonth(year: _ym.year, month: _ym.month),
+        ftProv.fetchByMonth(year: _ym.year, month: _ym.month),
+      ]);
+      await _fetchPrediction();
+      await _fetchPreviousMonthCategorySpending();
+    }
+
+    await _fetchPreviousWeekCategorySpending();
+    await _fetchWeeklyPrediction();
+  }
+
+  Future<void> _setSelectedWeek(DateTime weekStart) async {
+    final normalized = _startOfWeek(weekStart);
+    final nextMonth = DateTime(normalized.year, normalized.month);
+    final monthChanged = nextMonth.year != _ym.year || nextMonth.month != _ym.month;
+
+    setState(() {
+      _selectedWeekStart = normalized;
+      if (monthChanged) {
+        _ym = nextMonth;
+      }
+    });
+
+    await _reloadSelectedPeriod(reloadMonthData: monthChanged);
+  }
+
+  Future<void> _shiftSelectedWeek(int delta) async {
+    await _setSelectedWeek(_selectedWeekStart.add(Duration(days: delta * 7)));
   }
 
   @override
@@ -211,10 +318,15 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
 
     final nf = NumberFormat.decimalPattern(locale);
     final monthLabel = DateFormat.yMMMM(locale).format(_ym);
+    final selectedWeekLabel = _formatSelectedWeekRange();
     Future<void> openMonthPicker() async {
       final picked = await _pickMonth(context, initial: _ym);
       if (picked != null) {
-        setState(() => _ym = picked);
+        final nextWeek = _startOfWeek(picked);
+        setState(() {
+          _ym = picked;
+          _selectedWeekStart = nextWeek;
+        });
         await Future.wait([
           budgetsProv.loadForMonth(
             year: _ym.year,
@@ -222,8 +334,17 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
           ),
           ftProv.fetchByMonth(year: _ym.year, month: _ym.month),
         ]);
+        await _fetchPreviousMonthCategorySpending();
+        await _fetchPreviousWeekCategorySpending();
         await _fetchPrediction();
         await _fetchWeeklyPrediction();
+      }
+    }
+
+    Future<void> openWeekPicker() async {
+      final picked = await _pickWeek(context, initial: _selectedWeekStart);
+      if (picked != null) {
+        await _setSelectedWeek(picked);
       }
     }
 
@@ -234,11 +355,16 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
       appBar: AppPageHeaderBar(
         icon: Icons.analytics_outlined,
         title: t.analyticsTitle,
-        subtitle: monthLabel,
-        onTap: openMonthPicker,
+        subtitle: '$selectedWeekLabel • $monthLabel',
+        onTap: openWeekPicker,
         actions: [
           HeaderIconButton(
-            icon: Icons.calendar_today_outlined,
+            icon: Icons.date_range_rounded,
+            tooltip: 'Chọn tuần',
+            onPressed: openWeekPicker,
+          ),
+          HeaderIconButton(
+            icon: Icons.calendar_month_rounded,
             tooltip: t.selectMonth,
             onPressed: openMonthPicker,
           ),
@@ -251,6 +377,8 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
             ftProv.fetchByMonth(year: _ym.year, month: _ym.month),
             if (!catsProv.loading) catsProv.refresh(),
           ]);
+          await _fetchPreviousMonthCategorySpending();
+          await _fetchPreviousWeekCategorySpending();
           await _fetchPrediction();
           await _fetchWeeklyPrediction();
         },
@@ -259,7 +387,7 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
           children: [
             _SectionCard(
               title: t.predictionAndWarning,
-              child: _buildPredictionInsightCard(nf, t),
+              child: _buildPredictionInsightCard(nf, t, items, categories),
             ),
             const SizedBox(height: 16),
             _SectionCard(
@@ -303,7 +431,11 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
   bool get _showLegacyPredictionCard => false;
 
   Widget _buildWeeklyPredictionInsightCard(
-      NumberFormat nf, AppLocalizations t) {
+    NumberFormat nf,
+    AppLocalizations t,
+    List<BudgetItem> budgetItems,
+    Map<int, Category> categories,
+  ) {
     final nextWeekPrediction = (_nextWeekPrediction ?? 0).toDouble();
     final currentWeekPrediction = (_currentWeekPrediction ?? 0).toDouble();
     final warningLimit = (_weeklyWarningLimit ?? 0).toDouble();
@@ -315,12 +447,33 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
             warningLimit > 0);
 
     if (!hasWeeklyData) {
-      return _AnalyticsEmptyState(
-        icon: Icons.insights_rounded,
-        title: t.notEnoughDataTitle,
-        message: (_weeklyMessage != null && _weeklyMessage!.trim().isNotEmpty)
-            ? _weeklyMessage!
-            : t.notEnoughDataDesc,
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _WeekSelectorBar(
+            label: _formatSelectedWeekRange(),
+            onPrevious: () => _shiftSelectedWeek(-1),
+            onNext: () => _shiftSelectedWeek(1),
+            onTap: () async {
+              final picked = await _pickWeek(
+                context,
+                initial: _selectedWeekStart,
+              );
+              if (picked != null) {
+                await _setSelectedWeek(picked);
+              }
+            },
+          ),
+          const SizedBox(height: 12),
+          _AnalyticsEmptyState(
+            icon: Icons.insights_rounded,
+            title: t.notEnoughDataTitle,
+            message:
+                (_weeklyMessage != null && _weeklyMessage!.trim().isNotEmpty)
+                    ? _weeklyMessage!
+                    : t.notEnoughDataDesc,
+          ),
+        ],
       );
     }
 
@@ -366,12 +519,12 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
 
     final progress = (_weeklyProgressPercent.clamp(0, 100)) / 100.0;
     final spentLabel = nf.format(spentWtd.round());
-    final remainingToLimit = warningLimit - spentWtd;
-    final insightText = warningLimit <= 0
-        ? (_weeklyMessage ?? 'Chưa có mốc cảnh báo')
-        : isOver
-            ? 'Đã vượt mốc ${nf.format(remainingToLimit.abs().round())}'
-            : 'Còn ${nf.format(remainingToLimit.round())} trước khi chạm mốc';
+    final insightText = _weeklyHistoryWarningText(
+      _previousWeekSpentByCategory,
+      categories,
+      nf,
+      fallback: 'Chưa có dữ liệu chi tiêu tuần trước để đưa ra cảnh báo.',
+    );
     final currentLabel =
         (_weeklyTargetLabel != null && _weeklyTargetLabel!.trim().isNotEmpty)
             ? _weeklyTargetLabel!
@@ -381,6 +534,21 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        _WeekSelectorBar(
+          label: _formatSelectedWeekRange(),
+          onPrevious: () => _shiftSelectedWeek(-1),
+          onNext: () => _shiftSelectedWeek(1),
+          onTap: () async {
+            final picked = await _pickWeek(
+              context,
+              initial: _selectedWeekStart,
+            );
+            if (picked != null) {
+              await _setSelectedWeek(picked);
+            }
+          },
+        ),
+        const SizedBox(height: 12),
         IntrinsicHeight(
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -421,7 +589,9 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
           ),
         ),
         const SizedBox(height: 12),
-        Container(
+        GestureDetector(
+          onTap: () => _showWarningDialog(insightText),
+          child: Container(
           width: double.infinity,
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
           decoration: BoxDecoration(
@@ -455,21 +625,72 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
               ),
             ],
           ),
+          ),
         ),
       ],
     );
   }
 
-  Widget _buildPredictionInsightCard(NumberFormat nf, AppLocalizations t) {
+  Widget _buildPredictionInsightCard(
+    NumberFormat nf,
+    AppLocalizations t,
+    List<BudgetItem> budgetItems,
+    Map<int, Category> categories,
+  ) {
+    final isWeekMode = _predictionViewMode == _PredictionViewMode.week;
+
+    Widget content;
+    if (isWeekMode) {
+      if (_loadingWeekly && !_weeklyLoaded) {
+        content = const Padding(
+          padding: EdgeInsets.all(16),
+          child: Center(child: CircularProgressIndicator()),
+        );
+      } else if (_weeklyLoaded) {
+        content =
+            _buildWeeklyPredictionInsightCard(nf, t, budgetItems, categories);
+      } else {
+        content = _AnalyticsEmptyState(
+          icon: Icons.insights_rounded,
+          title: t.notEnoughDataTitle,
+          message: (_weeklyMessage != null && _weeklyMessage!.trim().isNotEmpty)
+              ? _weeklyMessage!
+              : t.notEnoughDataDesc,
+        );
+      }
+    } else {
+      content = _buildMonthlyPredictionInsightCard(
+        nf,
+        t,
+        budgetItems,
+        categories,
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _PredictionModeSelector(
+          value: _predictionViewMode,
+          onChanged: (value) => setState(() => _predictionViewMode = value),
+        ),
+        const SizedBox(height: 12),
+        content,
+      ],
+    );
+  }
+
+  Widget _buildMonthlyPredictionInsightCard(
+    NumberFormat nf,
+    AppLocalizations t,
+    List<BudgetItem> budgetItems,
+    Map<int, Category> categories,
+  ) {
     if (_loadingAI) {
       return const Padding(
         padding: EdgeInsets.all(16),
         child: Center(child: CircularProgressIndicator()),
       );
-    }
-
-    if (_weeklyLoaded) {
-      return _buildWeeklyPredictionInsightCard(nf, t);
     }
 
     if (_aiError != null) {
@@ -502,11 +723,10 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
     final mainPrediction = currentMonthPrediction > 0
         ? currentMonthPrediction
         : snapshotPrediction;
-    final hasPredictionData = !_isNoPredictionStatus(_predictionStatus) &&
-        (nextMonthPrediction > 0 ||
-            currentMonthPrediction > 0 ||
-            snapshotPrediction > 0 ||
-            warningLimit > 0);
+    final hasPredictionData = nextMonthPrediction > 0 ||
+        currentMonthPrediction > 0 ||
+        snapshotPrediction > 0 ||
+        warningLimit > 0;
 
     if (!hasPredictionData) {
       return _AnalyticsEmptyState(
@@ -560,23 +780,27 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
         _predictionStatus == 'over' || _predictionStatus == 'over_limit';
     final isWarning =
         _predictionStatus == 'near_limit' || _predictionStatus == 'warning';
+    final hasCurrentMonthLimit = warningLimit > 0;
     final statusLabel = isOver
         ? 'Vượt mốc'
         : isWarning
             ? 'Cần chú ý'
             : (_predictionStatus == 'watch')
                 ? 'Theo dõi'
-                : 'An toàn';
+                : hasCurrentMonthLimit
+                    ? 'An toàn'
+                    : 'Chưa có mốc';
     final spentLabel = nf.format(spentMtd.round());
     final limitSummary = warningLimit > 0
         ? '${nf.format(spentMtd.round())} / ${nf.format(warningLimit.round())}'
         : '${nf.format(spentMtd.round())} / --';
-    final remainingToLimit = warningLimit - spentMtd;
-    final insightText = warningLimit <= 0
-        ? (_statusMessage ?? 'Chưa có mốc cảnh báo')
-        : isOver
-            ? 'Đã vượt mốc ${nf.format(remainingToLimit.abs().round())}'
-            : 'Còn ${nf.format(remainingToLimit.round())} trước khi chạm mốc';
+    final insightText = _monthlyHistoryWarningText(
+      _previousMonthSpentByCategory,
+      budgetItems,
+      categories,
+      nf,
+      fallback: 'Chưa có dữ liệu chi tiêu tháng trước để đưa ra cảnh báo.',
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -611,7 +835,9 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
                   progressColor: barColor,
                   footerIcon:
                       isOver ? Icons.warning_rounded : Icons.shield_rounded,
-                  footerText: 'Đã chi $spentLabel',
+                  footerText: hasCurrentMonthLimit
+                      ? 'Đã chi $spentLabel'
+                      : 'Chưa có mốc',
                   footerColor: barColor,
                 ),
               ),
@@ -619,7 +845,9 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
           ),
         ),
         const SizedBox(height: 12),
-        Container(
+        GestureDetector(
+          onTap: () => _showWarningDialog(insightText),
+          child: Container(
           width: double.infinity,
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
           decoration: BoxDecoration(
@@ -652,6 +880,7 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
                 ),
               ),
             ],
+          ),
           ),
         ),
         if (_showLegacyPredictionCard) ...[
@@ -830,6 +1059,251 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
     );
   }
 
+  String _categoryWarningText(
+    List<BudgetItem> budgetItems,
+    Map<int, Category> categories,
+    NumberFormat nf, {
+    required String fallback,
+  }) {
+    final items = budgetItems.where((item) => item.spent > 0).toList();
+
+    if (items.isEmpty) {
+      return fallback;
+    }
+
+    String categoryName(BudgetItem item) {
+      final name = item.name?.trim();
+      if (name != null && name.isNotEmpty) {
+        return name;
+      }
+
+      final category = categories[item.categoryId];
+      if (category != null && category.name.trim().isNotEmpty) {
+        return category.name;
+      }
+
+      return 'Danh mục #${item.categoryId}';
+    }
+
+    final overBudget = items.where((item) {
+      return item.amount > 0 && item.spent > item.amount;
+    }).toList()
+      ..sort((a, b) => (b.spent - b.amount).compareTo(a.spent - a.amount));
+
+    if (overBudget.isNotEmpty) {
+      final item = overBudget.first;
+      final overAmount = item.spent - item.amount;
+      return '${categoryName(item)} đã vượt kế hoạch '
+          '${nf.format(overAmount)}. Nên giảm chi ở danh mục này.';
+    }
+
+    final nearLimit = items.where((item) {
+      if (item.amount <= 0) return false;
+      return item.spent / item.amount >= 0.8;
+    }).toList()
+      ..sort((a, b) {
+        final bp = b.amount <= 0 ? 0.0 : b.spent / b.amount;
+        final ap = a.amount <= 0 ? 0.0 : a.spent / a.amount;
+        return bp.compareTo(ap);
+      });
+
+    if (nearLimit.isNotEmpty) {
+      final item = nearLimit.first;
+      final percent = ((item.spent / item.amount) * 100).round();
+      return '${categoryName(item)} đã dùng $percent% kế hoạch '
+          '(${nf.format(item.spent)} / ${nf.format(item.amount)}).';
+    }
+
+    items.sort((a, b) => b.spent.compareTo(a.spent));
+    final top = items.first;
+
+    if (top.amount > 0) {
+      return '${categoryName(top)} đang chi nhiều nhất: '
+          '${nf.format(top.spent)} trên kế hoạch ${nf.format(top.amount)}.';
+    }
+
+    return '${categoryName(top)} đang chi nhiều nhất: ${nf.format(top.spent)}.';
+  }
+
+  String _spendingRiskWarningText(
+    List<BudgetItem> budgetItems,
+    Map<int, Category> categories,
+    NumberFormat nf, {
+    required String fallback,
+  }) {
+    final items = budgetItems.where((item) => item.spent > 0).toList();
+
+    if (items.isEmpty) {
+      return fallback;
+    }
+
+    String categoryName(BudgetItem item) {
+      final name = item.name?.trim();
+      if (name != null && name.isNotEmpty) {
+        return name;
+      }
+
+      final category = categories[item.categoryId];
+      if (category != null && category.name.trim().isNotEmpty) {
+        return category.name;
+      }
+
+      return 'Danh mục #${item.categoryId}';
+    }
+
+    final overBudget = items.where((item) {
+      return item.amount > 0 && item.spent > item.amount;
+    }).toList()
+      ..sort((a, b) => (b.spent - b.amount).compareTo(a.spent - a.amount));
+
+    if (overBudget.isNotEmpty) {
+      final item = overBudget.first;
+      final overAmount = item.spent - item.amount;
+      return '${categoryName(item)} đang vượt kế hoạch '
+          '${nf.format(overAmount)}. Bạn nên hạn chế thêm khoản chi '
+          'ở nhóm này trong thời gian tới.';
+    }
+
+    final nearLimit = items.where((item) {
+      if (item.amount <= 0) return false;
+      return item.spent / item.amount >= 0.8;
+    }).toList()
+      ..sort((a, b) {
+        final bp = b.amount <= 0 ? 0.0 : b.spent / b.amount;
+        final ap = a.amount <= 0 ? 0.0 : a.spent / a.amount;
+        return bp.compareTo(ap);
+      });
+
+    if (nearLimit.isNotEmpty) {
+      final item = nearLimit.first;
+      final percent = ((item.spent / item.amount) * 100).round();
+      return '${categoryName(item)} đã dùng $percent% kế hoạch. '
+          'Nếu tiếp tục chi như hiện tại, danh mục này có thể sớm vượt '
+          'mức bạn đã đặt.';
+    }
+
+    items.sort((a, b) => b.spent.compareTo(a.spent));
+    final top = items.first;
+    final totalSpent = items.fold<int>(0, (sum, item) => sum + item.spent);
+    final topShare = totalSpent > 0 ? top.spent / totalSpent : 0.0;
+
+    if (topShare >= 0.4 && items.length > 1) {
+      return 'Chi tiêu đang tập trung nhiều vào ${categoryName(top)}. '
+          'Bạn nên theo dõi nhóm này để tránh làm lệch kế hoạch '
+          'chi tiêu trong thời gian tới.';
+    }
+
+    return 'Chi tiêu hiện vẫn khá ổn định. Chưa có danh mục nào '
+        'gây áp lực rõ rệt lên kế hoạch của bạn.';
+  }
+
+  String _monthlyHistoryWarningText(
+    Map<int, num> previousMonthSpent,
+    List<BudgetItem> currentBudgetItems,
+    Map<int, Category> categories,
+    NumberFormat nf, {
+    required String fallback,
+  }) {
+    final entries = previousMonthSpent.entries
+        .where((entry) => entry.key > 0 && entry.value > 0)
+        .toList();
+
+    if (entries.isEmpty) {
+      return fallback;
+    }
+
+    entries.sort((a, b) => b.value.compareTo(a.value));
+    final top = entries.first;
+    final totalPreviousSpent =
+        entries.fold<num>(0, (sum, entry) => sum + entry.value);
+    final topShare =
+        totalPreviousSpent > 0 ? top.value / totalPreviousSpent : 0.0;
+    final currentBudget = currentBudgetItems
+        .where((item) => item.categoryId == top.key)
+        .map((item) => item.amount)
+        .fold<int>(0, (sum, amount) => sum + amount);
+
+    String categoryName(int categoryId) {
+      final category = categories[categoryId];
+      if (category != null && category.name.trim().isNotEmpty) {
+        return category.name;
+      }
+
+      BudgetItem? currentItem;
+      for (final item in currentBudgetItems) {
+        if (item.categoryId == categoryId) {
+          currentItem = item;
+          break;
+        }
+      }
+
+      final itemName = currentItem?.name?.trim();
+      if (itemName != null && itemName.isNotEmpty) {
+        return itemName;
+      }
+
+      return 'Danh mục #$categoryId';
+    }
+
+    final name = categoryName(top.key);
+    final spentLabel = nf.format(top.value.round());
+
+    if (currentBudget > 0 && top.value > currentBudget) {
+      return 'Tháng trước bạn chi $spentLabel cho $name, cao hơn kế hoạch '
+          'tháng này. Nên để ý nhóm này sớm để tránh vượt ngân sách.';
+    }
+
+    if (topShare >= 0.4 && entries.length > 1) {
+      return 'Tháng trước, $name là khoản chi nổi bật nhất với $spentLabel. '
+          'Tháng này bạn nên theo dõi nhóm này kỹ hơn.';
+    }
+
+    return 'Dựa trên tháng trước, chi tiêu chưa tập trung quá mạnh vào một '
+        'danh mục nào. Bạn vẫn nên theo dõi các khoản phát sinh lớn.';
+  }
+
+  String _weeklyHistoryWarningText(
+    Map<int, num> previousWeekSpent,
+    Map<int, Category> categories,
+    NumberFormat nf, {
+    required String fallback,
+  }) {
+    final entries = previousWeekSpent.entries
+        .where((entry) => entry.key > 0 && entry.value > 0)
+        .toList();
+
+    if (entries.isEmpty) {
+      return fallback;
+    }
+
+    entries.sort((a, b) => b.value.compareTo(a.value));
+    final top = entries.first;
+    final totalPreviousSpent =
+        entries.fold<num>(0, (sum, entry) => sum + entry.value);
+    final topShare =
+        totalPreviousSpent > 0 ? top.value / totalPreviousSpent : 0.0;
+
+    String categoryName(int categoryId) {
+      final category = categories[categoryId];
+      if (category != null && category.name.trim().isNotEmpty) {
+        return category.name;
+      }
+
+      return 'Danh mục #$categoryId';
+    }
+
+    final name = categoryName(top.key);
+    final spentLabel = nf.format(top.value.round());
+
+    if (topShare >= 0.4 && entries.length > 1) {
+      return 'Tuần trước, $name là khoản chi nổi bật nhất với $spentLabel. '
+          'Tuần này bạn nên theo dõi nhóm này kỹ hơn.';
+    }
+
+    return 'Tuần trước chi tiêu chưa tập trung quá mạnh vào một danh mục nào. '
+        'Bạn vẫn nên chú ý các khoản phát sinh bất thường trong tuần này.';
+  }
+
   Future<DateTime?> _pickMonth(
     BuildContext context, {
     required DateTime initial,
@@ -843,6 +1317,38 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
 
     if (picked == null) return null;
     return DateTime(picked.year, picked.month);
+  }
+
+  Future<DateTime?> _pickWeek(
+    BuildContext context, {
+    required DateTime initial,
+  }) {
+    return showModalBottomSheet<DateTime>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _WeekPickerSheet(initial: initial),
+    );
+  }
+
+  String _formatSelectedWeekRange() {
+    final locale = Localizations.localeOf(context).toLanguageTag();
+    final start = _selectedWeekStart;
+    final end = start.add(const Duration(days: 6));
+    return '${DateFormat('dd/MM', locale).format(start)} - ${DateFormat('dd/MM', locale).format(end)}';
+  }
+
+  static DateTime _startOfWeek(DateTime date) {
+    final normalized = DateTime(date.year, date.month, date.day);
+    return normalized.subtract(Duration(days: normalized.weekday - DateTime.monday));
+  }
+
+  static String _formatApiDate(DateTime date) {
+    final y = date.year.toString().padLeft(4, '0');
+    final m = date.month.toString().padLeft(2, '0');
+    final d = date.day.toString().padLeft(2, '0');
+    return '$y-$m-$d';
   }
 
   String _formatWeekRange(String? startRaw, String? endRaw) {
@@ -861,6 +1367,463 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
     return status == 'no_prediction' ||
         status == 'no_data' ||
         status == 'insufficient_data';
+  }
+
+  void _showWarningDialog(String message) {
+    showDialog<void>(
+      context: context,
+      builder: (context) {
+        final isDark = Theme.of(context).brightness == Brightness.dark;
+
+        return AlertDialog(
+          backgroundColor: isDark ? const Color(0xFF1F2937) : Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+          ),
+          title: Row(
+            children: [
+              const Icon(
+                Icons.warning_amber_rounded,
+                color: Color(0xFFEF4444),
+                size: 22,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Cảnh báo chi tiêu',
+                  style: TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w900,
+                    color: isDark ? Colors.white : const Color(0xFF111827),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          content: Text(
+            message,
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              height: 1.45,
+              color: isDark ? Colors.white70 : const Color(0xFF475467),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text(
+                'Đã hiểu',
+                style: TextStyle(fontWeight: FontWeight.w800),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _PredictionModeSelector extends StatelessWidget {
+  const _PredictionModeSelector({
+    required this.value,
+    required this.onChanged,
+  });
+
+  final _PredictionViewMode value;
+  final ValueChanged<_PredictionViewMode> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF111827) : const Color(0xFFEFF4F8),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          _PredictionModeSegment(
+            icon: Icons.calendar_view_week_rounded,
+            label: 'Tuần',
+            selected: value == _PredictionViewMode.week,
+            onTap: () => onChanged(_PredictionViewMode.week),
+          ),
+          const SizedBox(width: 4),
+          _PredictionModeSegment(
+            icon: Icons.calendar_month_rounded,
+            label: 'Tháng',
+            selected: value == _PredictionViewMode.month,
+            onTap: () => onChanged(_PredictionViewMode.month),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PredictionModeSegment extends StatelessWidget {
+  const _PredictionModeSegment({
+    required this.icon,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final selectedBg = isDark ? const Color(0xFF1F2937) : Colors.white;
+    final selectedColor = isDark ? Colors.white : AppColors.primaryDark;
+    final idleColor = isDark ? Colors.white70 : const Color(0xFF667085);
+
+    return Expanded(
+      child: InkWell(
+        borderRadius: BorderRadius.circular(9),
+        onTap: selected ? null : onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          height: 38,
+          decoration: BoxDecoration(
+            color: selected ? selectedBg : Colors.transparent,
+            borderRadius: BorderRadius.circular(9),
+            boxShadow: selected && !isDark
+                ? [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: .06),
+                      blurRadius: 8,
+                      offset: const Offset(0, 3),
+                    ),
+                  ]
+                : [],
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                icon,
+                size: 17,
+                color: selected ? selectedColor : idleColor,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w900,
+                  color: selected ? selectedColor : idleColor,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _WeekSelectorBar extends StatelessWidget {
+  const _WeekSelectorBar({
+    required this.label,
+    required this.onPrevious,
+    required this.onNext,
+    required this.onTap,
+  });
+
+  final String label;
+  final VoidCallback onPrevious;
+  final VoidCallback onNext;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final borderColor = isDark ? Colors.white12 : const Color(0xFFE5E7EB);
+    final textColor = isDark ? Colors.white : const Color(0xFF111827);
+
+    return Row(
+      children: [
+        _WeekNavButton(
+          icon: Icons.chevron_left_rounded,
+          onTap: onPrevious,
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Material(
+            color: isDark ? const Color(0xFF111827) : Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            child: InkWell(
+              onTap: onTap,
+              borderRadius: BorderRadius.circular(12),
+              child: Container(
+                height: 42,
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: borderColor),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(
+                      Icons.date_range_rounded,
+                      size: 17,
+                      color: AppColors.primary,
+                    ),
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Text(
+                        'Tuần $label',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: textColor,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        _WeekNavButton(
+          icon: Icons.chevron_right_rounded,
+          onTap: onNext,
+        ),
+      ],
+    );
+  }
+}
+
+class _WeekNavButton extends StatelessWidget {
+  const _WeekNavButton({
+    required this.icon,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Material(
+      color: isDark ? const Color(0xFF111827) : Colors.white,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          width: 42,
+          height: 42,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: isDark ? Colors.white12 : const Color(0xFFE5E7EB),
+            ),
+          ),
+          child: Icon(icon, color: AppColors.primary, size: 24),
+        ),
+      ),
+    );
+  }
+}
+
+class _WeekPickerSheet extends StatefulWidget {
+  const _WeekPickerSheet({required this.initial});
+
+  final DateTime initial;
+
+  @override
+  State<_WeekPickerSheet> createState() => _WeekPickerSheetState();
+}
+
+class _WeekPickerSheetState extends State<_WeekPickerSheet> {
+  late DateTime _visibleMonth;
+
+  @override
+  void initState() {
+    super.initState();
+    _visibleMonth = DateTime(widget.initial.year, widget.initial.month);
+  }
+
+  List<DateTime> _weeksForVisibleMonth() {
+    final firstDay = DateTime(_visibleMonth.year, _visibleMonth.month);
+    final lastDay = DateTime(_visibleMonth.year, _visibleMonth.month + 1, 0);
+    final firstWeek = _AnalyticsPageState._startOfWeek(firstDay);
+    final weeks = <DateTime>[];
+
+    for (var week = firstWeek;
+        !week.isAfter(lastDay);
+        week = week.add(const Duration(days: 7))) {
+      weeks.add(week);
+    }
+
+    return weeks;
+  }
+
+  String _weekRangeLabel(DateTime start) {
+    final locale = Localizations.localeOf(context).toLanguageTag();
+    final end = start.add(const Duration(days: 6));
+    return '${DateFormat('dd/MM', locale).format(start)} - ${DateFormat('dd/MM', locale).format(end)}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final nowWeek = _AnalyticsPageState._startOfWeek(DateTime.now());
+    final selectedWeek = _AnalyticsPageState._startOfWeek(widget.initial);
+    final weeks = _weeksForVisibleMonth();
+    final locale = Localizations.localeOf(context).toLanguageTag();
+
+    return Container(
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      padding: EdgeInsets.fromLTRB(
+        20,
+        12,
+        20,
+        20 + MediaQuery.of(context).padding.bottom,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 46,
+            height: 4,
+            decoration: BoxDecoration(
+              color: const Color(0xFFD1D5DB),
+              borderRadius: BorderRadius.circular(999),
+            ),
+          ),
+          const SizedBox(height: 18),
+          Row(
+            children: [
+              IconButton(
+                onPressed: () => setState(
+                  () => _visibleMonth =
+                      DateTime(_visibleMonth.year, _visibleMonth.month - 1),
+                ),
+                icon: const Icon(Icons.chevron_left_rounded),
+                color: const Color(0xFF111827),
+                iconSize: 26,
+                splashRadius: 22,
+              ),
+              Expanded(
+                child: Text(
+                  DateFormat.yMMMM(locale).format(_visibleMonth),
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w900,
+                    color: Color(0xFF111827),
+                  ),
+                ),
+              ),
+              IconButton(
+                onPressed: () => setState(
+                  () => _visibleMonth =
+                      DateTime(_visibleMonth.year, _visibleMonth.month + 1),
+                ),
+                icon: const Icon(Icons.chevron_right_rounded),
+                color: const Color(0xFF111827),
+                iconSize: 26,
+                splashRadius: 22,
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxHeight: 360),
+            child: ListView.separated(
+              shrinkWrap: true,
+              itemCount: weeks.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 10),
+              itemBuilder: (context, index) {
+                final week = weeks[index];
+                final selected = week == selectedWeek;
+                final current = week == nowWeek;
+                final label = _weekRangeLabel(week);
+
+                Color background = Colors.white;
+                Color border = const Color(0xFFE5E7EB);
+                Color foreground = const Color(0xFF111827);
+
+                if (selected) {
+                  background = AppColors.primaryLight;
+                  border = AppColors.primary;
+                  foreground = AppColors.primaryDark;
+                } else if (current) {
+                  background = AppColors.primarySurface;
+                  border = AppColors.border;
+                  foreground = AppColors.primaryDark;
+                }
+
+                return Material(
+                  color: background,
+                  borderRadius: BorderRadius.circular(14),
+                  child: InkWell(
+                    onTap: () => Navigator.pop(context, week),
+                    borderRadius: BorderRadius.circular(14),
+                    child: Container(
+                      height: 52,
+                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: border),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            current
+                                ? Icons.today_rounded
+                                : Icons.date_range_rounded,
+                            color: foreground,
+                            size: 19,
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              'Tuần $label',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: foreground,
+                                fontSize: 15,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
+                          if (selected)
+                            const Icon(
+                              Icons.check_rounded,
+                              color: AppColors.primaryDark,
+                              size: 20,
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 

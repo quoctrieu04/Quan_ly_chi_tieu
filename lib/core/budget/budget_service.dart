@@ -89,13 +89,17 @@ class BudgetService {
   Future<Map<int, num>> getSpentByCategory({
     required int year,
     required int month,
+    String? weekStart,
   }) async {
+    final queryParameters = <String, dynamic>{
+      'month': month,
+      'year': year,
+      if (weekStart != null) 'week_start': weekStart,
+    };
+
     final res = await dio.get(
       'api/transactions/spent-by-category',
-      queryParameters: {
-        'month': month,
-        'year': year,
-      },
+      queryParameters: queryParameters,
     );
 
     if (res.statusCode != 200) return {};
