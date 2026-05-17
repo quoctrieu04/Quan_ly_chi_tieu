@@ -291,7 +291,6 @@ class _RealEstateTile extends StatelessWidget {
     return s.isEmpty ? '' : s;
   }
 
-  @override
   Widget build(BuildContext context) {
     final price = (item.totalCost ?? item.purchasePrice ?? 0) as num;
     final name = _safeText(item.name).isEmpty ? 'Bất động sản' : item.name;
@@ -299,12 +298,13 @@ class _RealEstateTile extends StatelessWidget {
 
     final plans = item.incomePlans as List<dynamic>?;
     final hasOverduePlan = plans?.any((p) => p.canCollectToday == true) ?? false;
+    final bool isClosed = item.isSold ?? false;
 
     Widget tile = Container(
-      margin: const EdgeInsets.only(bottom: 12),
+      margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
         color: isDark ? cs.surfaceContainerHigh : Colors.white,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(
           color: isDark
               ? cs.outlineVariant.withOpacity(.08)
@@ -320,7 +320,7 @@ class _RealEstateTile extends StatelessWidget {
         ],
       ),
       child: InkWell(
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(14),
         onTap: () async {
           await Navigator.of(context).push(
             MaterialPageRoute(
@@ -332,92 +332,92 @@ class _RealEstateTile extends StatelessWidget {
           }
         },
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.fromLTRB(12, 9, 12, 9),
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Container(
-                    width: 10,
-                    height: 10,
-                    decoration: const BoxDecoration(
-                      color: Color(0xFFF59E0B),
-                      shape: BoxShape.circle,
+                    width: 3,
+                    height: 22,
+                    margin: const EdgeInsets.only(top: 2),
+                    decoration: BoxDecoration(
+                      color: isClosed ? Colors.grey : const Color(0xFFF59E0B),
+                      borderRadius: BorderRadius.circular(99),
                     ),
                   ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 15,
-                        color: cs.onSurface,
-                      ),
-                    ),
-                  ),
-                  Text(
-                    '100%',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w800,
-                      color: cs.primary,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 14),
-              Row(
-                children: [
+                  const SizedBox(width: 9),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Giá trị',
+                          name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                            fontSize: 11.5,
-                            color: cs.onSurface.withOpacity(.4),
-                          ),
-                        ),
-                        const SizedBox(height: 3),
-                        Text(
-                          money(price),
-                          style: TextStyle(
+                            fontWeight: FontWeight.w700,
                             fontSize: 14,
-                            fontWeight: FontWeight.w800,
                             color: cs.onSurface,
                           ),
                         ),
+                        if (type.isNotEmpty) ...[
+                          const SizedBox(height: 1),
+                          Text(
+                            type,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: cs.onSurface.withOpacity(.4),
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   ),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Text(
-                          'Trạng thái',
-                          style: TextStyle(
-                            fontSize: 11.5,
-                            color: cs.onSurface.withOpacity(.4),
-                          ),
+                  if (isClosed)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: cs.error.withOpacity(.06),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        'Đã bán',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: cs.error,
+                          fontWeight: FontWeight.w600,
                         ),
-                        const SizedBox(height: 3),
-                        Text(
-                          'Đang giữ',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w800,
-                            color: cs.primary,
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
-                  ),
                 ],
+              ),
+              const SizedBox(height: 8),
+              Text.rich(
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                TextSpan(
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: cs.onSurface.withOpacity(.45),
+                    height: 1.15,
+                  ),
+                  children: [
+                    const TextSpan(text: 'Vốn đầu tư: '),
+                    TextSpan(
+                      text: money(price),
+                      style: TextStyle(
+                        color: cs.onSurface,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
@@ -425,31 +425,34 @@ class _RealEstateTile extends StatelessWidget {
       ),
     );
 
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        tile,
-        if (hasOverduePlan)
-          Positioned(
-            top: 0,
-            right: 0,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-              decoration: const BoxDecoration(
-                color: Colors.red,
-                borderRadius: BorderRadius.only(
-                  topRight: Radius.circular(14),
-                  bottomLeft: Radius.circular(10),
+    return Opacity(
+      opacity: isClosed ? 0.45 : 1,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          tile,
+          if (hasOverduePlan)
+            Positioned(
+              top: 0,
+              right: 0,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                decoration: const BoxDecoration(
+                  color: Colors.red,
+                  borderRadius: BorderRadius.only(
+                    topRight: Radius.circular(14),
+                    bottomLeft: Radius.circular(10),
+                  ),
                 ),
+                child: const Text('1',
+                    style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold)),
               ),
-              child: const Text('1',
-                  style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold)),
             ),
-          ),
-      ],
+        ],
+      ),
     );
   }
 }

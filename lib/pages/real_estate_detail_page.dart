@@ -135,6 +135,15 @@ class _RealEstateDetailPageState extends State<RealEstateDetailPage> {
     
     if (!mounted) return;
 
+    if (incomeProv.plan != null && incomeProv.plan!.canCollectToday) {
+      showAppSnackBar(
+        context,
+        'Vui lòng thu tiền hoặc xóa khoản thu nhập định kỳ đang quá hạn trước khi bán!',
+        isError: true,
+      );
+      return;
+    }
+
     final result = await showModalBottomSheet<Map<String, dynamic>>(
       context: context,
       isScrollControlled: true,
