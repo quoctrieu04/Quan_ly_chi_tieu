@@ -81,6 +81,19 @@ class _RealEstateDetailPageState extends State<RealEstateDetailPage> {
 
       if (created == true) {
         await incomeProv.load(realEstate.id);
+        
+        // Cập nhật lại danh sách chính để hiện badge
+        if (mounted) {
+          final prov = context.read<RealEstateProvider>();
+          await prov.fetch();
+          final updated = prov.items.firstWhere(
+            (e) => e.id == realEstate.id,
+            orElse: () => realEstate,
+          );
+          setState(() {
+            realEstate = updated;
+          });
+        }
       }
 
       return;

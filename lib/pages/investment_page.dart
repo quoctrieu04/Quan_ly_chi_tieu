@@ -298,8 +298,7 @@ class _RealEstateTile extends StatelessWidget {
     final type = _safeText(item.propertyType);
 
     final plans = item.incomePlans as List<dynamic>?;
-    final hasOverduePlan =
-        plans?.any((p) => p.canCollectToday == true) ?? false;
+    final hasOverduePlan = plans?.any((p) => p.canCollectToday == true) ?? false;
 
     Widget tile = Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -322,11 +321,16 @@ class _RealEstateTile extends StatelessWidget {
       ),
       child: InkWell(
         borderRadius: BorderRadius.circular(18),
-        onTap: () => Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => RealEstateDetailPage(item: item),
-          ),
-        ),
+        onTap: () async {
+          await Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => RealEstateDetailPage(item: item),
+            ),
+          );
+          if (context.mounted) {
+            context.read<RealEstateProvider>().fetch();
+          }
+        },
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Column(
