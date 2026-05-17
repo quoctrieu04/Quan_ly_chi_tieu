@@ -1,4 +1,5 @@
 import 'package:chitieu/api/investment/investment_provider.dart';
+import 'package:chitieu/api/real_estate/real_estate_provider.dart';
 import 'package:chitieu/financial_transaction/financial_transaction_provider.dart';
 import 'package:chitieu/utils/safe_ui.dart';
 import 'package:chitieu/widgets/create_investment_form.dart';
@@ -369,6 +370,25 @@ class _AccountsPageState extends State<AccountsPage> {
     final hasAccounts = walletProv.items.isNotEmpty;
     final hasTransactions = totalIncome > 0 || totalSpent > 0;
 
+    final reProv = context.watch<RealEstateProvider>();
+    final invProv = context.watch<InvestmentProvider>();
+    
+    int overdueCount = 0;
+    
+    for (var re in reProv.items) {
+      if ((re.incomePlans as List<dynamic>?)?.any((p) => p.canCollectToday == true) ?? false) {
+        overdueCount++;
+      }
+    }
+    
+    for (var inv in invProv.items) {
+      if (inv.isMature) {
+        overdueCount++;
+      }
+    }
+    
+    final hasOverdueNotification = overdueCount > 0;
+
 
 
     final now = DateTime.now();
@@ -554,6 +574,8 @@ class _AccountsPageState extends State<AccountsPage> {
                       FeatureItem(
                         icon: Icons.trending_up_rounded,
                         label: t.investment,
+                        showBadge: hasOverdueNotification,
+                        badgeCount: overdueCount,
                         onTap: () {
                           Navigator.pushNamed(context, '/investment');
                         },
@@ -565,7 +587,7 @@ class _AccountsPageState extends State<AccountsPage> {
                           Navigator.pushNamed(
                             context,
                             '/transactions',
-                            arguments: {'year': ym.year, 'month': ym.month},
+                            arguments: {'year': ym.year, 'month': ym.month, 'day': null},
                           );
                         },
                       ),
@@ -1192,10 +1214,10 @@ class MonthSummaryCard extends StatelessWidget {
                 bg: const Color(0xFFE9F7EF),
                 isDark: isDark,
                 onTap: () {
-                  final ym = context.read<YearMonthProvider>().ym;
                   Navigator.pushNamed(context, '/transactions', arguments: {
-                    'year': ym.year,
-                    'month': ym.month,
+                    'year': 0,
+                    'month': 0,
+                    'day': null,
                     'type': 'in',
                   });
                 },
@@ -1211,10 +1233,10 @@ class MonthSummaryCard extends StatelessWidget {
                 bg: const Color(0xFFFFEFEF),
                 isDark: isDark,
                 onTap: () {
-                  final ym = context.read<YearMonthProvider>().ym;
                   Navigator.pushNamed(context, '/transactions', arguments: {
-                    'year': ym.year,
-                    'month': ym.month,
+                    'year': 0,
+                    'month': 0,
+                    'day': null,
                     'type': 'out',
                   });
                 },

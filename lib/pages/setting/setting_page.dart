@@ -166,15 +166,6 @@ class SettingsPage extends StatelessWidget {
                       ),
                       _thinDivider(cs, isDark),
                       _buildActionRow(
-                        icon: Icons.lock_outline_rounded,
-                        label: t.changePassword,
-                        cs: cs,
-                        onTap: () {
-                          // TODO: mở form đổi mật khẩu
-                        },
-                      ),
-                      _thinDivider(cs, isDark),
-                      _buildActionRow(
                         icon: Icons.shield_outlined,
                         label: t.policy,
                         cs: cs,

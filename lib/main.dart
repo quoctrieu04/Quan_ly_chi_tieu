@@ -350,6 +350,8 @@ class MyApp extends StatelessWidget {
           secondary: AppColors.primary,
           surface: AppColors.darkSurface,
           error: AppColors.danger,
+          onSurface: AppColors.darkTextMain,
+          onBackground: AppColors.darkTextMain,
         ),
         scaffoldBackgroundColor: AppColors.darkBackground,
       ),
@@ -652,6 +654,22 @@ class _HomeScaffoldState extends State<HomeScaffold> {
     final cs = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
+    int overdueCount = 0;
+    try {
+      final reProv = context.watch<RealEstateProvider>();
+      for (var re in reProv.items) {
+        if ((re.incomePlans as List<dynamic>?)?.any((p) => p.canCollectToday == true) ?? false) {
+          overdueCount++;
+        }
+      }
+      final invProv = context.watch<InvestmentProvider>();
+      for (var inv in invProv.items) {
+        if (inv.isMature) {
+          overdueCount++;
+        }
+      }
+    } catch (_) {}
+
     return Scaffold(
       body: IndexedStack(
         index: _currentIndex,
@@ -675,6 +693,7 @@ class _HomeScaffoldState extends State<HomeScaffold> {
         ],
         cs: cs,
         isDark: isDark,
+        notificationCount: overdueCount,
       ),
     );
   }
@@ -693,6 +712,7 @@ class _ModernBottomNav extends StatelessWidget {
   final List<IconData> icons;
   final ColorScheme cs;
   final bool isDark;
+  final int notificationCount;
 
   const _ModernBottomNav({
     required this.currentIndex,
@@ -702,6 +722,7 @@ class _ModernBottomNav extends StatelessWidget {
     required this.icons,
     required this.cs,
     required this.isDark,
+    this.notificationCount = 0,
   });
 
   @override
@@ -806,7 +827,16 @@ class _ModernBottomNav extends StatelessWidget {
                       : Colors.transparent,
                   borderRadius: BorderRadius.circular(20),
                 ),
-                child: Icon(icons[index], size: 21, color: color),
+                child: index == 1 && notificationCount > 0
+                    ? Badge(
+                        label: Text('$notificationCount',
+                            style: const TextStyle(
+                                fontSize: 9, fontWeight: FontWeight.bold)),
+                        backgroundColor: Colors.red,
+                        offset: const Offset(8, -8),
+                        child: Icon(icons[index], size: 21, color: color),
+                      )
+                    : Icon(icons[index], size: 21, color: color),
               ),
               const SizedBox(height: 3),
               Text(
@@ -1047,7 +1077,7 @@ class _ActionBtn extends StatelessWidget {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        GestureDetector( 
+        GestureDetector(
           onTap: onTap,
           child: Container(
             width: 48,
@@ -1084,7 +1114,7 @@ class _ActionBtn extends StatelessWidget {
             fontSize: 11,
             fontWeight: FontWeight.w600,
           ),
-        ), 
+        ),
       ],
     );
   }

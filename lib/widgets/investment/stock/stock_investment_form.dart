@@ -1,150 +1,64 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 
-import 'package:chitieu/api/bankaccount/bank_account_provider.dart';
-import 'package:chitieu/api/investment/investment_provider.dart';
-import 'package:chitieu/widgets/create_investment_form.dart';
-import 'package:chitieu/widgets/investment/investment_form_fields.dart';
-
-class StockInvestmentForm extends StatefulWidget {
+class StockInvestmentForm extends StatelessWidget {
   const StockInvestmentForm({super.key});
-
-  @override
-  State<StockInvestmentForm> createState() => _StockInvestmentFormState();
-}
-
-class _StockInvestmentFormState extends State<StockInvestmentForm> {
-  final _formKey = GlobalKey<FormState>();
-  final nameCtrl = TextEditingController();
-  final priceCtrl = TextEditingController();
-  final qtyCtrl = TextEditingController(text: '1');
-
-  String? selectedAccount;
-
-  @override
-  void dispose() {
-    nameCtrl.dispose();
-    priceCtrl.dispose();
-    qtyCtrl.dispose();
-    super.dispose();
-  }
-
-  double _parseMoney(String input) {
-    final cleaned = input.replaceAll('.', '').replaceAll(',', '');
-    if (cleaned.isEmpty) return 0;
-    return double.parse(cleaned);
-  }
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bankProv = context.watch<BankAccountProvider>();
 
-    return Form(
-      key: _formKey,
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 22),
+      decoration: BoxDecoration(
+        color: isDark ? cs.surfaceContainerHigh : Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: isDark
+              ? cs.outlineVariant.withOpacity(.1)
+              : const Color(0xFFE5E7EB),
+        ),
+      ),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          InvestmentFormFields.textField(
-            controller: nameCtrl,
-            label: 'Tên cổ phiếu',
-            icon: Icons.candlestick_chart_rounded,
-            cs: cs,
-            isDark: isDark,
-            textInputAction: TextInputAction.next,
-            validator: (v) =>
-                v == null || v.trim().isEmpty ? 'Không được để trống' : null,
+          Container(
+            width: 54,
+            height: 54,
+            decoration: BoxDecoration(
+              color: const Color(0xFF1565C0).withOpacity(.1),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: const Icon(
+              Icons.candlestick_chart_rounded,
+              color: Color(0xFF1565C0),
+              size: 28,
+            ),
           ),
-          const SizedBox(height: 12),
-          InvestmentFormFields.textField(
-            controller: priceCtrl,
-            label: 'Giá mua / cổ phiếu',
-            icon: Icons.payments_outlined,
-            cs: cs,
-            isDark: isDark,
-            keyboardType: TextInputType.number,
-            inputFormatters: [MoneyInputFormatter()],
-            suffixText: 'đ',
-            textInputAction: TextInputAction.next,
-            validator: (v) =>
-                v == null || v.trim().isEmpty ? 'Nhập giá mua' : null,
+          const SizedBox(height: 14),
+          Text(
+            'Cổ phiếu đang phát triển',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w900,
+              color: cs.onSurface,
+            ),
           ),
-          const SizedBox(height: 12),
-          InvestmentFormFields.textField(
-            controller: qtyCtrl,
-            label: 'Số lượng',
-            icon: Icons.confirmation_number_outlined,
-            cs: cs,
-            isDark: isDark,
-            keyboardType: TextInputType.number,
-            textInputAction: TextInputAction.next,
-            validator: (v) {
-              final qty = int.tryParse(v ?? '');
-              if (qty == null || qty <= 0) {
-                return 'Số lượng không hợp lệ';
-              }
-              return null;
-            },
-          ),
-          const SizedBox(height: 12),
-          InvestmentFormFields.dropdown<String>(
-            value: selectedAccount,
-            label: 'Tài khoản nguồn tiền',
-            icon: Icons.account_balance_wallet_outlined,
-            cs: cs,
-            isDark: isDark,
-            validator: (v) => v == null ? 'Vui lòng chọn tài khoản' : null,
-            items: bankProv.items
-                .map(
-                  (acc) => DropdownMenuItem(
-                    value: acc.id.toString(),
-                    child: Text('${acc.name} - ${acc.bankname ?? ''}'),
-                  ),
-                )
-                .toList(),
-            onChanged: (v) => setState(() => selectedAccount = v),
-          ),
-          const SizedBox(height: 18),
-          SizedBox(
-            width: double.infinity,
-            height: 52,
-            child: ElevatedButton(
-              onPressed: _save,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: cs.primary,
-                foregroundColor: cs.onPrimary,
-                elevation: 2,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-              child: const Text(
-                'Lưu',
-                style: TextStyle(fontWeight: FontWeight.w800),
-              ),
+          const SizedBox(height: 8),
+          Text(
+            'Chức năng đầu tư cổ phiếu chưa hoàn thiện.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 13,
+              height: 1.4,
+              fontWeight: FontWeight.w600,
+              color: cs.onSurface.withOpacity(.55),
             ),
           ),
         ],
       ),
     );
-  }
-
-  Future<void> _save() async {
-    if (!_formKey.currentState!.validate()) return;
-
-    final price = _parseMoney(priceCtrl.text);
-    final qty = int.parse(qtyCtrl.text);
-    
-    await context.read<InvestmentProvider>().addRaw({
-      'name': nameCtrl.text,
-      'type': 'stock',
-      'buy_price': price * qty,
-      'unit_price': price,
-      'quantity': qty,
-      'accountSource': int.parse(selectedAccount!),
-    });
-
-    if (!mounted) return;
-    Navigator.pop(context, true);
   }
 }

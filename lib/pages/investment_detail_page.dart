@@ -81,19 +81,21 @@ class _InvestmentDetailPageState extends State<InvestmentDetailPage> {
         '${investment.interestRate?.toStringAsFixed(2) ?? '0'}% / năm';
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cs = Theme.of(context).colorScheme;
 
     return Scaffold(
       backgroundColor: isDark ? const Color(0xFF0F172A) : AppColors.background,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        foregroundColor: const Color(0xFF00323D),
+        foregroundColor: cs.onSurface,
         titleSpacing: 0,
         title: Text(
           'Chi tiết ${investment.name}',
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.w700,
+            color: cs.onSurface,
           ),
         ),
       ),
@@ -103,10 +105,10 @@ class _InvestmentDetailPageState extends State<InvestmentDetailPage> {
           Center(
             child: Column(
               children: [
-                const Text(
+                Text(
                   'TỔNG GIÁ TRỊ',
                   style: TextStyle(
-                    color: Color(0xFF68727C),
+                    color: cs.onSurface.withOpacity(0.6),
                     fontSize: 13,
                     fontWeight: FontWeight.w700,
                     letterSpacing: 1.2,
@@ -120,19 +122,19 @@ class _InvestmentDetailPageState extends State<InvestmentDetailPage> {
                   children: [
                     Text(
                       moneyText(totalAmount),
-                      style: const TextStyle(
-                        color: Color(0xFF00323D),
+                      style: TextStyle(
+                        color: cs.onSurface,
                         fontSize: 38,
                         height: 1,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
-                    const Padding(
-                      padding: EdgeInsets.only(bottom: 4),
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 4),
                       child: Text(
                         'VND',
                         style: TextStyle(
-                          color: Color(0xFF00323D),
+                          color: cs.onSurface,
                           fontSize: 16,
                           fontWeight: FontWeight.w700,
                         ),
@@ -146,7 +148,7 @@ class _InvestmentDetailPageState extends State<InvestmentDetailPage> {
           const SizedBox(height: 36),
           Container(
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: isDark ? cs.surfaceContainerHigh : Colors.white,
               borderRadius: BorderRadius.circular(14),
               boxShadow: [
                 BoxShadow(
@@ -161,11 +163,13 @@ class _InvestmentDetailPageState extends State<InvestmentDetailPage> {
                 _detailRow(
                   'Gốc đầu tư',
                   '${moneyText(investment.totalInvested)} VND',
+                  cs,
                 ),
                 _detailDivider(),
                 _detailRow(
                   isBeforeMaturity ? 'Lãi tạm tính trước hạn' : 'Lãi hiện tại',
                   '${moneyText(displayProfit)} VND',
+                  cs,
                   valueColor:
                       displayProfit >= 0 ? const Color(0xFF55B866) : Colors.red,
                   trailing: investment.type == 'bank'
@@ -178,15 +182,17 @@ class _InvestmentDetailPageState extends State<InvestmentDetailPage> {
                   investment.startDate != null
                       ? dateFmt.format(investment.startDate!)
                       : '—',
+                  cs,
                 ),
                 if (investment.type == 'bank') ...[
                   _detailDivider(),
                   _detailRow(
                     'Ngày đáo hạn',
                     maturityDate != null ? dateFmt.format(maturityDate) : '—',
+                    cs,
                     valueColor: canWithdraw
                         ? const Color(0xFF55B866)
-                        : const Color(0xFF68727C),
+                        : (isDark ? cs.onSurface.withOpacity(0.6) : const Color(0xFF68727C)),
                     leadingValueIcon: Icons.event_available_rounded,
                   ),
                 ],
@@ -196,6 +202,8 @@ class _InvestmentDetailPageState extends State<InvestmentDetailPage> {
         ],
       ),
       bottomNavigationBar: _actionBar(
+        cs: cs,
+        isDark: isDark,
         canWithdraw: canWithdraw,
         canWithdrawInterestAndRenew: canWithdrawInterestAndRenew,
         isBeforeMaturity: isBeforeMaturity,
@@ -206,7 +214,8 @@ class _InvestmentDetailPageState extends State<InvestmentDetailPage> {
 
   Widget _detailRow(
     String label,
-    String value, {
+    String value,
+    ColorScheme cs, {
     Color? valueColor,
     Widget? trailing,
     IconData? leadingValueIcon,
@@ -221,8 +230,8 @@ class _InvestmentDetailPageState extends State<InvestmentDetailPage> {
           Expanded(
             child: Text(
               label,
-              style: const TextStyle(
-                color: Color(0xFF68727C),
+              style: TextStyle(
+                color: cs.onSurface.withOpacity(0.6),
                 fontSize: 14,
                 fontWeight: FontWeight.w500,
               ),
@@ -239,7 +248,7 @@ class _InvestmentDetailPageState extends State<InvestmentDetailPage> {
                     Icon(
                       leadingValueIcon,
                       size: 16,
-                      color: valueColor ?? const Color(0xFF1F2933),
+                      color: valueColor ?? cs.onSurface,
                     ),
                     const SizedBox(width: 5),
                   ],
@@ -247,7 +256,7 @@ class _InvestmentDetailPageState extends State<InvestmentDetailPage> {
                     value,
                     textAlign: TextAlign.right,
                     style: TextStyle(
-                      color: valueColor ?? const Color(0xFF1F2933),
+                      color: valueColor ?? cs.onSurface,
                       fontSize: 14,
                       fontWeight: FontWeight.w800,
                     ),
@@ -291,6 +300,8 @@ class _InvestmentDetailPageState extends State<InvestmentDetailPage> {
   }
 
   Widget _actionBar({
+    required ColorScheme cs,
+    required bool isDark,
     required bool canWithdraw,
     required bool canWithdrawInterestAndRenew,
     required bool isBeforeMaturity,
@@ -304,7 +315,7 @@ class _InvestmentDetailPageState extends State<InvestmentDetailPage> {
       child: Container(
         padding: const EdgeInsets.fromLTRB(22, 12, 22, 14),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: isDark ? cs.surfaceContainerHigh : Colors.white,
           borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
           boxShadow: [
             BoxShadow(
@@ -319,6 +330,8 @@ class _InvestmentDetailPageState extends State<InvestmentDetailPage> {
                 children: [
                   Expanded(
                     child: _bottomActionButton(
+                      cs: cs,
+                      isDark: isDark,
                       icon: Icons.warning_amber_rounded,
                       label: 'RÚT TRƯỚC HẠN',
                       onPressed: _busy ? null : _openEarlyWithdrawInfoSheet,
@@ -329,6 +342,8 @@ class _InvestmentDetailPageState extends State<InvestmentDetailPage> {
                     const SizedBox(width: 8),
                     Expanded(
                       child: _bottomActionButton(
+                        cs: cs,
+                        isDark: isDark,
                         icon: Icons.payments_outlined,
                         label: 'RÚT LÃI ĐỊNH KỲ\n($withdrawableMonths tháng)',
                         onPressed: _busy ? null : () => _openMonthlyWithdrawInfoSheet(withdrawableMonths),
@@ -343,6 +358,8 @@ class _InvestmentDetailPageState extends State<InvestmentDetailPage> {
                 children: [
                   Expanded(
                     child: _bottomActionButton(
+                      cs: cs,
+                      isDark: isDark,
                       icon: Icons.logout_rounded,
                       label: 'RÚT TOÀN BỘ',
                       onPressed:
@@ -353,6 +370,8 @@ class _InvestmentDetailPageState extends State<InvestmentDetailPage> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: _bottomActionButton(
+                      cs: cs,
+                      isDark: isDark,
                       icon: Icons.account_balance_wallet_outlined,
                       label: 'RÚT LÃI &\nGIA HẠN GỐC',
                       onPressed: canUseInterestRenew
@@ -365,6 +384,8 @@ class _InvestmentDetailPageState extends State<InvestmentDetailPage> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: _bottomActionButton(
+                      cs: cs,
+                      isDark: isDark,
                       icon: Icons.refresh_rounded,
                       label: 'GIA HẠN',
                       onPressed: canUsePrimaryActions ? _openRenewDialog : null,
@@ -504,17 +525,22 @@ class _InvestmentDetailPageState extends State<InvestmentDetailPage> {
   }
 
   Widget _bottomActionButton({
+    required ColorScheme cs,
+    required bool isDark,
     required IconData icon,
     required String label,
     required VoidCallback? onPressed,
     bool outlined = false,
-    Color backgroundColor = Colors.white,
-    Color foregroundColor = const Color(0xFF004A55),
+    Color? backgroundColor,
+    Color? foregroundColor,
   }) {
+    backgroundColor ??= isDark ? cs.surfaceContainerHigh : Colors.white;
+    foregroundColor ??= isDark ? cs.onSurface : const Color(0xFF004A55);
+
     final borderRadius = BorderRadius.circular(10);
     final disabledBackground =
-        outlined ? Colors.white : const Color(0xFFE0E5E8);
-    final disabledForeground = const Color(0xFF9AA4AC);
+        outlined ? Colors.transparent : (isDark ? cs.surfaceContainer : const Color(0xFFE0E5E8));
+    final disabledForeground = isDark ? cs.onSurface.withOpacity(0.4) : const Color(0xFF9AA4AC);
 
     return SizedBox(
       height: 57,
@@ -532,8 +558,8 @@ class _InvestmentDetailPageState extends State<InvestmentDetailPage> {
             side: outlined
                 ? BorderSide(
                     color: onPressed == null
-                        ? const Color(0xFFD4DADE)
-                        : const Color(0xFF9AA4AC),
+                        ? (isDark ? cs.outlineVariant.withOpacity(0.3) : const Color(0xFFD4DADE))
+                        : (isDark ? cs.outlineVariant : const Color(0xFF9AA4AC)),
                   )
                 : BorderSide.none,
           ),

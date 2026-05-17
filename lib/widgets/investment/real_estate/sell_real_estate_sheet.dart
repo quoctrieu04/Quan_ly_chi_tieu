@@ -57,6 +57,8 @@ class _SellRealEstateSheetState extends State<SellRealEstateSheet> {
   @override
   Widget build(BuildContext context) {
     final bankProv = context.watch<BankAccountProvider>();
+    final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     // đảm bảo có dữ liệu tài khoản
     if (!bankProv.loading && bankProv.items.isEmpty && bankProv.error == null) {
@@ -103,10 +105,11 @@ class _SellRealEstateSheetState extends State<SellRealEstateSheet> {
             TextField(
               controller: _priceCtl,
               keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                labelText: 'Giá bán',
-                hintText: 'VD: 500.000.000',
-                border: OutlineInputBorder(),
+              decoration: _fieldDecoration(
+                label: 'Giá bán',
+                icon: Icons.payments_outlined,
+                cs: cs,
+                isDark: isDark,
               ),
               onChanged: (v) {
                 final f = _formatMoneyInput(v);
@@ -123,27 +126,22 @@ class _SellRealEstateSheetState extends State<SellRealEstateSheet> {
             // Ngày bán
             InkWell(
               onTap: _pickDate,
-              borderRadius: BorderRadius.circular(12),
-              child: Container(
-                width: double.infinity,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-                decoration: BoxDecoration(
-                  border: Border.all(color: const Color(0xFFDDDDDD)),
-                  borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(16),
+              child: InputDecorator(
+                decoration: _fieldDecoration(
+                  label: 'Ngày bán',
+                  icon: Icons.calendar_month_outlined,
+                  cs: cs,
+                  isDark: isDark,
+                  suffixIcon: Icons.calendar_month_rounded,
                 ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.calendar_month, size: 18),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        'Ngày bán: ${DateFormat('dd/MM/yyyy').format(_sellDate)}',
-                        style: const TextStyle(fontWeight: FontWeight.w700),
-                      ),
-                    ),
-                    const Icon(Icons.chevron_right),
-                  ],
+                child: Text(
+                  DateFormat('dd/MM/yyyy').format(_sellDate),
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: cs.onSurface,
+                  ),
                 ),
               ),
             ),
@@ -170,10 +168,18 @@ class _SellRealEstateSheetState extends State<SellRealEstateSheet> {
               )
             else
               DropdownButtonFormField<int>(
+                isExpanded: true,
                 value: _accountTargetId,
-                decoration: const InputDecoration(
-                  labelText: 'Tài khoản nhận tiền',
-                  border: OutlineInputBorder(),
+                borderRadius: BorderRadius.circular(14),
+                icon: Icon(
+                  Icons.expand_more_rounded,
+                  color: cs.onSurface.withOpacity(.45),
+                ),
+                decoration: _fieldDecoration(
+                  label: 'Tài khoản nhận tiền',
+                  icon: Icons.account_balance_wallet_outlined,
+                  cs: cs,
+                  isDark: isDark,
                 ),
                 items: bankProv.items.map((b) {
                   final bankName = (b.bankname ?? '').trim();
@@ -196,8 +202,16 @@ class _SellRealEstateSheetState extends State<SellRealEstateSheet> {
             // Submit
             SizedBox(
               width: double.infinity,
-              height: 46,
+              height: 48,
               child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: cs.primary,
+                  foregroundColor: cs.onPrimary,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
                 onPressed: _submitting || bankProv.items.isEmpty
                     ? null
                     : () async {
@@ -224,12 +238,18 @@ class _SellRealEstateSheetState extends State<SellRealEstateSheet> {
                         }
                       },
                 child: _submitting
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
+                    ? SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: cs.onPrimary,
+                        ),
                       )
-                    : const Text('Xác nhận'),
+                    : const Text(
+                        'Xác nhận',
+                        style: TextStyle(fontWeight: FontWeight.w800),
+                      ),
               ),
             ),
           ],
@@ -237,4 +257,54 @@ class _SellRealEstateSheetState extends State<SellRealEstateSheet> {
       ),
     );
   }
+
+  InputDecoration _fieldDecoration({
+    required String label,
+    required IconData icon,
+    required ColorScheme cs,
+    required bool isDark,
+    IconData? suffixIcon,
+  }) {
+    final borderColor =
+        isDark ? cs.outlineVariant.withOpacity(.12) : const Color(0xFFE5E7EB);
+
+    return InputDecoration(
+      labelText: label,
+      floatingLabelBehavior: FloatingLabelBehavior.never,
+      labelStyle: TextStyle(
+        color: cs.primary.withOpacity(.65),
+        fontWeight: FontWeight.w600,
+      ),
+      filled: true,
+      fillColor: isDark ? cs.surfaceContainerHigh : Colors.white,
+      contentPadding: const EdgeInsets.fromLTRB(18, 16, 16, 16),
+      prefixIcon: Padding(
+        padding: const EdgeInsets.only(left: 14, right: 10),
+        child: Icon(icon, color: cs.primary, size: 22),
+      ),
+      suffixIcon:
+          suffixIcon == null ? null : Icon(suffixIcon, color: cs.primary),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(color: borderColor),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(color: borderColor),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(color: cs.primary, width: 2),
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(color: cs.error, width: 1.5),
+      ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(color: cs.error, width: 2),
+      ),
+    );
+  }
 }
+

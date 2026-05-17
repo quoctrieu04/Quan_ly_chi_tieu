@@ -133,7 +133,7 @@ class _RealEstateInvestmentFormState extends State<RealEstateInvestmentForm> {
                 .map(
                   (acc) => DropdownMenuItem(
                     value: acc.id.toString(),
-                    child: Text('${acc.name} - ${acc.bankname ?? ''}'),
+                    child: Text('${acc.name} - ${acc.bankname ?? ''}', overflow: TextOverflow.ellipsis),
                   ),
                 )
                 .toList(),

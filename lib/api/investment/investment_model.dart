@@ -143,6 +143,24 @@ class Investment {
   /// Tổng vốn bỏ ra
   double get totalInvested => buyPrice * quantity;
 
+  /// Kế hoạch đã đến hạn hay chưa (chỉ dùng cho ngân hàng)
+  bool get isMature {
+    if (type != 'bank' || startDate == null || termMonths == null || closedAt != null) {
+      return false;
+    }
+    
+    final maturityDate = DateTime(
+      startDate!.year, 
+      startDate!.month + termMonths!, 
+      startDate!.day
+    );
+    
+    final today = DateTime.now();
+    final todayDateOnly = DateTime(today.year, today.month, today.day);
+    
+    return !todayDateOnly.isBefore(maturityDate);
+  }
+
   /// Lãi / lỗ
   double get profitLoss {
     if (type == 'bank') return _bankProfit;

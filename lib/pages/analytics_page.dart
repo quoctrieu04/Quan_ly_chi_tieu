@@ -17,6 +17,12 @@ import 'package:chitieu/widgets/app_month_picker_sheet.dart';
 import 'package:chitieu/pages/note_page.dart';
 import 'package:chitieu/utils/error_handler.dart';
 
+String _capFirst(String text) {
+  final trimmed = text.trim();
+  if (trimmed.isEmpty) return trimmed;
+  return trimmed[0].toUpperCase() + trimmed.substring(1).toLowerCase();
+}
+
 class AnalyticsPage extends StatefulWidget {
   const AnalyticsPage({super.key});
 
@@ -54,6 +60,7 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
   String? _weeklyTargetLabel;
   String? _weeklyNextStart;
   String? _weeklyNextEnd;
+  List<BudgetItem> _previousMonthBudgetItems = [];
   Map<int, num> _previousMonthSpentByCategory = {};
   Map<int, num> _previousWeekSpentByCategory = {};
 
@@ -91,18 +98,51 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
     try {
       final previous = DateTime(_ym.year, _ym.month - 1);
       final service = context.read<BudgetsProvider>().service;
-      final spent = await service.getSpentByCategory(
+      final spentFuture = service.getSpentByCategory(
         year: previous.year,
         month: previous.month,
       );
+      final budgetFuture = service.getBudgets(
+        year: previous.year,
+        month: previous.month,
+      );
+      final spent = await spentFuture;
+      final budgetRes = await budgetFuture;
+      final budgetData = (budgetRes['data'] as List?) ?? const [];
+
+      int parseInt(dynamic value) {
+        if (value == null) return 0;
+        if (value is num) return value.round();
+        final text = value.toString().trim();
+        final asNum = num.tryParse(text);
+        if (asNum != null) return asNum.round();
+        return int.tryParse(text.replaceAll(RegExp(r'[^\d-]'), '')) ?? 0;
+      }
+
+      final previousBudgetItems = budgetData.map((e) {
+        final m = Map<String, dynamic>.from(e as Map);
+        final categoryId = parseInt(m['category_id'] ?? m['categoryId']);
+        return BudgetItem.fromJson({
+          'id': m['id'],
+          'user_id': m['user_id'],
+          'category_id': categoryId,
+          'name': m['name'] ?? m['category_name'] ?? '',
+          'year': m['year'],
+          'month': m['month'],
+          'amount': parseInt(m['amount']),
+          'spent': spent[categoryId] ?? 0,
+        });
+      }).toList();
 
       _safeSetState(() {
         _previousMonthSpentByCategory = spent;
+        _previousMonthBudgetItems = previousBudgetItems;
       });
     } catch (e) {
       debugPrint('fetchPreviousMonthCategorySpending FAILED: $e');
       _safeSetState(() {
         _previousMonthSpentByCategory = {};
+        _previousMonthBudgetItems = [];
       });
     }
   }
@@ -309,16 +349,16 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
         items.fold<num>(0, (sum, item) => sum + item.spent);
     final num monthRemaining = totalIncome - totalSpent;
     final num budgetRemaining = totalAssigned - totalBudgetSpent;
-    final totalBudgetAmount = items
-        .map((e) => e.amount)
-        .where((v) => v > 0)
-        .fold<num>(0, (a, b) => a + b);
-    final hasTransactions = totalIncome > 0 || totalSpent > 0;
+    final previousMonthBudgetTotal =
+        _previousMonthBudgetItems.fold<num>(0, (sum, item) => sum + item.amount);
+    final previousMonthSpentTotal = _previousMonthSpentByCategory.values
+        .fold<num>(0, (sum, amount) => sum + amount);
+    final hasPreviousMonthAnalysis =
+        previousMonthBudgetTotal > 0 || previousMonthSpentTotal > 0;
     final hasBudgetPlan = totalAssigned > 0;
 
     final nf = NumberFormat.decimalPattern(locale);
     final monthLabel = DateFormat.yMMMM(locale).format(_ym);
-    final selectedWeekLabel = _formatSelectedWeekRange();
     Future<void> openMonthPicker() async {
       final picked = await _pickMonth(context, initial: _ym);
       if (picked != null) {
@@ -341,13 +381,6 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
       }
     }
 
-    Future<void> openWeekPicker() async {
-      final picked = await _pickWeek(context, initial: _selectedWeekStart);
-      if (picked != null) {
-        await _setSelectedWeek(picked);
-      }
-    }
-
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
@@ -355,14 +388,9 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
       appBar: AppPageHeaderBar(
         icon: Icons.analytics_outlined,
         title: t.analyticsTitle,
-        subtitle: '$selectedWeekLabel • $monthLabel',
-        onTap: openWeekPicker,
+        subtitle: monthLabel,
+        onTap: openMonthPicker,
         actions: [
-          HeaderIconButton(
-            icon: Icons.date_range_rounded,
-            tooltip: 'Chọn tuần',
-            onPressed: openWeekPicker,
-          ),
           HeaderIconButton(
             icon: Icons.calendar_month_rounded,
             tooltip: t.selectMonth,
@@ -392,15 +420,12 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
             const SizedBox(height: 16),
             _SectionCard(
               title: t.analyticsBudgetSplit,
-              child: totalBudgetAmount <= 0
+              child: !hasPreviousMonthAnalysis
                   ? _AnalyticsEmptyState(
                       icon: Icons.pie_chart_outline_rounded,
-                      title: hasTransactions
-                          ? 'Chưa có kế hoạch theo danh mục'
-                          : 'Chưa có dữ liệu tháng này',
-                      message: hasTransactions
-                          ? 'Bạn đã có giao dịch, nhưng chưa đặt ngân sách cho danh mục. Hãy cấp ngân sách để biểu đồ phân bổ có ý nghĩa hơn.'
-                          : 'Nhập một vài giao dịch và đặt ngân sách để xem tiền được phân bổ theo từng danh mục.',
+                      title: 'Chưa có dữ liệu tháng trước',
+                      message:
+                          'Cần có kế hoạch hoặc giao dịch của tháng trước để so sánh số đã tiêu với kế hoạch.',
                       actionText: 'Thêm giao dịch',
                       onAction: () {
                         Navigator.of(context).push(
@@ -408,7 +433,13 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
                         );
                       },
                     )
-                  : _BudgetPieChart(items: items, categories: categories),
+                  : _BudgetPieChart(
+                      items: _previousMonthBudgetItems,
+                      spentByCategory: _previousMonthSpentByCategory,
+                      categories: categories,
+                      periodLabel: DateFormat.yMMMM(locale)
+                          .format(DateTime(_ym.year, _ym.month - 1)),
+                    ),
             ),
             const SizedBox(height: 16),
             _SectionCard(
@@ -525,6 +556,14 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
       nf,
       fallback: 'Chưa có dữ liệu chi tiêu tuần trước để đưa ra cảnh báo.',
     );
+    final highlightedCategoryName = _weeklyHistoryWarningCategoryName(
+      _previousWeekSpentByCategory,
+      categories,
+    );
+    final previewInsightText = _compactHistoryWarningPreview(
+      _firstSentence(insightText),
+      highlightedCategoryName,
+    );
     final currentLabel =
         (_weeklyTargetLabel != null && _weeklyTargetLabel!.trim().isNotEmpty)
             ? _weeklyTargetLabel!
@@ -590,7 +629,10 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
         ),
         const SizedBox(height: 12),
         GestureDetector(
-          onTap: () => _showWarningDialog(insightText),
+          onTap: () => _showWarningDialog(
+            insightText,
+            highlight: highlightedCategoryName,
+          ),
           child: Container(
           width: double.infinity,
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
@@ -607,20 +649,44 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
               ),
               const SizedBox(width: 8),
               Expanded(
-                child: RichText(
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  text: TextSpan(
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w800,
-                      color: badgeText,
+                child: Stack(
+                  children: [
+                    RichText(
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      text: TextSpan(
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w800,
+                          color: badgeText,
+                        ),
+                        children: [
+                          const TextSpan(text: 'Cảnh báo: '),
+                          ..._highlightTextSpans(
+                            previewInsightText,
+                            highlight: highlightedCategoryName,
+                            baseColor: badgeText,
+                          ),
+                        ],
+                      ),
                     ),
-                    children: [
-                      const TextSpan(text: 'Cảnh báo: '),
-                      TextSpan(text: insightText),
-                    ],
-                  ),
+                    Positioned(
+                      right: 0,
+                      bottom: 0,
+                      child: Container(
+                        padding: const EdgeInsets.only(left: 4),
+                        color: badgeBg,
+                        child: Text(
+                          '...xem thêm',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: badgeText.withOpacity(.55),
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -794,12 +860,23 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
     final limitSummary = warningLimit > 0
         ? '${nf.format(spentMtd.round())} / ${nf.format(warningLimit.round())}'
         : '${nf.format(spentMtd.round())} / --';
+    const historyWarningBg = Color(0xFFFDECEC);
+    const historyWarningText = Color(0xFFD93025);
     final insightText = _monthlyHistoryWarningText(
       _previousMonthSpentByCategory,
       budgetItems,
       categories,
       nf,
       fallback: 'Chưa có dữ liệu chi tiêu tháng trước để đưa ra cảnh báo.',
+    );
+    final highlightedCategoryName = _monthlyHistoryWarningCategoryName(
+      _previousMonthSpentByCategory,
+      budgetItems,
+      categories,
+    );
+    final previewInsightText = _compactHistoryWarningPreview(
+      _firstSentence(insightText),
+      highlightedCategoryName,
     );
 
     return Column(
@@ -846,37 +923,64 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
         ),
         const SizedBox(height: 12),
         GestureDetector(
-          onTap: () => _showWarningDialog(insightText),
+          onTap: () => _showWarningDialog(
+            insightText,
+            highlight: highlightedCategoryName,
+          ),
           child: Container(
           width: double.infinity,
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
           decoration: BoxDecoration(
-            color: badgeBg,
+            color: historyWarningBg,
             borderRadius: BorderRadius.circular(12),
           ),
           child: Row(
             children: [
               Icon(
-                isOver ? Icons.warning_rounded : Icons.shield_rounded,
-                color: badgeText,
+                Icons.warning_rounded,
+                color: historyWarningText,
                 size: 18,
               ),
               const SizedBox(width: 8),
               Expanded(
-                child: RichText(
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  text: TextSpan(
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w800,
-                      color: badgeText,
+                child: Stack(
+                  children: [
+                    RichText(
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      text: TextSpan(
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w800,
+                          color: historyWarningText,
+                        ),
+                        children: [
+                          const TextSpan(text: 'Cảnh báo: '),
+                          ..._highlightTextSpans(
+                            previewInsightText,
+                            highlight: highlightedCategoryName,
+                            baseColor: historyWarningText,
+                          ),
+                        ],
+                      ),
                     ),
-                    children: [
-                      const TextSpan(text: 'Cảnh báo: '),
-                      TextSpan(text: insightText),
-                    ],
-                  ),
+                    Positioned(
+                      right: 0,
+                      bottom: 0,
+                      child: Container(
+                        padding: const EdgeInsets.only(left: 4),
+                        color: historyWarningBg,
+                        child: Text(
+                          '...xem thêm',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: historyWarningText.withOpacity(.55),
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -1197,6 +1301,101 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
         'gây áp lực rõ rệt lên kế hoạch của bạn.';
   }
 
+  String _firstSentence(String text) {
+    final trimmed = text.trim();
+    final firstDot = trimmed.indexOf('.');
+    if (firstDot <= 0) return trimmed;
+    return trimmed.substring(0, firstDot).trim();
+  }
+
+  String _compactHistoryWarningPreview(String text, String? highlight) {
+    const maxLength = 96;
+    if (text.length <= maxLength) return text;
+
+    var cut = maxLength;
+    final target = highlight?.trim();
+    if (target != null && target.isNotEmpty) {
+      final start = text.toLowerCase().indexOf(target.toLowerCase());
+      if (start >= 0) {
+        final targetEnd = start + target.length;
+        if (targetEnd + 12 > cut) {
+          cut = targetEnd + 12;
+        }
+      }
+    }
+
+    if (cut > text.length) cut = text.length;
+    final candidate = text.substring(0, cut).trimRight();
+    final lastSpace = candidate.lastIndexOf(' ');
+    if (lastSpace > 48) {
+      return candidate.substring(0, lastSpace).trimRight();
+    }
+
+    return candidate;
+  }
+
+  List<TextSpan> _highlightTextSpans(
+    String text, {
+    required String? highlight,
+    required Color baseColor,
+  }) {
+    final target = highlight?.trim();
+    if (target == null || target.isEmpty) {
+      return [TextSpan(text: text)];
+    }
+
+    final start = text.toLowerCase().indexOf(target.toLowerCase());
+    if (start < 0) {
+      return [TextSpan(text: text)];
+    }
+
+    final end = start + target.length;
+    return [
+      if (start > 0) TextSpan(text: text.substring(0, start)),
+      TextSpan(
+        text: text.substring(start, end),
+        style: TextStyle(
+          color: baseColor,
+          fontWeight: FontWeight.w900,
+          backgroundColor: const Color(0xFFFFDAD6),
+        ),
+      ),
+      if (end < text.length) TextSpan(text: text.substring(end)),
+    ];
+  }
+
+  String? _monthlyHistoryWarningCategoryName(
+    Map<int, num> previousMonthSpent,
+    List<BudgetItem> currentBudgetItems,
+    Map<int, Category> categories,
+  ) {
+    final entries = previousMonthSpent.entries
+        .where((entry) => entry.key > 0 && entry.value > 0)
+        .toList();
+
+    if (entries.isEmpty) {
+      return null;
+    }
+
+    entries.sort((a, b) => b.value.compareTo(a.value));
+    final topCategoryId = entries.first.key;
+    final category = categories[topCategoryId];
+    if (category != null && category.name.trim().isNotEmpty) {
+      return category.name.trim();
+    }
+
+    for (final item in currentBudgetItems) {
+      if (item.categoryId == topCategoryId) {
+        final itemName = item.name?.trim();
+        if (itemName != null && itemName.isNotEmpty) {
+          return itemName;
+        }
+      }
+    }
+
+    return 'Danh mục #$topCategoryId';
+  }
+
   String _monthlyHistoryWarningText(
     Map<int, num> previousMonthSpent,
     List<BudgetItem> currentBudgetItems,
@@ -1250,16 +1449,38 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
 
     if (currentBudget > 0 && top.value > currentBudget) {
       return 'Tháng trước bạn chi $spentLabel cho $name, cao hơn kế hoạch '
-          'tháng này. Nên để ý nhóm này sớm để tránh vượt ngân sách.';
+          'tháng này. Tháng này cần kiểm soát nhóm này sớm để tránh vượt ngân sách.';
     }
 
     if (topShare >= 0.4 && entries.length > 1) {
       return 'Tháng trước, $name là khoản chi nổi bật nhất với $spentLabel. '
-          'Tháng này bạn nên theo dõi nhóm này kỹ hơn.';
+          'Tháng này cần theo dõi nhóm này kỹ hơn để tránh phát sinh quá mức.';
     }
 
-    return 'Dựa trên tháng trước, chi tiêu chưa tập trung quá mạnh vào một '
-        'danh mục nào. Bạn vẫn nên theo dõi các khoản phát sinh lớn.';
+    return 'Dựa trên tháng trước, chưa có danh mục nào chi quá nổi bật. '
+        'Tháng này vẫn cần theo dõi các khoản phát sinh lớn.';
+  }
+
+  String? _weeklyHistoryWarningCategoryName(
+    Map<int, num> previousWeekSpent,
+    Map<int, Category> categories,
+  ) {
+    final entries = previousWeekSpent.entries
+        .where((entry) => entry.key > 0 && entry.value > 0)
+        .toList();
+
+    if (entries.isEmpty) {
+      return null;
+    }
+
+    entries.sort((a, b) => b.value.compareTo(a.value));
+    final topCategoryId = entries.first.key;
+    final category = categories[topCategoryId];
+    if (category != null && category.name.trim().isNotEmpty) {
+      return category.name.trim();
+    }
+
+    return 'Danh mục #$topCategoryId';
   }
 
   String _weeklyHistoryWarningText(
@@ -1369,11 +1590,14 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
         status == 'insufficient_data';
   }
 
-  void _showWarningDialog(String message) {
+  void _showWarningDialog(String message, {String? highlight}) {
     showDialog<void>(
       context: context,
       builder: (context) {
         final isDark = Theme.of(context).brightness == Brightness.dark;
+        final contentColor = isDark ? Colors.white70 : const Color(0xFF475467);
+        final highlightColor =
+            isDark ? const Color(0xFFFFB4AB) : const Color(0xFFD93025);
 
         return AlertDialog(
           backgroundColor: isDark ? const Color(0xFF1F2937) : Colors.white,
@@ -1400,13 +1624,19 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
               ),
             ],
           ),
-          content: Text(
-            message,
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              height: 1.45,
-              color: isDark ? Colors.white70 : const Color(0xFF475467),
+          content: RichText(
+            text: TextSpan(
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                height: 1.45,
+                color: contentColor,
+              ),
+              children: _highlightTextSpans(
+                message,
+                highlight: highlight,
+                baseColor: highlightColor,
+              ),
             ),
           ),
           actions: [
@@ -2190,55 +2420,82 @@ class _SmallActionButton extends StatelessWidget {
 
 class _BudgetChartSlice {
   const _BudgetChartSlice({
-    required this.amount,
+    required this.categoryId,
     required this.label,
+    required this.planned,
+    required this.spent,
   });
 
-  final num amount;
+  final int categoryId;
   final String label;
+  final num planned;
+  final num spent;
 }
 
 class _BudgetPieChart extends StatelessWidget {
   const _BudgetPieChart({
     required this.items,
+    required this.spentByCategory,
     required this.categories,
+    required this.periodLabel,
   });
 
   final List<BudgetItem> items;
+  final Map<int, num> spentByCategory;
   final Map<int, Category> categories;
+  final String periodLabel;
 
   @override
   Widget build(BuildContext context) {
-    final t = AppLocalizations.of(context)!;
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final locale = Localizations.localeOf(context).toLanguageTag();
+    final nf = NumberFormat.decimalPattern(locale)..maximumFractionDigits = 0;
 
-    final data = items.where((e) => e.amount > 0).toList();
-    data.sort((a, b) => b.amount.compareTo(a.amount));
+    final itemByCategory = {for (final item in items) item.categoryId: item};
+    final categoryIds = <int>{
+      ...itemByCategory.keys,
+      ...spentByCategory.keys.where((id) => id > 0),
+    };
 
-    final total = data.fold<num>(0, (a, b) => a + b.amount);
+    final data = categoryIds.map((categoryId) {
+      final item = itemByCategory[categoryId];
+      final rawName =
+          categories[categoryId]?.name ?? item?.name ?? '#$categoryId';
+      final name = rawName.startsWith('#') ? rawName : _capFirst(rawName);
+      return _BudgetChartSlice(
+        categoryId: categoryId,
+        label: name,
+        planned: item?.amount ?? 0,
+        spent: spentByCategory[categoryId] ?? item?.spent ?? 0,
+      );
+    }).where((slice) => slice.planned > 0 || slice.spent > 0).toList()
+      ..sort((a, b) => b.spent.compareTo(a.spent));
+
+    final totalPlanned = data.fold<num>(0, (sum, item) => sum + item.planned);
+    final totalSpent = data.fold<num>(0, (sum, item) => sum + item.spent);
+    final overallPercent = totalPlanned > 0
+        ? ((totalSpent / totalPlanned) * 100).round().clamp(0, 100)
+        : 0;
+
     final chartData = data.length > 6
         ? [
             ...data.take(5).map(
                   (e) => _BudgetChartSlice(
-                    amount: e.amount,
-                    label: categories[e.categoryId]?.name ?? '#${e.categoryId}',
+                    categoryId: e.categoryId,
+                    label: e.label,
+                    planned: e.planned,
+                    spent: e.spent,
                   ),
                 ),
             _BudgetChartSlice(
-              amount: data.skip(5).fold<num>(0, (sum, e) => sum + e.amount),
+              categoryId: 0,
               label: 'Khác',
+              planned: data.skip(5).fold<num>(0, (sum, e) => sum + e.planned),
+              spent: data.skip(5).fold<num>(0, (sum, e) => sum + e.spent),
             ),
           ]
-        : data
-            .map(
-              (e) => _BudgetChartSlice(
-                amount: e.amount,
-                label: categories[e.categoryId]?.name ?? '#${e.categoryId}',
-              ),
-            )
-            .toList();
+        : data;
 
-    // Teal / cyan color palette
     const chartColors = [
       AppColors.primaryDark,
       AppColors.primary,
@@ -2255,7 +2512,7 @@ class _BudgetPieChart extends StatelessWidget {
       final e = entry.value;
       final color = chartColors[i % chartColors.length];
       return PieChartSectionData(
-        value: e.amount.toDouble(),
+        value: e.spent > 0 ? e.spent.toDouble() : 0.01,
         title: '',
         radius: 24,
         color: color,
@@ -2265,12 +2522,16 @@ class _BudgetPieChart extends StatelessWidget {
     final legendItems = chartData.asMap().entries.map((entry) {
       final i = entry.key;
       final e = entry.value;
-      final pct = total == 0 ? 0 : (e.amount / total) * 100;
+      final rawPlanPercent = e.planned > 0 ? (e.spent / e.planned) * 100 : 0;
+      final isOverPlan = rawPlanPercent > 100;
       final color = chartColors[i % chartColors.length];
 
       return _BudgetLegendItem(
         color: color,
-        percent: '${pct.toStringAsFixed(0)}%',
+        percent: isOverPlan
+            ? 'Vượt ${(rawPlanPercent - 100).round()}%'
+            : '${rawPlanPercent.clamp(0, 100).toStringAsFixed(0)}%',
+        percentColor: isOverPlan ? const Color(0xFFEF4444) : null,
         label: e.label.toUpperCase(),
       );
     }).toList();
@@ -2292,7 +2553,7 @@ class _BudgetPieChart extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                '100%',
+                totalPlanned > 0 ? '$overallPercent%' : '--',
                 style: TextStyle(
                   fontSize: 22,
                   fontWeight: FontWeight.w900,
@@ -2301,7 +2562,7 @@ class _BudgetPieChart extends StatelessWidget {
               ),
               const SizedBox(height: 1),
               Text(
-                t.totalSpentPieChart,
+                'Đã chi / kế hoạch',
                 style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w600,
@@ -2315,7 +2576,17 @@ class _BudgetPieChart extends StatelessWidget {
     );
 
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        Text(
+          'Phân tích tháng trước: $periodLabel',
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+            color: isDark ? Colors.white70 : const Color(0xFF667085),
+          ),
+        ),
+        const SizedBox(height: 10),
         chart,
         const SizedBox(height: 12),
         LayoutBuilder(
@@ -2331,7 +2602,110 @@ class _BudgetPieChart extends StatelessWidget {
             );
           },
         ),
+        const SizedBox(height: 14),
+        ...data.take(5).map(
+              (item) => _BudgetAnalysisRow(
+                item: item,
+                number: nf,
+              ),
+            ),
       ],
+    );
+  }
+}
+
+class _BudgetAnalysisRow extends StatelessWidget {
+  const _BudgetAnalysisRow({
+    required this.item,
+    required this.number,
+  });
+
+  final _BudgetChartSlice item;
+  final NumberFormat number;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final planned = item.planned;
+    final spent = item.spent;
+    final ratio = planned > 0 ? spent / planned : 0.0;
+    final overPercent = planned > 0 ? ((ratio - 1) * 100).round() : 0;
+    final progress = ratio.clamp(0.0, 1.0).toDouble();
+    final isOver = planned > 0 && spent > planned;
+    final isNear = !isOver && planned > 0 && ratio >= .85;
+    final statusColor = isOver
+        ? const Color(0xFFEF4444)
+        : isNear
+            ? const Color(0xFFF59E0B)
+            : AppColors.primaryDark;
+    final statusText = isOver
+        ? 'Vượt kế hoạch $overPercent%'
+        : isNear
+            ? 'Sắp chạm kế hoạch'
+            : 'Trong kế hoạch';
+
+    return Container(
+      margin: const EdgeInsets.only(top: 10),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1C2530) : const Color(0xFFFAFBFC),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isOver
+              ? const Color(0xFFFF8A80)
+              : isNear
+                  ? const Color(0xFFFBBF24)
+                  : (isDark ? Colors.white10 : const Color(0xFFE5E7EB)),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  item.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w900,
+                    color: isDark ? Colors.white : const Color(0xFF111827),
+                  ),
+                ),
+              ),
+              Text(
+                '${number.format(spent)} / ${planned > 0 ? number.format(planned) : '--'}',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                  color: statusColor,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(999),
+            child: LinearProgressIndicator(
+              minHeight: 7,
+              value: progress,
+              backgroundColor: isDark ? Colors.white10 : const Color(0xFFE5E7EB),
+              valueColor: AlwaysStoppedAnimation<Color>(statusColor),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            statusText,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+              color: statusColor,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -2341,11 +2715,13 @@ class _BudgetLegendItem extends StatelessWidget {
     required this.color,
     required this.percent,
     required this.label,
+    this.percentColor,
   });
 
   final Color color;
   final String percent;
   final String label;
+  final Color? percentColor;
 
   @override
   Widget build(BuildContext context) {
@@ -2376,7 +2752,8 @@ class _BudgetLegendItem extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w900,
-                    color: isDark ? Colors.white : const Color(0xFF111827),
+                    color: percentColor ??
+                        (isDark ? Colors.white : const Color(0xFF111827)),
                   ),
                   maxLines: 1,
                 ),

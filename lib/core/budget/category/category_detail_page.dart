@@ -156,13 +156,16 @@ class _CategoryDetailPageState extends State<CategoryDetailPage>
 
       final limit = _parseMoney(_limitCtl.text);
 
-      await context.read<BudgetsProvider>().assignMany(
+      final budgetsProvider = context.read<BudgetsProvider>();
+      await budgetsProvider.service.setOne(
         year: widget.year,
         month: widget.month,
-        allocations: {widget.category.id.toInt(): limit.toDouble()},
+        categoryId: widget.category.id.toInt(),
+        amount: limit,
+        mode: 'set',
       );
 
-      await context.read<BudgetsProvider>().loadForMonth(
+      await budgetsProvider.loadForMonth(
             year: widget.year,
             month: widget.month,
           );

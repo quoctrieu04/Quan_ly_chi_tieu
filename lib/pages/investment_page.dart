@@ -297,7 +297,11 @@ class _RealEstateTile extends StatelessWidget {
     final name = _safeText(item.name).isEmpty ? 'Bất động sản' : item.name;
     final type = _safeText(item.propertyType);
 
-    return Container(
+    final plans = item.incomePlans as List<dynamic>?;
+    final hasOverduePlan =
+        plans?.any((p) => p.canCollectToday == true) ?? false;
+
+    Widget tile = Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
         color: isDark ? cs.surfaceContainerHigh : Colors.white,
@@ -415,6 +419,33 @@ class _RealEstateTile extends StatelessWidget {
           ),
         ),
       ),
+    );
+
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        tile,
+        if (hasOverduePlan)
+          Positioned(
+            top: 0,
+            right: 0,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+              decoration: const BoxDecoration(
+                color: Colors.red,
+                borderRadius: BorderRadius.only(
+                  topRight: Radius.circular(14),
+                  bottomLeft: Radius.circular(10),
+                ),
+              ),
+              child: const Text('1',
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold)),
+            ),
+          ),
+      ],
     );
   }
 }

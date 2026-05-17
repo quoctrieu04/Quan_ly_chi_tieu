@@ -35,139 +35,166 @@ class InvestmentItemTile extends StatelessWidget {
         ? investment.bankName!
         : (isBank ? '' : 'Cổ phiếu');
 
-    return Opacity(
-      opacity: isClosed ? 0.45 : 1,
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 8),
-        decoration: BoxDecoration(
-          color: isDark ? cs.surfaceContainerHigh : Colors.white,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: isDark
-                ? cs.outlineVariant.withOpacity(.08)
-                : const Color(0xFFECEDF2),
-          ),
-          boxShadow: [
-            if (!isDark)
-              BoxShadow(
-                color: Colors.black.withOpacity(.02),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
-              ),
-          ],
+    Widget tile = Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: isDark ? cs.surfaceContainerHigh : Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: isDark
+              ? cs.outlineVariant.withOpacity(.08)
+              : const Color(0xFFECEDF2),
         ),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(14),
-          onTap: isClosed
-              ? null
-              : () async {
-                  final needReload = await Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) =>
-                          InvestmentDetailPage(investment: investment),
+        boxShadow: [
+          if (!isDark)
+            BoxShadow(
+              color: Colors.black.withOpacity(.02),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+        ],
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: isClosed
+            ? null
+            : () async {
+                final needReload = await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        InvestmentDetailPage(investment: investment),
+                  ),
+                );
+                if (needReload == true && context.mounted) {
+                  context.read<InvestmentProvider>().fetch();
+                }
+              },
+        onLongPress: isClosed ? () => _confirmDelete(context, cs) : null,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 9, 12, 9),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 3,
+                    height: 22,
+                    margin: const EdgeInsets.only(top: 2),
+                    decoration: BoxDecoration(
+                      color: isClosed ? Colors.grey : dotColor,
+                      borderRadius: BorderRadius.circular(99),
                     ),
-                  );
-                  if (needReload == true && context.mounted) {
-                    context.read<InvestmentProvider>().fetch();
-                  }
-                },
-          onLongPress: isClosed ? () => _confirmDelete(context, cs) : null,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(12, 9, 12, 9),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Container(
-                      width: 3,
-                      height: 22,
-                      margin: const EdgeInsets.only(top: 2),
-                      decoration: BoxDecoration(
-                        color: isClosed ? Colors.grey : dotColor,
-                        borderRadius: BorderRadius.circular(99),
-                      ),
-                    ),
-                    const SizedBox(width: 9),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
+                  ),
+                  const SizedBox(width: 9),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          investment.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 14,
+                            color: cs.onSurface,
+                          ),
+                        ),
+                        if (subtitle.isNotEmpty) ...[
+                          const SizedBox(height: 1),
                           Text(
-                            investment.name,
+                            subtitle,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
-                              fontWeight: FontWeight.w700,
-                              fontSize: 14,
-                              color: cs.onSurface,
+                              fontSize: 11,
+                              color: cs.onSurface.withOpacity(.4),
                             ),
                           ),
-                          if (subtitle.isNotEmpty) ...[
-                            const SizedBox(height: 1),
-                            Text(
-                              subtitle,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: cs.onSurface.withOpacity(.4),
-                              ),
-                            ),
-                          ],
                         ],
+                      ],
+                    ),
+                  ),
+                  if (!isClosed && !isBank)
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          (profit > 0 ? '+' : '') + money(profit),
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w800,
+                            color: valueColor,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        _miniChip(
+                          '${investment.profitPercent.toStringAsFixed(2)}%',
+                          profitColor,
+                          isDark,
+                        ),
+                      ],
+                    ),
+                  if (isClosed)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: cs.error.withOpacity(.06),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        'Đã tất toán',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: cs.error,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ),
-                    if (!isClosed && !isBank)
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Text(
-                            (profit > 0 ? '+' : '') + money(profit),
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w800,
-                              color: valueColor,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          _miniChip(
-                            '${investment.profitPercent.toStringAsFixed(2)}%',
-                            profitColor,
-                            isDark,
-                          ),
-                        ],
-                      ),
-                    if (isClosed)
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: cs.error.withOpacity(.06),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(
-                          'Đã tất toán',
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: cs.error,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                _inlineStats(
-                  context,
-                  principal: money(investment.totalInvested),
-                ),
-              ],
-            ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              _inlineStats(
+                context,
+                principal: money(investment.totalInvested),
+              ),
+            ],
           ),
         ),
+      ),
+    );
+
+    return Opacity(
+      opacity: isClosed ? 0.45 : 1,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          tile,
+          if (investment.isMature)
+            Positioned(
+              top: 0,
+              right: 0,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                decoration: const BoxDecoration(
+                  color: Colors.red,
+                  borderRadius: BorderRadius.only(
+                    topRight: Radius.circular(14),
+                    bottomLeft: Radius.circular(10),
+                  ),
+                ),
+                child: const Text('1',
+                    style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold)),
+              ),
+            ),
+        ],
       ),
     );
   }

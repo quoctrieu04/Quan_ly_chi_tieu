@@ -52,6 +52,7 @@ class InvestmentFormFields {
     String? Function(T?)? validator,
   }) {
     return DropdownButtonFormField<T>(
+      isExpanded: true,
       initialValue: value,
       decoration: decoration(
         label: label,

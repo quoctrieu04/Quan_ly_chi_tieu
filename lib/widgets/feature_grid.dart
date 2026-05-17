@@ -4,11 +4,15 @@ class FeatureItem {
   final IconData icon;
   final String label;
   final VoidCallback onTap;
+  final bool showBadge;
+  final int badgeCount;
 
   FeatureItem({
     required this.icon,
     required this.label,
     required this.onTap,
+    this.showBadge = false,
+    this.badgeCount = 0,
   });
 }
 
@@ -52,32 +56,44 @@ class _FeatureButton extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
+    Widget iconContainer = Container(
+      width: 46,
+      height: 46,
+      decoration: BoxDecoration(
+        color: isDark
+            ? cs.surfaceContainerHigh
+            : cs.primary.withOpacity(.07),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: isDark
+              ? cs.outlineVariant.withOpacity(.1)
+              : cs.primary.withOpacity(.14),
+        ),
+      ),
+      child: Icon(
+        item.icon,
+        size: 22,
+        color: cs.primary,
+      ),
+    );
+
+    if (item.showBadge) {
+      iconContainer = Badge(
+        label: Text('${item.badgeCount > 0 ? item.badgeCount : 1}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+        backgroundColor: Colors.red,
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        offset: const Offset(4, -4),
+        child: iconContainer,
+      );
+    }
+
     return InkWell(
       borderRadius: BorderRadius.circular(14),
       onTap: item.onTap,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
-            width: 46,
-            height: 46,
-            decoration: BoxDecoration(
-              color: isDark
-                  ? cs.surfaceContainerHigh
-                  : cs.primary.withOpacity(.07),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                color: isDark
-                    ? cs.outlineVariant.withOpacity(.1)
-                    : cs.primary.withOpacity(.14),
-              ),
-            ),
-            child: Icon(
-              item.icon,
-              size: 22,
-              color: cs.primary,
-            ),
-          ),
+          iconContainer,
           const SizedBox(height: 6),
           Text(
             item.label,

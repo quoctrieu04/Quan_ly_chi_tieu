@@ -49,7 +49,24 @@ class RealEstateProvider extends ChangeNotifier {
     _setError(null);
     try {
       final data = await service.fetch();
-      _items = data.map((e) => RealEstate.fromJson(e)).toList();
+      final parsedItems = data.map((e) => RealEstate.fromJson(e)).toList();
+
+      // Tạm thời fetch income plan cho từng BĐS để hỗ trợ hiển thị Badge
+      // (Cách tốt nhất là Backend trả về luôn mảng income_plans trong API danh sách)
+      for (var item in parsedItems) {
+        if (!item.isSold) {
+          try {
+            final plan = await incomePlanService.fetchIncomePlan(item.id);
+            if (plan != null) {
+              item.incomePlans = [plan];
+            }
+          } catch (e) {
+            debugPrint("Lỗi lấy khoản thu cho BĐS ${item.id}: $e");
+          }
+        }
+      }
+
+      _items = parsedItems;
     } catch (e) {
       _setError(e.toString());
     } finally {

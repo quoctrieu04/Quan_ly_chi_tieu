@@ -22,10 +22,16 @@ class _BankInvestmentFormState extends State<BankInvestmentForm> {
   final nameCtrl = TextEditingController();
   final amountCtrl = TextEditingController();
   final rateCtrl = TextEditingController();
+  final otherBankNameCtrl = TextEditingController();
+  final customTermCtrl = TextEditingController();
+  final otherBankNameFocus = FocusNode();
+  final customTermFocus = FocusNode();
 
   String bankName = 'VCB';
   int termMonths = 12;
-  final List<int> termOptions = List.generate(36, (i) => i + 1); // 1 đến 36 tháng
+  static const int customTermOption = -1;
+  int selectedTermOption = 12;
+  final List<int> termOptions = const [1, 3, 5, 12];
   DateTime startDate = DateTime.now();
 
   String interestPaymentMethod = 'Trả lãi cuối kỳ';
@@ -50,6 +56,10 @@ class _BankInvestmentFormState extends State<BankInvestmentForm> {
     nameCtrl.dispose();
     amountCtrl.dispose();
     rateCtrl.dispose();
+    otherBankNameCtrl.dispose();
+    customTermCtrl.dispose();
+    otherBankNameFocus.dispose();
+    customTermFocus.dispose();
     super.dispose();
   }
 
@@ -91,7 +101,7 @@ class _BankInvestmentFormState extends State<BankInvestmentForm> {
                 .map(
                   (acc) => DropdownMenuItem(
                     value: acc.id.toString(),
-                    child: Text('${acc.name} - ${acc.bankname ?? ''}'),
+                    child: Text('${acc.name} - ${acc.bankname ?? ''}', overflow: TextOverflow.ellipsis),
                   ),
                 )
                 .toList(),
@@ -109,21 +119,51 @@ class _BankInvestmentFormState extends State<BankInvestmentForm> {
                 v == null || v.trim().isEmpty ? 'Không được để trống' : null,
           ),
           const SizedBox(height: 12),
-          _buildDropdownField<String>(
-            value: bankName,
-            label: 'Ngân hàng',
-            icon: Icons.account_balance_outlined,
-            cs: cs,
-            isDark: isDark,
-            items: const [
-              'VCB',
-              'BIDV',
-              'VietinBank',
-              'MB',
-              'ACB',
-              'Techcombank',
-            ].map((b) => DropdownMenuItem(value: b, child: Text(b))).toList(),
-            onChanged: (v) => setState(() => bankName = v ?? 'VCB'),
+          _switchableField(
+            bankName == 'Khác'
+                ? _buildTextField(
+                    controller: otherBankNameCtrl,
+                    focusNode: otherBankNameFocus,
+                    autofocus: true,
+                    label: 'Tên ngân hàng',
+                    icon: Icons.account_balance_outlined,
+                    cs: cs,
+                    isDark: isDark,
+                    textInputAction: TextInputAction.next,
+                    validator: (v) {
+                      if (v == null || v.trim().isEmpty) {
+                        return 'Nhập tên ngân hàng';
+                      }
+                      return null;
+                    },
+                  )
+                : _buildDropdownField<String>(
+                    value: bankName,
+                    label: 'Ngân hàng',
+                    icon: Icons.account_balance_outlined,
+                    cs: cs,
+                    isDark: isDark,
+                    items: const [
+                      'VCB',
+                      'BIDV',
+                      'VietinBank',
+                      'MB',
+                      'ACB',
+                      'Techcombank',
+                      'Khác',
+                    ]
+                        .map((b) => DropdownMenuItem(value: b, child: Text(b, overflow: TextOverflow.ellipsis)))
+                        .toList(),
+                    onChanged: (v) {
+                      setState(() => bankName = v ?? 'VCB');
+                      if (v == 'Khác') {
+                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                          if (mounted) otherBankNameFocus.requestFocus();
+                        });
+                      }
+                    },
+                  ),
+            key: ValueKey(bankName == 'Khác' ? 'bank-other' : 'bank-preset'),
           ),
           const SizedBox(height: 12),
           _buildTextField(
@@ -145,16 +185,59 @@ class _BankInvestmentFormState extends State<BankInvestmentForm> {
             },
           ),
           const SizedBox(height: 12),
-          _buildDropdownField<int>(
-            value: termMonths,
-            label: 'Kỳ hạn',
-            icon: Icons.event_repeat_rounded,
-            cs: cs,
-            isDark: isDark,
-            items: termOptions
-                .map((m) => DropdownMenuItem(value: m, child: Text('$m tháng')))
-                .toList(),
-            onChanged: (v) => setState(() => termMonths = v ?? 12),
+          _switchableField(
+            selectedTermOption == customTermOption
+                ? _buildTextField(
+                    controller: customTermCtrl,
+                    focusNode: customTermFocus,
+                    autofocus: true,
+                    label: 'Kỳ hạn (tháng)',
+                    icon: Icons.event_repeat_rounded,
+                    cs: cs,
+                    isDark: isDark,
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    textInputAction: TextInputAction.next,
+                    validator: (v) {
+                      final months = int.tryParse(v?.trim() ?? '');
+                      if (months == null || months <= 0) {
+                        return 'Nhập kỳ hạn hợp lệ';
+                      }
+                      return null;
+                    },
+                  )
+                : _buildDropdownField<int>(
+                    value: selectedTermOption,
+                    label: 'Kỳ hạn',
+                    icon: Icons.event_repeat_rounded,
+                    cs: cs,
+                    isDark: isDark,
+                    items: termOptions
+                        .map((m) => DropdownMenuItem(
+                            value: m, child: Text('$m tháng', overflow: TextOverflow.ellipsis)))
+                        .followedBy([
+                      const DropdownMenuItem<int>(
+                        value: customTermOption,
+                        child: Text('Khác', overflow: TextOverflow.ellipsis),
+                      ),
+                    ]).toList(),
+                    onChanged: (v) {
+                      setState(() {
+                        selectedTermOption = v ?? 12;
+                        if (selectedTermOption != customTermOption) {
+                          termMonths = selectedTermOption;
+                        }
+                      });
+                      if (v == customTermOption) {
+                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                          if (mounted) customTermFocus.requestFocus();
+                        });
+                      }
+                    },
+                  ),
+            key: ValueKey(selectedTermOption == customTermOption
+                ? 'term-custom'
+                : 'term-preset'),
           ),
           const SizedBox(height: 12),
           _buildInterestMethodSelector(cs, isDark),
@@ -204,6 +287,22 @@ class _BankInvestmentFormState extends State<BankInvestmentForm> {
     required bool isDark,
   }) {
     return child;
+  }
+
+  Widget _switchableField(Widget child, {required Key key}) {
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 180),
+      switchInCurve: Curves.easeOutCubic,
+      switchOutCurve: Curves.easeInCubic,
+      transitionBuilder: (child, animation) {
+        return SizeTransition(
+          sizeFactor: animation,
+          axisAlignment: -1,
+          child: FadeTransition(opacity: animation, child: child),
+        );
+      },
+      child: KeyedSubtree(key: key, child: child),
+    );
   }
 
   InputDecoration _fieldDecoration({
@@ -264,6 +363,8 @@ class _BankInvestmentFormState extends State<BankInvestmentForm> {
     required IconData icon,
     required ColorScheme cs,
     required bool isDark,
+    FocusNode? focusNode,
+    bool autofocus = false,
     TextInputType? keyboardType,
     TextInputAction? textInputAction,
     List<TextInputFormatter>? inputFormatters,
@@ -276,6 +377,8 @@ class _BankInvestmentFormState extends State<BankInvestmentForm> {
       isDark: isDark,
       child: TextFormField(
         controller: controller,
+        focusNode: focusNode,
+        autofocus: autofocus,
         keyboardType: keyboardType,
         textInputAction: textInputAction,
         inputFormatters: inputFormatters,
@@ -311,6 +414,7 @@ class _BankInvestmentFormState extends State<BankInvestmentForm> {
       cs: cs,
       isDark: isDark,
       child: DropdownButtonFormField<T>(
+        isExpanded: true,
         initialValue: value,
         decoration: _fieldDecoration(
           label: label,
@@ -436,6 +540,11 @@ class _BankInvestmentFormState extends State<BankInvestmentForm> {
     if (account == null) return;
 
     final amount = _parseNumber(amountCtrl.text);
+    final resolvedBankName =
+        bankName == 'Khác' ? otherBankNameCtrl.text.trim() : bankName;
+    final resolvedTermMonths = selectedTermOption == customTermOption
+        ? int.parse(customTermCtrl.text.trim())
+        : selectedTermOption;
 
     if (amount > account.balance) {
       setState(() {
@@ -450,9 +559,9 @@ class _BankInvestmentFormState extends State<BankInvestmentForm> {
       'buy_price': amount,
       'accountSource': account.id,
       'interest_rate': double.tryParse(rateCtrl.text) ?? 0,
-      'term_months': termMonths,
+      'term_months': resolvedTermMonths,
       'start_date': startDate.toIso8601String(),
-      'bank_name': bankName,
+      'bank_name': resolvedBankName,
       'interest_payment_method': interestPaymentMethod,
       'rollover_method': rolloverMethod,
     });

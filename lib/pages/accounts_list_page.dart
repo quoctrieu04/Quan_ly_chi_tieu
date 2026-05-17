@@ -409,6 +409,38 @@ class _AccountsListPageState extends State<AccountsListPage>
               // Menu
               PopupMenuButton(
                 onSelected: (v) async {
+                  if (v == 'edit') {
+                    final updated = await showModalBottomSheet<bool>(
+                      context: context,
+                      isScrollControlled: true,
+                      useSafeArea: true,
+                      backgroundColor: isDark
+                          ? cs.surfaceContainerHigh
+                          : Colors.white,
+                      shape: const RoundedRectangleBorder(
+                        borderRadius:
+                            BorderRadius.vertical(top: Radius.circular(20)),
+                      ),
+                      builder: (_) => Padding(
+                        padding: EdgeInsets.only(
+                          bottom: MediaQuery.of(context).viewInsets.bottom,
+                        ),
+                        child: EditBankAccountForm(
+                          accountId: acc.id,
+                          initialName: acc.name,
+                          initialBankName: acc.bankname,
+                          initialBankNumber: acc.banknumber,
+                          initialBalance: (acc.balance ?? 0).toDouble(),
+                          initialCurrency: acc.currency ?? 'VND',
+                        ),
+                      ),
+                    );
+                    if (updated == true && context.mounted) {
+                      await context
+                          .read<BankAccountProvider>()
+                          .fetchAccounts();
+                    }
+                  }
                   if (v == 'delete') {
                     await _confirmDelete(context, acc, prov, cs);
                   }

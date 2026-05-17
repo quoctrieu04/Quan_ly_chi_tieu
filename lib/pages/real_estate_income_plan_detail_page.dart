@@ -74,6 +74,8 @@ class _RealEstateIncomePlanDetailPageState
       isScrollControlled: true,
       builder: (_) => StatefulBuilder(
         builder: (ctx, setModalState) {
+          final cs = Theme.of(ctx).colorScheme;
+          final isDark = Theme.of(ctx).brightness == Brightness.dark;
           return Padding(
             padding: EdgeInsets.only(
               left: 16,
@@ -93,8 +95,11 @@ class _RealEstateIncomePlanDetailPageState
                 TextField(
                   controller: amountCtrl,
                   keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: 'Số tiền / tháng',
+                  decoration: _fieldDecoration(
+                    label: 'Số tiền / tháng',
+                    icon: Icons.payments_outlined,
+                    cs: cs,
+                    isDark: isDark,
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -121,6 +126,15 @@ class _RealEstateIncomePlanDetailPageState
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: cs.primary,
+                      foregroundColor: cs.onPrimary,
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
                     onPressed: () async {
                       if (dueDate != plan.nextDueDate) {
                         final confirm = await showDialog<bool>(
@@ -223,10 +237,23 @@ class _RealEstateIncomePlanDetailPageState
     List<dynamic> accounts,
     int? selectedId,
     ValueChanged<int?> onChanged,
+    ColorScheme cs,
+    bool isDark,
   ) {
     return DropdownButtonFormField<int>(
-      initialValue: selectedId,
-      decoration: const InputDecoration(labelText: 'Tài khoản nhận tiền'),
+      isExpanded: true,
+      value: selectedId,
+      borderRadius: BorderRadius.circular(14),
+      icon: Icon(
+        Icons.expand_more_rounded,
+        color: cs.onSurface.withOpacity(.45),
+      ),
+      decoration: _fieldDecoration(
+        label: 'Tài khoản nhận tiền',
+        icon: Icons.account_balance_wallet_outlined,
+        cs: cs,
+        isDark: isDark,
+      ),
       items: accounts
           .where((account) => account.isDeleted != true)
           .map<DropdownMenuItem<int>>(
@@ -236,6 +263,7 @@ class _RealEstateIncomePlanDetailPageState
                 account.bankname != null && account.bankname!.isNotEmpty
                     ? '${account.name} • ${account.bankname}'
                     : account.name,
+                overflow: TextOverflow.ellipsis,
               ),
             ),
           )
@@ -274,6 +302,8 @@ class _RealEstateIncomePlanDetailPageState
       isScrollControlled: true,
       builder: (_) => StatefulBuilder(
         builder: (ctx, setModalState) {
+          final cs = Theme.of(ctx).colorScheme;
+          final isDark = Theme.of(ctx).brightness == Brightness.dark;
           final expectedTotal = plan.monthlyAmount * months;
           
           return Padding(
@@ -334,10 +364,12 @@ class _RealEstateIncomePlanDetailPageState
                   TextField(
                     controller: amountCtrl,
                     keyboardType: TextInputType.number,
-                    decoration: InputDecoration(
-                      labelText: 'Số tiền thực thu (VND)',
+                    decoration: _fieldDecoration(
+                      label: 'Số tiền thực thu (VND)',
+                      icon: Icons.payments_outlined,
+                      cs: cs,
+                      isDark: isDark,
                       helperText: 'Dự kiến: ${_money(expectedTotal)} VND',
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -347,13 +379,17 @@ class _RealEstateIncomePlanDetailPageState
                     (value) => setModalState(() {
                       receiveAccountId = value;
                     }),
+                    cs,
+                    isDark,
                   ),
                   const SizedBox(height: 12),
                   TextField(
                     controller: notesCtrl,
-                    decoration: InputDecoration(
-                      labelText: 'Ghi chú (Tùy chọn)',
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                    decoration: _fieldDecoration(
+                      label: 'Ghi chú (Tùy chọn)',
+                      icon: Icons.notes_outlined,
+                      cs: cs,
+                      isDark: isDark,
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -362,10 +398,19 @@ class _RealEstateIncomePlanDetailPageState
                       ? 'App sẽ dời lịch thu lên $months tháng tính từ kỳ thu tiếp theo.'
                       : 'Đánh dấu đã thu xong $months kỳ và lùi lịch thu tiếp theo.',
                     textAlign: TextAlign.center,
-                    style: const TextStyle(color: Colors.black54, fontSize: 12),
+                    style: TextStyle(color: cs.onSurface.withOpacity(0.6), fontSize: 12),
                   ),
                   const SizedBox(height: 14),
                   ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: cs.primary,
+                      foregroundColor: cs.onPrimary,
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
                     onPressed: receiveAccountId == null ||
                             amountCtrl.text.isEmpty ||
                             context.read<RealEstateIncomePlanProvider>().collecting
@@ -441,23 +486,23 @@ class _RealEstateIncomePlanDetailPageState
               const SizedBox(height: 20),
               Text(
                 title,
-                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.black87),
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Theme.of(ctx).colorScheme.onSurface),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 20),
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: Colors.grey.shade50,
+                  color: Theme.of(ctx).brightness == Brightness.dark ? Theme.of(ctx).colorScheme.surfaceContainerHigh : Colors.grey.shade50,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.grey.shade200),
+                  border: Border.all(color: Theme.of(ctx).brightness == Brightness.dark ? Colors.white10 : Colors.grey.shade200),
                 ),
                 child: Column(
                   children: [
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text('Số tiền đã thu', style: TextStyle(color: Colors.black54)),
+                        Text('Số tiền đã thu', style: TextStyle(color: Theme.of(ctx).colorScheme.onSurface.withOpacity(0.6))),
                         Text('${_money(amount)} ₫', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.green)),
                       ],
                     ),
@@ -468,8 +513,8 @@ class _RealEstateIncomePlanDetailPageState
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text('Kỳ thu tiếp theo', style: TextStyle(color: Colors.black54)),
-                        Text(DateFormat('dd/MM/yyyy').format(newDueDate), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.black87)),
+                        Text('Kỳ thu tiếp theo', style: TextStyle(color: Theme.of(ctx).colorScheme.onSurface.withOpacity(0.6))),
+                        Text(DateFormat('dd/MM/yyyy').format(newDueDate), style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Theme.of(ctx).colorScheme.onSurface)),
                       ],
                     ),
                   ],
@@ -524,12 +569,12 @@ class _RealEstateIncomePlanDetailPageState
                 style: TextStyle(height: 1.35),
               ),
               const SizedBox(height: 8),
-              const Text(
+              Text(
                 'Khi xác nhận, app gửi yêu cầu thu trước hạn để backend ghi nhận tiền về tài khoản và chuyển sang kỳ thu tiếp theo.',
                 style: TextStyle(
                   height: 1.35,
                   fontWeight: FontWeight.w700,
-                  color: Colors.black54,
+                  color: Theme.of(ctx).colorScheme.onSurface.withOpacity(0.6),
                 ),
               ),
               const SizedBox(height: 24),
@@ -702,6 +747,57 @@ class _RealEstateIncomePlanDetailPageState
       ),
     );
   }
+
+  InputDecoration _fieldDecoration({
+    required String label,
+    required IconData icon,
+    required ColorScheme cs,
+    required bool isDark,
+    IconData? suffixIcon,
+    String? helperText,
+  }) {
+    final borderColor =
+        isDark ? cs.outlineVariant.withOpacity(.12) : const Color(0xFFE5E7EB);
+
+    return InputDecoration(
+      labelText: label,
+      helperText: helperText,
+      floatingLabelBehavior: FloatingLabelBehavior.never,
+      labelStyle: TextStyle(
+        color: cs.primary.withOpacity(.65),
+        fontWeight: FontWeight.w600,
+      ),
+      filled: true,
+      fillColor: isDark ? cs.surfaceContainerHigh : Colors.white,
+      contentPadding: const EdgeInsets.fromLTRB(18, 16, 16, 16),
+      prefixIcon: Padding(
+        padding: const EdgeInsets.only(left: 14, right: 10),
+        child: Icon(icon, color: cs.primary, size: 22),
+      ),
+      suffixIcon:
+          suffixIcon == null ? null : Icon(suffixIcon, color: cs.primary),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(color: borderColor),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(color: borderColor),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(color: cs.primary, width: 2),
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(color: cs.error, width: 1.5),
+      ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(color: cs.error, width: 2),
+      ),
+    );
+  }
 }
 
 // ==========================
@@ -718,13 +814,14 @@ class _InfoRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: const TextStyle(color: Colors.black54)),
-          Text(value, style: const TextStyle(fontWeight: FontWeight.bold)),
+          Text(label, style: TextStyle(color: cs.onSurface.withOpacity(0.6))),
+          Text(value, style: TextStyle(fontWeight: FontWeight.bold, color: cs.onSurface)),
         ],
       ),
     );

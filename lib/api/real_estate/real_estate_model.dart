@@ -20,7 +20,7 @@ class RealEstate {
   final double profit;
 
   // ===== KẾ HOẠCH THU (MỚI) =====
-  final List<RealEstateIncomePlan> incomePlans;
+  List<RealEstateIncomePlan> incomePlans;
 
   // ===== TRẠNG THÁI =====
   final DateTime? soldAt;
@@ -47,6 +47,14 @@ class RealEstate {
   });
 
   factory RealEstate.fromJson(Map<String, dynamic> json) {
+    final plans = (json['income_plans'] as List?)
+            ?.map((e) => RealEstateIncomePlan.fromJson(e))
+            .toList() ??
+        [];
+        
+    final baseTotalIncome = double.parse((json['total_income'] ?? 0).toString());
+    final collectedFromPlans = plans.fold(0.0, (sum, plan) => sum + plan.totalCollected);
+
     return RealEstate(
       id: json['id'],
       name: json['name'],
@@ -60,17 +68,12 @@ class RealEstate {
       purchaseDate:
           DateTime.parse(json['purchase_date']),
 
-      totalIncome:
-          double.parse((json['total_income'] ?? 0).toString()),
+      totalIncome: baseTotalIncome + collectedFromPlans,
       profit:
           double.parse((json['profit'] ?? 0).toString()),
 
       // 🔥 PARSE KẾ HOẠCH THU
-      incomePlans: (json['income_plans'] as List?)
-              ?.map((e) =>
-                  RealEstateIncomePlan.fromJson(e))
-              .toList() ??
-          [],
+      incomePlans: plans,
 
       soldAt: json['sold_at'] != null
           ? DateTime.parse(json['sold_at'])
