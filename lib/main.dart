@@ -6,6 +6,7 @@ import 'package:chitieu/api/real_estate/real_estate_provider.dart';
 import 'package:chitieu/api/real_estate/real_estate_service.dart';
 import 'package:chitieu/financial_transaction/financial_transaction_provider.dart';
 import 'package:chitieu/financial_transaction/financial_transaction_service.dart';
+import 'package:chitieu/core/notifications/push_notification_service.dart';
 import 'package:chitieu/core/theme/app_colors.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -84,6 +85,7 @@ import 'pages/investment_page.dart';
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await PushNotificationService.instance.initialize();
 
   // 🔹 Voice preload
   final voiceStore = VoiceSynonymStore();
@@ -278,9 +280,68 @@ Future<void> main() async {
           ),
         ),
       ],
-      child: const MyApp(),
+      child: const AppBootstrap(child: MyApp()),
     ),
   );
+}
+
+class AppBootstrap extends StatefulWidget {
+  const AppBootstrap({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  State<AppBootstrap> createState() => _AppBootstrapState();
+}
+
+class _AppBootstrapState extends State<AppBootstrap> {
+  bool _syncing = false;
+  String? _lastAuthFingerprint;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _syncNotificationsForAuthState();
+  }
+
+  Future<void> _syncNotificationsForAuthState() async {
+    if (_syncing) return;
+
+    final auth = context.read<AuthProvider>();
+    final dio = context.read<Dio>();
+    final fingerprint =
+        '${auth.isAuthenticated}:${auth.user?['id']}:${auth.accessToken != null}';
+
+    if (_lastAuthFingerprint == fingerprint) return;
+    _lastAuthFingerprint = fingerprint;
+    _syncing = true;
+
+    try {
+      if (auth.isAuthenticated) {
+        await PushNotificationService.instance.syncToken(dio);
+      } else {
+        await PushNotificationService.instance.clearSyncedToken();
+      }
+    } catch (e) {
+      debugPrint('Push sync error: $e');
+    } finally {
+      _syncing = false;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final auth = context.watch<AuthProvider>();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _syncNotificationsForAuthState();
+      }
+    });
+    debugPrint(
+      'AppBootstrap auth state: isAuthenticated=${auth.isAuthenticated}, userId=${auth.user?['id']}',
+    );
+    return widget.child;
+  }
 }
 
 class MyApp extends StatelessWidget {
@@ -441,18 +502,46 @@ class _HomeScaffoldState extends State<HomeScaffold> {
         SettingsPage(onReplayGuide: _replayFeatureTour),
       ];
 
+  String _scopedTourKey(String baseKey) {
+    final auth = context.read<AuthProvider>();
+    final user = auth.user;
+    final suffix = user?['id']?.toString().trim().isNotEmpty == true
+        ? user!['id'].toString().trim()
+        : (user?['email']?.toString().trim().isNotEmpty == true
+            ? user!['email'].toString().trim().toLowerCase()
+            : 'anonymous');
+    return '${baseKey}_$suffix';
+  }
+
+  bool _isGuideSeen(SharedPreferences prefs, String baseKey) {
+    final scopedKey = _scopedTourKey(baseKey);
+    return (prefs.getBool(scopedKey) ?? false) ||
+        (prefs.getBool(baseKey) ?? false);
+  }
+
+  Future<void> _markGuideSeen(
+    SharedPreferences prefs,
+    String baseKey,
+  ) async {
+    await prefs.setBool(_scopedTourKey(baseKey), true);
+  }
+
+  Future<void> _markAllGuidesSeen(SharedPreferences prefs) async {
+    await _markGuideSeen(prefs, _budgetIntroSeenKey);
+    await _markGuideSeen(prefs, _accountIntroSeenKey);
+    await _markGuideSeen(prefs, _featureTourSeenKey);
+  }
+
+  Future<void> _clearGuideSeen(
+    SharedPreferences prefs,
+    String baseKey,
+  ) async {
+    await prefs.remove(_scopedTourKey(baseKey));
+    await prefs.remove(baseKey);
+  }
+
   void _maybeStartFeatureTour() {
     if (_tourChecking || _tourRunning) return;
-
-    final accounts = context.read<BankAccountProvider>();
-    final incomes = context.read<IncomeProvider>();
-    final categories = context.read<CategoryProvider>();
-    final budgets = context.read<BudgetsProvider>();
-
-    final readyForTour = accounts.items.isNotEmpty &&
-        incomes.items.isNotEmpty &&
-        categories.items.isNotEmpty &&
-        budgets.totalAssigned > 0;
 
     _tourChecking = true;
     WidgetsBinding.instance.addPostFrameCallback((_) async {
@@ -464,10 +553,17 @@ class _HomeScaffoldState extends State<HomeScaffold> {
         return;
       }
 
-      final budgetIntroSeen = prefs.getBool(_budgetIntroSeenKey) ?? false;
+      final budgetIntroSeen = _isGuideSeen(prefs, _budgetIntroSeenKey);
+      final accountIntroSeen = _isGuideSeen(prefs, _accountIntroSeenKey);
+      final featureTourSeen = _isGuideSeen(prefs, _featureTourSeenKey);
+
       if (_currentIndex == 0 && !budgetIntroSeen) {
-        await _runTourSteps(_budgetIntroSteps);
-        await prefs.setBool(_budgetIntroSeenKey, true);
+        final completed = await _runTourSteps(_fullGuideSteps, endIndex: 0);
+        if (completed) {
+          await _markAllGuidesSeen(prefs);
+        } else {
+          await _markAllGuidesSeen(prefs);
+        }
         if (!mounted) return;
         setState(() {
           _tourChecking = false;
@@ -476,10 +572,20 @@ class _HomeScaffoldState extends State<HomeScaffold> {
         return;
       }
 
-      final accountIntroSeen = prefs.getBool(_accountIntroSeenKey) ?? false;
       if (_currentIndex == 1 && !accountIntroSeen) {
-        await _runTourSteps(_accountIntroSteps);
-        await prefs.setBool(_accountIntroSeenKey, true);
+        final completed = await _runTourSteps(
+          [
+            ..._accountIntroSteps,
+            ..._featureTourSteps,
+          ],
+          endIndex: 1,
+        );
+        if (completed) {
+          await _markGuideSeen(prefs, _accountIntroSeenKey);
+          await _markGuideSeen(prefs, _featureTourSeenKey);
+        } else {
+          await _markAllGuidesSeen(prefs);
+        }
         if (!mounted) return;
         setState(() {
           _tourChecking = false;
@@ -488,10 +594,13 @@ class _HomeScaffoldState extends State<HomeScaffold> {
         return;
       }
 
-      final featureTourSeen = prefs.getBool(_featureTourSeenKey) ?? false;
-      if (readyForTour && accountIntroSeen && !featureTourSeen) {
-        await _runTourSteps(_featureTourSteps, endIndex: 0);
-        await prefs.setBool(_featureTourSeenKey, true);
+      if (!featureTourSeen) {
+        final completed = await _runTourSteps(_featureTourSteps, endIndex: 0);
+        if (completed) {
+          await _markGuideSeen(prefs, _featureTourSeenKey);
+        } else {
+          await _markAllGuidesSeen(prefs);
+        }
         if (!mounted) return;
         setState(() {
           _tourChecking = false;
@@ -575,38 +684,46 @@ class _HomeScaffoldState extends State<HomeScaffold> {
         ..._featureTourSteps,
       ];
 
-  Future<void> _runTourSteps(
+  Future<bool> _runTourSteps(
     List<_FeatureTourStep> steps, {
     int? endIndex,
   }) async {
     _tourRunning = true;
 
     for (final step in steps) {
-      if (!mounted) return;
+      if (!mounted) return false;
       setState(() => _currentIndex = step.tabIndex);
       await Future<void>.delayed(const Duration(milliseconds: 260));
-      if (!mounted) return;
+      if (!mounted) return false;
 
-      await showDialog<void>(
+      final shouldContinue = await showDialog<bool>(
         context: context,
         barrierDismissible: false,
         builder: (dialogContext) => _FeatureTourDialog(step: step),
       );
+
+      if (shouldContinue != true) {
+        _tourRunning = false;
+        _tourChecking = false;
+        return false;
+      }
     }
 
-    if (!mounted) return;
+    if (!mounted) return false;
     if (endIndex != null) {
       setState(() => _currentIndex = endIndex);
     }
+    _tourRunning = false;
+    return true;
   }
 
   Future<void> _replayFeatureTour() async {
     if (_tourRunning) return;
 
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_budgetIntroSeenKey);
-    await prefs.remove(_accountIntroSeenKey);
-    await prefs.remove(_featureTourSeenKey);
+    await _clearGuideSeen(prefs, _budgetIntroSeenKey);
+    await _clearGuideSeen(prefs, _accountIntroSeenKey);
+    await _clearGuideSeen(prefs, _featureTourSeenKey);
     if (!mounted) return;
 
     setState(() {
@@ -614,11 +731,13 @@ class _HomeScaffoldState extends State<HomeScaffold> {
       _currentIndex = 0;
     });
 
-    await _runTourSteps(_fullGuideSteps, endIndex: 0);
+    final completed = await _runTourSteps(_fullGuideSteps, endIndex: 0);
     if (!mounted) return;
-    await prefs.setBool(_budgetIntroSeenKey, true);
-    await prefs.setBool(_accountIntroSeenKey, true);
-    await prefs.setBool(_featureTourSeenKey, true);
+    if (completed) {
+      await _markAllGuidesSeen(prefs);
+    } else {
+      await _markAllGuidesSeen(prefs);
+    }
     setState(() {
       _currentIndex = 0;
       _tourRunning = false;
@@ -925,24 +1044,55 @@ class _FeatureTourDialog extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 20),
-            SizedBox(
-              width: double.infinity,
-              height: 46,
-              child: FilledButton(
-                onPressed: () => Navigator.of(context).pop(),
-                style: FilledButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.white,
-                  textStyle: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w900,
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
+            Row(
+              children: [
+                Expanded(
+                  child: SizedBox(
+                    height: 46,
+                    child: Material(
+                      color: Colors.white,
+                      clipBehavior: Clip.antiAlias,
+                      shape: StadiumBorder(
+                        side: BorderSide(
+                          color: AppColors.primary.withOpacity(.35),
+                        ),
+                      ),
+                      child: InkWell(
+                        onTap: () => Navigator.of(context).pop(false),
+                        child: const Center(
+                          child: Text(
+                            'Đã hiểu',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w800,
+                              color: AppColors.primaryDark,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
                   ),
                 ),
-                child: const Text('Đã hiểu'),
-              ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: SizedBox(
+                    height: 46,
+                    child: FilledButton(
+                      onPressed: () => Navigator.of(context).pop(true),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: Colors.white,
+                        textStyle: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w900,
+                        ),
+                        shape: const StadiumBorder(),
+                      ),
+                      child: const Text('Tiếp tục'),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ],
         ),

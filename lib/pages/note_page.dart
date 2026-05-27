@@ -28,6 +28,7 @@ import 'package:chitieu/financial_transaction/financial_transaction_provider.dar
 // VOICE
 import 'package:chitieu/api/ai/voice_intent.dart';
 import 'package:chitieu/utils/math_utils.dart';
+import 'package:chitieu/utils/error_handler.dart';
 import 'package:chitieu/pages/note_voice_controller.dart';
 import 'package:chitieu/widgets/note/note_guide_dialog.dart';
 import 'package:chitieu/widgets/note/tool_chip.dart';
@@ -654,6 +655,7 @@ class _NotePageState extends State<NotePage> {
       builder: (_) => CategoryPickerSheet(
         items: catProv.items,
         selectedId: selectedCategory?.id,
+        onCreateCategory: _createCategoryFromSheet,
       ),
     );
 
@@ -668,6 +670,88 @@ class _NotePageState extends State<NotePage> {
         await store.learnFromUtterance(textToLearn, picked.name);
         debugPrint('🧠 Đã học: "\$textToLearn" -> "\${picked.name}"');
       }
+    }
+  }
+
+  Future<Category?> _createCategoryFromSheet() async {
+    final controller = TextEditingController();
+    final focusNode = FocusNode();
+    final cs = Theme.of(context).colorScheme;
+
+    try {
+      final name = await showDialog<String>(
+        context: context,
+        builder: (dialogContext) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (focusNode.canRequestFocus) {
+              focusNode.requestFocus();
+            }
+          });
+
+          return AlertDialog(
+            title: const Text('Tạo danh mục mới'),
+            content: TextField(
+              controller: controller,
+              focusNode: focusNode,
+              autofocus: true,
+              textInputAction: TextInputAction.done,
+              decoration: const InputDecoration(
+                labelText: 'Tên danh mục',
+                hintText: 'Ví dụ: Cafe, Mua sắm, Đi lại',
+              ),
+              onSubmitted: (_) =>
+                  Navigator.pop(dialogContext, controller.text.trim()),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('Huỷ'),
+              ),
+              FilledButton(
+                onPressed: () =>
+                    Navigator.pop(dialogContext, controller.text.trim()),
+                style: FilledButton.styleFrom(
+                  backgroundColor: cs.primary,
+                ),
+                child: const Text('Tạo'),
+              ),
+            ],
+          );
+        },
+      );
+
+      final trimmed = (name ?? '').trim();
+      if (trimmed.isEmpty) return null;
+
+      final created = await context.read<CategoryProvider>().create(
+            trimmed,
+            type: 'out',
+          );
+      await context.read<BudgetsProvider>().loadForMonth(
+            year: DateTime.now().year,
+            month: DateTime.now().month,
+          );
+
+      if (mounted) {
+        showAppSnackBar(
+          context,
+          'Đã tạo danh mục "$trimmed"',
+          icon: Icons.check_circle_rounded,
+        );
+      }
+      return created;
+    } catch (e) {
+      if (mounted) {
+        showAppSnackBar(
+          context,
+          'Tạo danh mục thất bại: ${getFriendlyError(e)}',
+          isError: true,
+        );
+      }
+      return null;
+    } finally {
+      controller.dispose();
+      focusNode.dispose();
     }
   }
 

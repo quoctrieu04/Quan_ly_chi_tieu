@@ -2,6 +2,38 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
+class AuthLoginException implements Exception {
+  final String? emailError;
+  final String? passwordError;
+  final String? message;
+
+  const AuthLoginException({
+    this.emailError,
+    this.passwordError,
+    this.message,
+  });
+
+  @override
+  String toString() => message ?? 'Đăng nhập thất bại';
+}
+
+class AuthRegisterException implements Exception {
+  final String? nameError;
+  final String? emailError;
+  final String? passwordError;
+  final String? message;
+
+  const AuthRegisterException({
+    this.nameError,
+    this.emailError,
+    this.passwordError,
+    this.message,
+  });
+
+  @override
+  String toString() => message ?? 'Đăng ký thất bại';
+}
+
 class AuthService {
   static const String _baseUrl = 'https://thuchi.itcctv-soft.com';
   static const FlutterSecureStorage _storage = FlutterSecureStorage();
@@ -54,6 +86,65 @@ class AuthService {
   }
 
   // ================= AUTH =================
+  String? _asText(dynamic value) {
+    final text = value?.toString().trim();
+    return (text == null || text.isEmpty) ? null : text;
+  }
+
+  String? _extractFieldError(dynamic errors, List<String> fieldNames) {
+    if (errors is! Map) return null;
+    for (final field in fieldNames) {
+      final raw = errors[field];
+      if (raw is List && raw.isNotEmpty) {
+        return _asText(raw.first);
+      }
+      final text = _asText(raw);
+      if (text != null) return text;
+    }
+    return null;
+  }
+
+  Never _throwLoginException(Response<dynamic> res) {
+    final data = res.data is Map<String, dynamic>
+        ? Map<String, dynamic>.from(res.data as Map<String, dynamic>)
+        : <String, dynamic>{};
+
+    final message = _asText(data['message']) ?? _asText(data['error']);
+    final errors = data['errors'];
+
+    final emailError =
+        _extractFieldError(errors, const ['email', 'username', 'account']);
+    final passwordError = _extractFieldError(errors, const ['password']);
+
+    if (res.statusCode == 401) {
+      final lower = (message ?? '').toLowerCase();
+      if (emailError == null &&
+          (lower.contains('email') ||
+              lower.contains('tài khoản') ||
+              lower.contains('tai khoan') ||
+              lower.contains('account') ||
+              lower.contains('user'))) {
+        throw AuthLoginException(
+          emailError: message,
+          message: message ?? 'Đăng nhập thất bại',
+        );
+      } else if (passwordError == null &&
+          (lower.contains('mật khẩu') ||
+              lower.contains('mat khau') ||
+              lower.contains('password'))) {
+        throw AuthLoginException(
+          passwordError: message,
+          message: message ?? 'Đăng nhập thất bại',
+        );
+      }
+    }
+
+    throw AuthLoginException(
+      emailError: emailError,
+      passwordError: passwordError,
+      message: message ?? 'Đăng nhập thất bại',
+    );
+  }
 
   /// 🔐 Login
   Future<void> login(String email, String password) async {
@@ -65,9 +156,15 @@ class AuthService {
       },
     );
 
+    if ((res.statusCode ?? 500) >= 400) {
+      _throwLoginException(res);
+    }
+
     final token = res.data['access_token'];
     if (token == null || token.toString().isEmpty) {
-      throw Exception('Login failed: access_token missing');
+      throw const AuthLoginException(
+        message: 'Đăng nhập thất bại',
+      );
     }
 
     await _saveToken(token);
@@ -107,9 +204,20 @@ class AuthService {
       },
     );
 
-    final token = res.data['access_token'];
-    if (token != null && token.toString().isNotEmpty) {
-      await _saveToken(token);
+    if ((res.statusCode ?? 500) >= 400) {
+      final data = res.data is Map<String, dynamic>
+          ? Map<String, dynamic>.from(res.data as Map<String, dynamic>)
+          : <String, dynamic>{};
+      final errors = data['errors'];
+
+      throw AuthRegisterException(
+        nameError: _extractFieldError(errors, const ['name']),
+        emailError: _extractFieldError(errors, const ['email']),
+        passwordError: _extractFieldError(errors, const ['password']),
+        message: _asText(data['message']) ??
+            _asText(data['error']) ??
+            'Đăng ký thất bại',
+      );
     }
   }
 

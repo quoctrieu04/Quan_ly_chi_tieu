@@ -15,9 +15,23 @@ class _RegisterPageState extends State<RegisterPage> {
   final _name = TextEditingController();
   final _email = TextEditingController();
   final _pass = TextEditingController();
+  final _nameFocus = FocusNode();
+  final _emailFocus = FocusNode();
+  final _passFocus = FocusNode();
 
   static const _mint = AppColors.primary;
   static const _tealEdge = AppColors.primaryLight;
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _email.dispose();
+    _pass.dispose();
+    _nameFocus.dispose();
+    _emailFocus.dispose();
+    _passFocus.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -65,34 +79,71 @@ class _RegisterPageState extends State<RegisterPage> {
                 const SizedBox(height: 48),
                 _buildTextField(
                   controller: _name,
+                  focusNode: _nameFocus,
                   icon: Icons.badge_rounded,
                   label: 'Họ tên',
                   isDark: isDark,
+                  errorText: auth.nameError,
+                  onChanged: (_) {
+                    if (auth.nameError != null || auth.error != null) {
+                      context.read<AuthProvider>().clearRegisterErrors();
+                    }
+                  },
+                  textInputAction: TextInputAction.next,
+                  onFieldSubmitted: (_) => _emailFocus.requestFocus(),
                   validator: (v) =>
                       (v == null || v.isEmpty) ? 'Nhập họ tên' : null,
                 ),
                 const SizedBox(height: 16),
                 _buildTextField(
                   controller: _email,
+                  focusNode: _emailFocus,
                   icon: Icons.email_rounded,
                   label: 'Email',
                   isDark: isDark,
-                  validator: (v) =>
-                      (v == null || v.isEmpty) ? 'Nhập email hợp lệ' : null,
+                  errorText: auth.emailError,
+                  onChanged: (_) {
+                    if (auth.emailError != null || auth.error != null) {
+                      context.read<AuthProvider>().clearRegisterErrors();
+                    }
+                  },
+                  textInputAction: TextInputAction.next,
+                  onFieldSubmitted: (_) => _passFocus.requestFocus(),
+                  validator: (v) {
+                    final value = v?.trim() ?? '';
+                    if (value.isEmpty) return 'Nhập email hợp lệ';
+                    const emailPattern =
+                        r'^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$';
+                    if (!RegExp(emailPattern).hasMatch(value)) {
+                      return 'Email không hợp lệ';
+                    }
+                    return null;
+                  },
                 ),
                 const SizedBox(height: 16),
                 _buildTextField(
                   controller: _pass,
+                  focusNode: _passFocus,
                   icon: Icons.lock_rounded,
                   label: 'Mật khẩu',
                   obscure: true,
                   isDark: isDark,
+                  errorText: auth.passwordError,
+                  onChanged: (_) {
+                    if (auth.passwordError != null || auth.error != null) {
+                      context.read<AuthProvider>().clearRegisterErrors();
+                    }
+                  },
+                  textInputAction: TextInputAction.done,
                   validator: (v) => (v == null || v.length < 6)
                       ? 'Mật khẩu phải từ 6 ký tự'
                       : null,
                 ),
                 const SizedBox(height: 24),
-                if (auth.error != null)
+                if (auth.error != null &&
+                    auth.nameError == null &&
+                    auth.emailError == null &&
+                    auth.passwordError == null)
                   Container(
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
@@ -133,10 +184,26 @@ class _RegisterPageState extends State<RegisterPage> {
                             if (!_f.currentState!.validate()) return;
                             final ok = await context
                                 .read<AuthProvider>()
-                                .register(_name.text, _email.text, _pass.text);
+                                .register(
+                                  _name.text.trim(),
+                                  _email.text.trim(),
+                                  _pass.text,
+                                );
                             if (ok && mounted) {
                               showAppSnackBar(context, 'Đăng ký thành công!', icon: Icons.check_circle_rounded);
-                              Navigator.pop(context);
+                              Navigator.pop(context, {
+                                'email': _email.text.trim(),
+                                'password': _pass.text,
+                              });
+                            } else if (mounted) {
+                              final state = context.read<AuthProvider>();
+                              if (state.nameError != null) {
+                                _nameFocus.requestFocus();
+                              } else if (state.emailError != null) {
+                                _emailFocus.requestFocus();
+                              } else if (state.passwordError != null) {
+                                _passFocus.requestFocus();
+                              }
                             }
                           },
                     style: ElevatedButton.styleFrom(
@@ -190,21 +257,31 @@ class _RegisterPageState extends State<RegisterPage> {
 
   Widget _buildTextField({
     required TextEditingController controller,
+    required FocusNode focusNode,
     required IconData icon,
     required String label,
     required bool isDark,
+    String? errorText,
+    ValueChanged<String>? onChanged,
+    TextInputAction? textInputAction,
+    ValueChanged<String>? onFieldSubmitted,
     bool obscure = false,
     String? Function(String?)? validator,
   }) {
     return TextFormField(
       controller: controller,
+      focusNode: focusNode,
       obscureText: obscure,
       validator: validator,
+      onChanged: onChanged,
+      textInputAction: textInputAction,
+      onFieldSubmitted: onFieldSubmitted,
       style: TextStyle(
           color: isDark ? Colors.white : Colors.black87,
           fontWeight: FontWeight.w600),
       decoration: InputDecoration(
         labelText: label,
+        errorText: errorText,
         labelStyle: TextStyle(
             color: isDark ? Colors.white54 : Colors.black54,
             fontWeight: FontWeight.w500),

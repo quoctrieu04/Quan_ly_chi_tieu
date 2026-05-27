@@ -290,7 +290,8 @@ class BudgetCategoryTile extends StatelessWidget {
                                         builder: (ctx) => AlertDialog(
                                           title: Text(t.overspentWarningTitle),
                                           content: Text(
-                                              t.overspentWarningMessage(_capFirst(category.name))),
+                                              t.overspentWarningMessage(
+                                                  _capFirst(category.name))),
                                           actions: [
                                             TextButton(
                                               onPressed: () =>
@@ -348,7 +349,7 @@ class BudgetCategoryTile extends StatelessWidget {
       return spent > 0 ? BudgetStatus.warn1 : BudgetStatus.normal;
     }
     final p = spent / amount;
-    if (spent > amount) return BudgetStatus.overspent;
+    if (spent >= amount) return BudgetStatus.overspent;
     if (p >= kWarn1) return BudgetStatus.warn1;
     return BudgetStatus.normal;
   }

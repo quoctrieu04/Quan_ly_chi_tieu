@@ -5,6 +5,7 @@ import 'auth_service.dart';
 class AuthProvider extends ChangeNotifier {
   final AuthService api;
   AuthProvider(this.api);
+  bool _googleInitialized = false;
 
   // ================== STATE ==================
   Map<String, dynamic>? _user;
@@ -15,6 +16,9 @@ class AuthProvider extends ChangeNotifier {
 
   bool loading = false;
   String? error;
+  String? emailError;
+  String? passwordError;
+  String? nameError;
   bool updatingName = false;
   bool changingPassword = false;
 
@@ -57,9 +61,24 @@ class AuthProvider extends ChangeNotifier {
   }
 
   // ================== LOGIN ==================
+  void clearLoginErrors({bool notify = true}) {
+    error = null;
+    emailError = null;
+    passwordError = null;
+    if (notify) notifyListeners();
+  }
+
+  void clearRegisterErrors({bool notify = true}) {
+    error = null;
+    nameError = null;
+    emailError = null;
+    passwordError = null;
+    if (notify) notifyListeners();
+  }
+
   Future<bool> login(String email, String pass) async {
     loading = true;
-    error = null;
+    clearLoginErrors(notify: false);
     notifyListeners();
 
     try {
@@ -71,6 +90,15 @@ class AuthProvider extends ChangeNotifier {
       _user = await api.me();
 
       return true;
+    } on AuthLoginException catch (e) {
+      if (kDebugMode) print('Login error: $e');
+      emailError = e.emailError;
+      passwordError = e.passwordError;
+      error = e.message;
+      _user = null;
+      _accessToken = null;
+      await api.clearToken();
+      return false;
     } catch (e) {
       if (kDebugMode) print('Login error: $e');
       error = 'Đăng nhập thất bại';
@@ -85,20 +113,24 @@ class AuthProvider extends ChangeNotifier {
   }
 
   // ================== GOOGLE LOGIN ==================
+  Future<void> _ensureGoogleInitialized() async {
+    if (_googleInitialized) return;
+    await GoogleSignIn.instance.initialize();
+    _googleInitialized = true;
+  }
+
   Future<bool> loginWithGoogle() async {
     loading = true;
     error = null;
     notifyListeners();
 
     try {
-      await GoogleSignIn.instance.initialize();
-      // Bản 7.x đổi signIn() thành authenticate() và trả về exception nếu hủy
+      await _ensureGoogleInitialized();
+
       final googleUser = await GoogleSignIn.instance.authenticate();
+      final idToken = googleUser.authentication.idToken;
 
-      final googleAuth = await googleUser.authentication;
-      final idToken = googleAuth.idToken;
-
-      if (idToken == null) {
+      if (idToken == null || idToken.isEmpty) {
         error = 'Không thể lấy token xác thực từ Google';
         return false;
       }
@@ -111,6 +143,17 @@ class AuthProvider extends ChangeNotifier {
       _user = await api.me();
 
       return true;
+    } on GoogleSignInException catch (e) {
+      if (kDebugMode) print('Google Login error: $e');
+      if (e.code == GoogleSignInExceptionCode.canceled) {
+        error = null;
+        return false;
+      }
+      error = 'Đăng nhập Google thất bại';
+      _user = null;
+      _accessToken = null;
+      await api.clearToken();
+      return false;
     } catch (e) {
       if (kDebugMode) print('Google Login error: $e');
       error = 'Đăng nhập Google thất bại';
@@ -127,16 +170,26 @@ class AuthProvider extends ChangeNotifier {
   // ================== REGISTER ==================
   Future<bool> register(String name, String email, String pass) async {
     loading = true;
-    error = null;
+    clearRegisterErrors(notify: false);
     notifyListeners();
 
     try {
       await api.register(name, email, pass);
-
-      _accessToken = await api.getAccessToken();
-      _user = await api.me();
+      await api.clearToken();
+      _accessToken = null;
+      _user = null;
 
       return true;
+    } on AuthRegisterException catch (e) {
+      if (kDebugMode) print('Register error: $e');
+      nameError = e.nameError;
+      emailError = e.emailError;
+      passwordError = e.passwordError;
+      error = e.message;
+      _user = null;
+      _accessToken = null;
+      await api.clearToken();
+      return false;
     } catch (e) {
       if (kDebugMode) print('Register error: $e');
       error = 'Đăng ký thất bại';
